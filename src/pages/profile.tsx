@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Link, useSearch } from "@tanstack/react-router"
+import { Link, useNavigate, useSearch } from "@tanstack/react-router"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
-import { changePassword } from "@/lib/auth"
+import { changePassword, disableTotp, updateProfile } from "@/lib/auth"
 import { useAuthStore } from "@/store/auth-store"
 import type { ProfileSection } from "@/router"
 
@@ -83,7 +83,7 @@ export function ProfilePage() {
 
           {section === "profile" && <ProfileDetails />}
           {section === "password" && <ChangePasswordForm />}
-          {section === "security" && <SecurityPlaceholder />}
+          {section === "security" && <SecuritySection />}
         </div>
       </div>
     </div>
@@ -128,33 +128,248 @@ function SideNav({ activeKey }: { activeKey: ProfileSection }) {
   )
 }
 
+const INDIA_DIAL_CODE = "91"
+const INDIA_PREFIX_DISPLAY = "+91"
+
+const profileSchema = z.object({
+  first_name: z
+    .string()
+    .max(64, "Too long")
+    .transform((v) => v.trim()),
+  last_name: z
+    .string()
+    .max(64, "Too long")
+    .transform((v) => v.trim()),
+  email: z.email("Enter a valid email").max(255, "Too long"),
+  mobile_local: z
+    .string()
+    .transform((v) => v.replace(/\D/g, ""))
+    .refine((v) => v.length === 0 || v.length === 10, "Enter exactly 10 digits")
+    .refine(
+      (v) => v.length === 0 || /^[6-9]\d{9}$/.test(v),
+      "Indian mobile must start with 6-9",
+    ),
+})
+
+type ProfileValues = z.infer<typeof profileSchema>
+
+function toLocal(stored: string | null | undefined): string {
+  return (stored ?? "").replace(/\D/g, "").slice(0, 10)
+}
+
 function ProfileDetails() {
   const user = useAuthStore((s) => s.user)
-  const initials = (user?.username ?? user?.email ?? "?")
-    .replace(/[^A-Za-z0-9]/g, "")
+  const [feedback, setFeedback] = React.useState<Feedback | null>(null)
+
+  const defaults: ProfileValues = React.useMemo(
+    () => ({
+      first_name: user?.first_name ?? "",
+      last_name: user?.last_name ?? "",
+      email: user?.email ?? "",
+      mobile_local: toLocal(user?.mobile_number),
+    }),
+    [user?.first_name, user?.last_name, user?.email, user?.mobile_number],
+  )
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting, isDirty },
+  } = useForm<ProfileValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: defaults,
+    values: defaults,
+  })
+
+  const watchedFirst = watch("first_name")
+  const watchedLast = watch("last_name")
+  const displayName =
+    [watchedFirst, watchedLast]
+      .map((p) => (p ?? "").trim())
+      .filter(Boolean)
+      .join(" ") || null
+  const initialsSource = displayName ?? user?.username ?? user?.email ?? "?"
+  const initials = initialsSource
+    .replace(/[^A-Za-z0-9 ]/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
     .slice(0, 2)
+    .join("")
     .toUpperCase()
+
+  const onSubmit = handleSubmit(async (values) => {
+    setFeedback(null)
+    try {
+      const hasMobile = values.mobile_local !== ""
+      await updateProfile({
+        first_name: values.first_name === "" ? null : values.first_name,
+        last_name: values.last_name === "" ? null : values.last_name,
+        country_code: hasMobile ? INDIA_DIAL_CODE : null,
+        mobile_number: hasMobile ? values.mobile_local : null,
+        email: values.email,
+      })
+      setFeedback({ kind: "success", message: "Profile updated." })
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.status === 409
+            ? err.message || "That email is already in use."
+            : err.message
+          : "Could not update profile. Please try again."
+      setFeedback({ kind: "error", message })
+    }
+  })
 
   return (
     <div>
       <div className="flex items-center gap-4">
         <div className="grid size-12 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-          {initials}
+          {initials || "?"}
         </div>
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">
-            {user?.username ?? "Unknown"}
+            {displayName ?? user?.username ?? "Unknown"}
           </div>
           <div className="truncate text-xs text-muted-foreground">{user?.email}</div>
         </div>
       </div>
-      <dl className="mt-6 grid grid-cols-1 gap-y-3 hd:grid-cols-2 hd:gap-x-6">
-        <DetailRow label="User ID" value={user?.id ?? "—"} mono />
-        <DetailRow
-          label="Created"
-          value={user?.createdAt ? new Date(user.createdAt).toLocaleString() : "—"}
-        />
-      </dl>
+
+      <form noValidate onSubmit={onSubmit} className="mt-6 grid max-w-2xl gap-4">
+        {feedback && (
+          <div
+            role="status"
+            className={
+              feedback.kind === "success"
+                ? "rounded-md border border-success/40 bg-success/10 px-3 py-2 text-sm text-success"
+                : "rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            }
+          >
+            {feedback.message}
+          </div>
+        )}
+
+        <div className="grid gap-4 hd:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="first_name">First name</Label>
+            <Input
+              id="first_name"
+              autoComplete="given-name"
+              aria-invalid={!!errors.first_name}
+              {...register("first_name")}
+            />
+            {errors.first_name && (
+              <p className="text-xs text-destructive">{errors.first_name.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="last_name">Last name</Label>
+            <Input
+              id="last_name"
+              autoComplete="family-name"
+              aria-invalid={!!errors.last_name}
+              {...register("last_name")}
+            />
+            {errors.last_name && (
+              <p className="text-xs text-destructive">{errors.last_name.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              aria-invalid={!!errors.email}
+              {...register("email")}
+            />
+            {errors.email && (
+              <p className="text-xs text-destructive">{errors.email.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="mobile_local">Mobile number</Label>
+            <div
+              className={cn(
+                "flex h-9 w-full items-stretch rounded-md border border-input bg-background text-sm shadow-xs transition-[color,box-shadow] focus-within:ring-2 focus-within:ring-ring/60 focus-within:ring-offset-2 focus-within:ring-offset-background",
+                errors.mobile_local && "border-destructive",
+              )}
+            >
+              <span className="grid select-none place-items-center border-r border-input bg-muted px-3 text-muted-foreground">
+                {INDIA_PREFIX_DISPLAY}
+              </span>
+              <input
+                id="mobile_local"
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                placeholder="9876543210"
+                maxLength={10}
+                aria-invalid={!!errors.mobile_local}
+                className="w-full rounded-r-md bg-transparent px-3 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                {...register("mobile_local", {
+                  onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                    const digits = e.target.value.replace(/\D/g, "").slice(0, 10)
+                    if (digits !== e.target.value) e.target.value = digits
+                  },
+                })}
+              />
+            </div>
+            {errors.mobile_local && (
+              <p className="text-xs text-destructive">{errors.mobile_local.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="display_name">Display name</Label>
+            <Input
+              id="display_name"
+              value={displayName ?? ""}
+              readOnly
+              disabled
+              aria-describedby="display_name_hint"
+            />
+            <p id="display_name_hint" className="text-xs text-muted-foreground">
+              Auto-generated from first and last name.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="username">Username</Label>
+            <Input id="username" value={user?.username ?? ""} readOnly disabled />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button type="submit" disabled={isSubmitting || !isDirty}>
+            {isSubmitting ? "Saving…" : "Save changes"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={isSubmitting || !isDirty}
+            onClick={() => {
+              reset(defaults)
+              setFeedback(null)
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+
+        <dl className="mt-2 grid grid-cols-1 gap-y-3 hd:grid-cols-2 hd:gap-x-6">
+          <DetailRow label="User ID" value={user?.id ?? "—"} mono />
+          <DetailRow
+            label="Created"
+            value={user?.created_at ? new Date(user.created_at).toLocaleString() : "—"}
+          />
+        </dl>
+      </form>
     </div>
   )
 }
@@ -277,12 +492,143 @@ function ChangePasswordForm() {
   )
 }
 
-function SecurityPlaceholder() {
+const disable2faSchema = z.object({
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128, "Too long"),
+  code: z
+    .string()
+    .min(6, "Enter the 6-digit code or a recovery code")
+    .max(16, "Too long")
+    .transform((v) => v.trim()),
+})
+
+type Disable2faValues = z.infer<typeof disable2faSchema>
+
+function SecuritySection() {
+  const user = useAuthStore((s) => s.user)
+  const navigate = useNavigate()
+  const enabled = !!user?.totp_enabled_at
+
   return (
-    <p className="text-sm text-muted-foreground">
-      Two-factor authentication, active sessions, and notification preferences are
-      coming soon.
-    </p>
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-medium">Authenticator app (TOTP)</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {enabled
+              ? `Enabled on ${new Date(user!.totp_enabled_at!).toLocaleString()}.`
+              : "Two-factor authentication is required for all admins."}
+          </p>
+        </div>
+        <span
+          className={cn(
+            "rounded-full px-2.5 py-0.5 text-xs font-medium",
+            enabled
+              ? "bg-success/10 text-success"
+              : "bg-destructive/10 text-destructive",
+          )}
+        >
+          {enabled ? "Enabled" : "Not enabled"}
+        </span>
+      </div>
+
+      {enabled ? (
+        <DisableTwoFactorForm />
+      ) : (
+        <Button onClick={() => navigate({ to: "/setup-2fa" })}>
+          Set up two-factor authentication
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function DisableTwoFactorForm() {
+  const [feedback, setFeedback] = React.useState<Feedback | null>(null)
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<Disable2faValues>({
+    resolver: zodResolver(disable2faSchema),
+    defaultValues: { password: "", code: "" },
+  })
+
+  const onSubmit = handleSubmit(async (values) => {
+    setFeedback(null)
+    try {
+      await disableTotp(values.password, values.code)
+      reset({ password: "", code: "" })
+      setFeedback({
+        kind: "success",
+        message: "Two-factor authentication disabled. Set it up again before signing out.",
+      })
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.status === 401
+            ? "Password or verification code is incorrect."
+            : err.message
+          : "Could not disable two-factor authentication. Please try again."
+      setFeedback({ kind: "error", message })
+    }
+  })
+
+  return (
+    <form noValidate onSubmit={onSubmit} className="grid max-w-md gap-4">
+      <p className="text-xs text-muted-foreground">
+        To disable, confirm with your password and a current 6-digit code (or a recovery code).
+      </p>
+
+      {feedback && (
+        <div
+          role="status"
+          className={
+            feedback.kind === "success"
+              ? "rounded-md border border-success/40 bg-success/10 px-3 py-2 text-sm text-success"
+              : "rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          }
+        >
+          {feedback.message}
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <Label htmlFor="disable-password">Current password</Label>
+        <Input
+          id="disable-password"
+          type="password"
+          autoComplete="current-password"
+          aria-invalid={!!errors.password}
+          {...register("password")}
+        />
+        {errors.password && (
+          <p className="text-xs text-destructive">{errors.password.message}</p>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="disable-code">Verification or recovery code</Label>
+        <Input
+          id="disable-code"
+          inputMode="text"
+          autoComplete="one-time-code"
+          aria-invalid={!!errors.code}
+          {...register("code")}
+        />
+        {errors.code && <p className="text-xs text-destructive">{errors.code.message}</p>}
+      </div>
+
+      <div>
+        <Button type="submit" variant="destructive" disabled={isSubmitting}>
+          {isSubmitting ? "Disabling…" : "Disable two-factor authentication"}
+        </Button>
+      </div>
+    </form>
   )
 }
 

@@ -3,15 +3,15 @@ import { useNavigate } from "@tanstack/react-router"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ApiError } from "@/lib/api"
-import { login } from "@/lib/auth"
+import { login, verifyTwoFactor } from "@/lib/auth"
 
-const schema = z.object({
+const credentialsSchema = z.object({
   identifier: z
     .string()
     .min(1, "Enter your email or username")
@@ -22,9 +22,40 @@ const schema = z.object({
     .max(128, "Too long"),
 })
 
-type FormValues = z.infer<typeof schema>
+type CredentialsValues = z.infer<typeof credentialsSchema>
+
+const codeSchema = z.object({
+  code: z
+    .string()
+    .min(6, "Enter the code from your authenticator")
+    .max(16, "Too long")
+    .transform((v) => v.trim()),
+})
+
+type CodeValues = z.infer<typeof codeSchema>
+
+type Step =
+  | { kind: "credentials" }
+  | { kind: "challenge"; challengeToken: string }
 
 export function LoginPage() {
+  const [step, setStep] = React.useState<Step>({ kind: "credentials" })
+
+  return step.kind === "credentials" ? (
+    <CredentialsStep onChallenge={(challengeToken) => setStep({ kind: "challenge", challengeToken })} />
+  ) : (
+    <ChallengeStep
+      challengeToken={step.challengeToken}
+      onCancel={() => setStep({ kind: "credentials" })}
+    />
+  )
+}
+
+function CredentialsStep({
+  onChallenge,
+}: {
+  onChallenge: (challengeToken: string) => void
+}) {
   const navigate = useNavigate()
   const [serverError, setServerError] = React.useState<string | null>(null)
   const [showPassword, setShowPassword] = React.useState(false)
@@ -33,16 +64,20 @@ export function LoginPage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+  } = useForm<CredentialsValues>({
+    resolver: zodResolver(credentialsSchema),
     defaultValues: { identifier: "", password: "" },
   })
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null)
     try {
-      await login(values.identifier, values.password)
-      navigate({ to: "/" })
+      const result = await login(values.identifier, values.password)
+      if (result.kind === "challenge") {
+        onChallenge(result.challengeToken)
+        return
+      }
+      navigate({ to: result.requiresTotpSetup ? "/setup-2fa" : "/" })
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -124,6 +159,102 @@ export function LoginPage() {
       <Button type="submit" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? "Signing in…" : "Sign in"}
       </Button>
+    </form>
+  )
+}
+
+function ChallengeStep({
+  challengeToken,
+  onCancel,
+}: {
+  challengeToken: string
+  onCancel: () => void
+}) {
+  const navigate = useNavigate()
+  const [serverError, setServerError] = React.useState<string | null>(null)
+
+  const {
+    register,
+    handleSubmit,
+    setFocus,
+    formState: { errors, isSubmitting },
+  } = useForm<CodeValues>({
+    resolver: zodResolver(codeSchema),
+    defaultValues: { code: "" },
+  })
+
+  React.useEffect(() => {
+    setFocus("code")
+  }, [setFocus])
+
+  const onSubmit = handleSubmit(async (values) => {
+    setServerError(null)
+    try {
+      await verifyTwoFactor(challengeToken, values.code)
+      navigate({ to: "/" })
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.status === 401
+            ? "Invalid or expired code"
+            : err.message
+          : "Something went wrong. Please try again."
+      setServerError(message)
+    }
+  })
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      noValidate
+      className="space-y-5 rounded-lg border bg-card p-6 text-card-foreground shadow-xs"
+    >
+      <div className="space-y-1.5 text-center">
+        <div className="mx-auto grid size-10 place-items-center rounded-full bg-primary/10 text-primary">
+          <ShieldCheck className="size-5" />
+        </div>
+        <h1 className="text-xl font-semibold tracking-tight">Two-factor authentication</h1>
+        <p className="text-sm text-muted-foreground">
+          Enter the 6-digit code from your authenticator app, or a recovery code.
+        </p>
+      </div>
+
+      {serverError && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {serverError}
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <Label htmlFor="code">Verification code</Label>
+        <Input
+          id="code"
+          inputMode="text"
+          autoComplete="one-time-code"
+          aria-invalid={!!errors.code}
+          placeholder="123456"
+          {...register("code")}
+        />
+        {errors.code && <p className="text-xs text-destructive">{errors.code.message}</p>}
+      </div>
+
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          className="flex-1"
+          onClick={onCancel}
+          disabled={isSubmitting}
+        >
+          Back
+        </Button>
+        <Button type="submit" className="flex-1" disabled={isSubmitting}>
+          {isSubmitting ? "Verifying…" : "Verify"}
+        </Button>
+      </div>
     </form>
   )
 }

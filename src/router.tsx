@@ -11,6 +11,7 @@ import { LoginPage } from "@/pages/login"
 import { MigrationsPage } from "@/pages/migrations"
 import { NotFoundPage } from "@/pages/not-found"
 import { ProfilePage } from "@/pages/profile"
+import { SetupTwoFactorPage } from "@/pages/setup-2fa"
 import { WelcomePage } from "@/pages/welcome"
 import { useAuthStore } from "@/store/auth-store"
 
@@ -35,13 +36,27 @@ const loginRoute = createRoute({
   component: LoginPage,
 })
 
+// Logged-in but not yet enrolled in 2FA. Lives outside the protected layout
+// so its beforeLoad doesn't bounce the admin away from the only page they
+// are allowed to use.
+const setup2faRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/setup-2fa",
+  beforeLoad: () => {
+    const user = useAuthStore.getState().user
+    if (!user) throw redirect({ to: "/login" })
+    if (user.totp_enabled_at) throw redirect({ to: "/" })
+  },
+  component: SetupTwoFactorPage,
+})
+
 const protectedLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: "_authed",
   beforeLoad: () => {
-    if (!useAuthStore.getState().user) {
-      throw redirect({ to: "/login" })
-    }
+    const user = useAuthStore.getState().user
+    if (!user) throw redirect({ to: "/login" })
+    if (!user.totp_enabled_at) throw redirect({ to: "/setup-2fa" })
   },
   component: AppLayout,
 })
@@ -79,6 +94,7 @@ const profileRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   authLayoutRoute.addChildren([loginRoute]),
+  setup2faRoute,
   protectedLayoutRoute.addChildren([welcomeRoute, migrationsRoute, profileRoute]),
 ])
 

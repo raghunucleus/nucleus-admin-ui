@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "PowerShell($ProgressPreference='SilentlyContinue'; foreach \\($p in '/openapi.json','/swagger.json','/docs-json','/api-json','/api/docs-json'\\) { try { $r = Invoke-WebRequest -Uri \"http://localhost:3000$p\" -UseBasicParsing -TimeoutSec 5; \"OK $p \\($\\($r.StatusCode\\), len=$\\($r.Content.Length\\)\\)\"; break } catch { \"FAIL $p $\\($_.Exception.Message\\)\" } })",
+      "PowerShell($ProgressPreference='SilentlyContinue'; \\(Invoke-WebRequest -Uri \"http://localhost:3000/docs-json\" -UseBasicParsing\\).Content | Out-File -FilePath \"$env:TEMP\\\\nucleus-openapi.json\" -Encoding utf8; \\(Get-Content \"$env:TEMP\\\\nucleus-openapi.json\" -Raw | ConvertFrom-Json\\).paths.PSObject.Properties | Select-Object Name | Format-Table -AutoSize)",
+      "PowerShell($spec = Get-Content \"$env:TEMP\\\\nucleus-openapi.json\" -Raw | ConvertFrom-Json; $spec.components.schemas | ConvertTo-Json -Depth 12; \"---SECURITY---\"; $spec.components.securitySchemes | ConvertTo-Json -Depth 8)",
+      "Bash(ls \"c:/Users/akrivia/Documents/Projects/nucleus\" 2>&1)",
+      "Read(//c/Users/akrivia/Documents/Projects/nucleus/**)",
+      "PowerShell(try { Invoke-WebRequest -Uri \"http://localhost:3000/docs-json\" -UseBasicParsing | Select-Object -ExpandProperty Content } catch { Write-Output \"ERR1: $_\"; try { Invoke-WebRequest -Uri \"http://localhost:3000/docs\" -UseBasicParsing | Select-Object -ExpandProperty Content } catch { Write-Output \"ERR2: $_\" } })",
+      "Bash(npm install *)"
+    ]
+  }
+}

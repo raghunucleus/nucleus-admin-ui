@@ -31,10 +31,16 @@ export function AppLayout() {
     }
   }
 
-  const initials = (user?.username ?? user?.email ?? "?")
-    .replace(/[^A-Za-z0-9]/g, "")
+  const primaryName = user?.display_name?.trim() || user?.username || "Guest"
+  const secondaryName = user?.display_name?.trim() ? user?.username : user?.email
+  const initials = primaryName
+    .replace(/[^A-Za-z0-9 ]/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
     .slice(0, 2)
-    .toUpperCase()
+    .join("")
+    .toUpperCase() || "?"
 
   return (
     <div className="flex min-h-full bg-background text-foreground">
@@ -61,9 +67,13 @@ export function AppLayout() {
                   <div className="grid size-8 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                     {initials}
                   </div>
-                  <div className="hidden leading-tight hd:block">
-                    <div className="text-sm font-medium">{user?.username ?? "Guest"}</div>
-                    <div className="text-xs text-muted-foreground">{user?.email}</div>
+                  <div className="hidden max-w-[14rem] leading-tight hd:block">
+                    <div className="truncate text-sm font-medium">{primaryName}</div>
+                    {secondaryName && (
+                      <div className="truncate text-xs text-muted-foreground">
+                        {secondaryName}
+                      </div>
+                    )}
                   </div>
                   <ChevronDown className="size-4 text-muted-foreground" />
                 </button>
@@ -72,8 +82,13 @@ export function AppLayout() {
                 <DropdownMenuLabel>
                   <div className="leading-tight">
                     <div className="truncate text-sm font-medium text-foreground">
-                      {user?.username ?? "Guest"}
+                      {primaryName}
                     </div>
+                    {user?.display_name?.trim() && user?.username && (
+                      <div className="truncate text-xs text-muted-foreground">
+                        @{user.username}
+                      </div>
+                    )}
                     {user?.email && (
                       <div className="truncate text-xs text-muted-foreground">
                         {user.email}
