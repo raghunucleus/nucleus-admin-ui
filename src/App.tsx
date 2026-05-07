@@ -38,7 +38,7 @@ function App() {
               <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
                 src/index.css
               </code>
-              . Change <code>--brand-hue</code> or any token to rebrand globally.
+              . Change <code>--primary</code> to rebrand globally.
             </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">

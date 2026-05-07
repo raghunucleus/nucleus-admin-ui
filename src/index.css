@@ -8,43 +8,42 @@
  * ------------------------------------------------------------------------- */
 
 :root {
-  /* Brand */
-  --brand-hue: 250;
-  --primary: oklch(0.55 0.22 var(--brand-hue));
-  --primary-foreground: oklch(0.99 0 0);
+  /* Brand — change these two to rebrand the entire app. */
+  --primary: oklch(56.123% 0.11942 250.81); /* #065ea8 */
+  --primary-foreground: oklch(1 0 0); /* #ffffff */
 
   /* Surfaces */
   --background: oklch(1 0 0);
-  --foreground: oklch(0.16 0.01 270);
+  --foreground: oklch(0.18 0.02 254);
   --card: oklch(1 0 0);
   --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
   --popover-foreground: var(--foreground);
 
-  /* Neutrals */
-  --secondary: oklch(0.97 0.005 270);
-  --secondary-foreground: oklch(0.22 0.01 270);
-  --muted: oklch(0.97 0.005 270);
-  --muted-foreground: oklch(0.55 0.02 270);
-  --accent: oklch(0.96 0.01 var(--brand-hue));
-  --accent-foreground: oklch(0.22 0.01 270);
+  /* Neutrals — derived from primary so they stay on-brand. */
+  --secondary: color-mix(in oklab, var(--primary) 5%, oklch(1 0 0));
+  --secondary-foreground: var(--primary);
+  --muted: color-mix(in oklab, var(--primary) 4%, oklch(1 0 0));
+  --muted-foreground: color-mix(in oklab, var(--foreground) 65%, oklch(1 0 0));
+  --accent: color-mix(in oklab, var(--primary) 10%, oklch(1 0 0));
+  --accent-foreground: var(--primary);
 
   /* Semantic */
-  --destructive: oklch(0.58 0.22 25);
-  --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.62 0.17 150);
-  --warning: oklch(0.78 0.16 80);
+  --destructive: oklch(0.55 0.19 27);
+  --destructive-foreground: oklch(1 0 0);
+  --success: oklch(0.56 0.13 150);
+  --warning: oklch(0.66 0.14 70);
 
   /* Lines / inputs */
-  --border: oklch(0.92 0.005 270);
-  --input: oklch(0.92 0.005 270);
-  --ring: oklch(0.55 0.22 var(--brand-hue));
+  --border: color-mix(in oklab, var(--primary) 14%, oklch(1 0 0));
+  --input: color-mix(in oklab, var(--primary) 14%, oklch(1 0 0));
+  --ring: var(--primary);
 
   /* Radius — single source of truth */
   --radius: 0.5rem;
 
   /* Sidebar (used by future shell layouts) */
-  --sidebar: oklch(0.985 0.003 270);
+  --sidebar: color-mix(in oklab, var(--primary) 3%, oklch(1 0 0));
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
@@ -54,24 +53,23 @@
   --sidebar-ring: var(--ring);
 }
 
-/*
+/* Future dark mode — uncomment and toggle `class="dark"` on <html>.
 .dark {
-  --background: oklch(0.14 0.01 270);
-  --foreground: oklch(0.97 0 0);
-  --card: oklch(0.18 0.01 270);
-  --card-foreground: oklch(0.97 0 0);
-  --popover: oklch(0.18 0.01 270);
-  --popover-foreground: oklch(0.97 0 0);
-  --secondary: oklch(0.24 0.01 270);
-  --secondary-foreground: oklch(0.97 0 0);
-  --muted: oklch(0.24 0.01 270);
-  --muted-foreground: oklch(0.7 0.02 270);
-  --accent: oklch(0.28 0.04 var(--brand-hue));
-  --accent-foreground: oklch(0.97 0 0);
-  --border: oklch(0.28 0.01 270);
-  --input: oklch(0.28 0.01 270);
-  --ring: oklch(0.65 0.2 var(--brand-hue));
-  --sidebar: oklch(0.18 0.01 270);
+  --background: oklch(0.18 0.02 254);
+  --foreground: oklch(1 0 0);
+  --card: oklch(0.22 0.025 254);
+  --card-foreground: oklch(1 0 0);
+  --popover: oklch(0.22 0.025 254);
+  --popover-foreground: oklch(1 0 0);
+  --secondary: color-mix(in oklab, var(--primary) 18%, oklch(0.18 0.02 254));
+  --secondary-foreground: oklch(1 0 0);
+  --muted: color-mix(in oklab, var(--primary) 12%, oklch(0.18 0.02 254));
+  --muted-foreground: color-mix(in oklab, oklch(1 0 0) 70%, oklch(0.18 0.02 254));
+  --accent: color-mix(in oklab, var(--primary) 25%, oklch(0.18 0.02 254));
+  --accent-foreground: oklch(1 0 0);
+  --border: color-mix(in oklab, var(--primary) 22%, oklch(0.18 0.02 254));
+  --input: color-mix(in oklab, var(--primary) 22%, oklch(0.18 0.02 254));
+  --sidebar: oklch(0.22 0.025 254);
 }
 */
 
