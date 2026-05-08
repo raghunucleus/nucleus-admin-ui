@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import { persist } from "zustand/middleware"
+import { createJSONStorage, persist } from "zustand/middleware"
 
 export type AdminProfile = {
   id: string
@@ -44,6 +44,9 @@ export const useAuthStore = create<AuthState>()(
       setLoginAt: (loginAt) => set({ loginAt }),
       clearAuth: () => set({ accessToken: null, refreshToken: null, user: null, loginAt: null }),
     }),
-    { name: "nucleus-auth-v2" },
+    {
+      name: "nucleus-auth-v2",
+      storage: createJSONStorage(() => sessionStorage),
+    },
   ),
 )

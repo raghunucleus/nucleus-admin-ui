@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Sidebar } from "@/components/sidebar"
+import { useIdleLogout } from "@/hooks/use-idle-logout"
 import { logout } from "@/lib/auth"
 import { useAuthStore } from "@/store/auth-store"
 import { useUiStore } from "@/store/ui-store"
@@ -21,6 +22,8 @@ export function AppLayout() {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const navigate = useNavigate()
   const [loggingOut, setLoggingOut] = React.useState(false)
+
+  useIdleLogout()
 
   const handleLogout = async () => {
     setLoggingOut(true)

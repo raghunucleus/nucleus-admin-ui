@@ -8,7 +8,8 @@
       "Bash(ls \"c:/Users/akrivia/Documents/Projects/nucleus\" 2>&1)",
       "Read(//c/Users/akrivia/Documents/Projects/nucleus/**)",
       "PowerShell(try { Invoke-WebRequest -Uri \"http://localhost:3000/docs-json\" -UseBasicParsing | Select-Object -ExpandProperty Content } catch { Write-Output \"ERR1: $_\"; try { Invoke-WebRequest -Uri \"http://localhost:3000/docs\" -UseBasicParsing | Select-Object -ExpandProperty Content } catch { Write-Output \"ERR2: $_\" } })",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(npx tsc *)"
     ]
   }
 }
