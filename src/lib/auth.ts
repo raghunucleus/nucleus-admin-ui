@@ -23,7 +23,19 @@ export async function login(identifier: string, password: string): Promise<Login
     body: { identifier, password },
     auth: false,
   })
+  return handleLoginResponse(res)
+}
 
+export async function loginWithGoogle(idToken: string): Promise<LoginResult> {
+  const res = await api<LoginRawResponse>("/admin/login/google", {
+    method: "POST",
+    body: { idToken },
+    auth: false,
+  })
+  return handleLoginResponse(res)
+}
+
+async function handleLoginResponse(res: LoginRawResponse): Promise<LoginResult> {
   if (res.twoFactorRequired) {
     return { kind: "challenge", challengeToken: res.challengeToken }
   }

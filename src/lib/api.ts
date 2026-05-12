@@ -1,6 +1,7 @@
 import { useAuthStore, type AuthTokens } from "@/store/auth-store"
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api"
+const API_BASE =
+  (import.meta.env.VITE_API_URL as string | undefined)?.trim() || "/api"
 
 export class ApiError extends Error {
   status: number

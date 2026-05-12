@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { GoogleOAuthProvider } from '@react-oauth/google'
 import './index.css'
 import App from './App.tsx'
 
@@ -11,8 +12,18 @@ try {
   /* ignore — storage may be unavailable in some embeddings */
 }
 
-createRoot(document.getElementById('root')!).render(
+const googleClientId = import.meta.env.VITE_GOOGLE_OIDC_CLIENT_ID as string | undefined
+
+const tree = (
   <StrictMode>
     <App />
-  </StrictMode>,
+  </StrictMode>
+)
+
+createRoot(document.getElementById('root')!).render(
+  googleClientId ? (
+    <GoogleOAuthProvider clientId={googleClientId}>{tree}</GoogleOAuthProvider>
+  ) : (
+    tree
+  ),
 )

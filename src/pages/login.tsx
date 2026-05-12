@@ -4,12 +4,17 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Eye, EyeOff, ShieldCheck } from "lucide-react"
+import { GoogleLogin, type CredentialResponse } from "@react-oauth/google"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ApiError } from "@/lib/api"
-import { login, verifyTwoFactor } from "@/lib/auth"
+import { login, loginWithGoogle, verifyTwoFactor } from "@/lib/auth"
+
+const googleClientId = import.meta.env.VITE_GOOGLE_OIDC_CLIENT_ID as
+  | string
+  | undefined
 
 const credentialsSchema = z.object({
   identifier: z
@@ -59,6 +64,7 @@ function CredentialsStep({
   const navigate = useNavigate()
   const [serverError, setServerError] = React.useState<string | null>(null)
   const [showPassword, setShowPassword] = React.useState(false)
+  const [googleSubmitting, setGoogleSubmitting] = React.useState(false)
 
   const {
     register,
@@ -88,6 +94,37 @@ function CredentialsStep({
       setServerError(message)
     }
   })
+
+  const handleGoogleSuccess = async (cred: CredentialResponse) => {
+    if (!cred.credential) {
+      setServerError("Google sign-in did not return a credential")
+      return
+    }
+    setServerError(null)
+    setGoogleSubmitting(true)
+    try {
+      const result = await loginWithGoogle(cred.credential)
+      if (result.kind === "challenge") {
+        onChallenge(result.challengeToken)
+        return
+      }
+      navigate({ to: result.requiresTotpSetup ? "/setup-2fa" : "/" })
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.status === 401
+            ? err.message || "This Google account cannot sign in here"
+            : err.message
+          : "Something went wrong. Please try again."
+      setServerError(message)
+    } finally {
+      setGoogleSubmitting(false)
+    }
+  }
+
+  const handleGoogleError = () => {
+    setServerError("Google sign-in failed. Please try again.")
+  }
 
   return (
     <form
@@ -156,9 +193,41 @@ function CredentialsStep({
         )}
       </div>
 
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={isSubmitting || googleSubmitting}
+      >
         {isSubmitting ? "Signing in…" : "Sign in"}
       </Button>
+
+      {googleClientId && (
+        <>
+          <div className="relative py-1 text-center text-xs text-muted-foreground">
+            <span className="bg-card relative px-2">or continue with</span>
+            <span
+              aria-hidden="true"
+              className="absolute inset-x-0 top-1/2 -z-0 border-t"
+            />
+          </div>
+
+          <div
+            className="flex justify-center"
+            aria-busy={googleSubmitting}
+            aria-disabled={googleSubmitting || isSubmitting}
+          >
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={handleGoogleError}
+              useOneTap={false}
+              theme="outline"
+              size="large"
+              text="signin_with"
+              shape="rectangular"
+            />
+          </div>
+        </>
+      )}
     </form>
   )
 }
@@ -235,7 +304,7 @@ function ChallengeStep({
           inputMode="text"
           autoComplete="one-time-code"
           aria-invalid={!!errors.code}
-          placeholder="123456"
+          placeholder="XXXXXX"
           {...register("code")}
         />
         {errors.code && <p className="text-xs text-destructive">{errors.code.message}</p>}
