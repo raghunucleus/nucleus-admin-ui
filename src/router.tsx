@@ -5,6 +5,7 @@ import {
   redirect,
 } from "@tanstack/react-router"
 
+import { AdminUsersPage } from "@/pages/admin-users"
 import { AppLayout } from "@/layouts/app-layout"
 import { AuthLayout } from "@/layouts/auth-layout"
 import { LoginPage } from "@/pages/login"
@@ -73,6 +74,12 @@ const migrationsRoute = createRoute({
   component: MigrationsPage,
 })
 
+const adminUsersRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/admin-users",
+  component: AdminUsersPage,
+})
+
 const profileSections = ["profile", "password", "security"] as const
 export type ProfileSection = (typeof profileSections)[number]
 
@@ -95,7 +102,12 @@ const profileRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   authLayoutRoute.addChildren([loginRoute]),
   setup2faRoute,
-  protectedLayoutRoute.addChildren([welcomeRoute, migrationsRoute, profileRoute]),
+  protectedLayoutRoute.addChildren([
+    welcomeRoute,
+    migrationsRoute,
+    adminUsersRoute,
+    profileRoute,
+  ]),
 ])
 
 export const router = createRouter({ routeTree })

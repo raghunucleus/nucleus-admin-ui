@@ -87,9 +87,7 @@ function CredentialsStep({
     } catch (err) {
       const message =
         err instanceof ApiError
-          ? err.status === 401
-            ? "Invalid credentials"
-            : err.message
+          ? err.message || "Invalid credentials"
           : "Something went wrong. Please try again."
       setServerError(message)
     }

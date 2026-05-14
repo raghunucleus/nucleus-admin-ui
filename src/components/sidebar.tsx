@@ -7,6 +7,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Sparkles,
+  Users,
   type LucideIcon,
 } from "lucide-react"
 
@@ -25,6 +26,7 @@ type NavItem = NavLeaf | NavGroup
 
 const nav: NavItem[] = [
   { type: "leaf", to: "/", label: "Welcome", icon: Home, exact: true },
+  { type: "leaf", to: "/admin-users", label: "Admin users", icon: Users },
   { type: "leaf", to: "/migrations", label: "Migrations", icon: Database },
 ]
 
