@@ -3,6 +3,8 @@ import type { AdmissionYear } from "@/lib/admission-years"
 import type { Programme } from "@/lib/programmes"
 import type { Semester } from "@/lib/semesters"
 
+export type ProgrammeSemesterStatus = "upcoming" | "ongoing" | "completed"
+
 export type ProgrammeSemester = {
   id: number
   programme_id: number
@@ -12,6 +14,7 @@ export type ProgrammeSemester = {
   semester_id: number
   semester: Semester
   is_active: boolean
+  status: ProgrammeSemesterStatus
   created_at: string
   updated_at: string
 }
@@ -108,6 +111,24 @@ export async function deactivateProgrammeSemester(
 ): Promise<ProgrammeSemester> {
   return api<ProgrammeSemester>(
     `/admin/programme-semesters/${id}/deactivate`,
+    { method: "POST" },
+  )
+}
+
+export async function startProgrammeSemester(
+  id: number,
+): Promise<ProgrammeSemester> {
+  return api<ProgrammeSemester>(
+    `/admin/programme-semesters/${id}/start`,
+    { method: "POST" },
+  )
+}
+
+export async function completeProgrammeSemester(
+  id: number,
+): Promise<ProgrammeSemester> {
+  return api<ProgrammeSemester>(
+    `/admin/programme-semesters/${id}/complete`,
     { method: "POST" },
   )
 }

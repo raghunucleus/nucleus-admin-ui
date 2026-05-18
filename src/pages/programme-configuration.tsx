@@ -4,9 +4,14 @@ import { toast } from "sonner"
 import {
   ArrowRight,
   BookMarked,
+  CalendarRange,
+  CheckCircle2,
   GraduationCap,
+  Hourglass,
   LayoutGrid,
+  MoreHorizontal,
   Pencil,
+  Play,
   Plus,
   Power,
   PowerOff,
@@ -17,6 +22,14 @@ import {
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -40,8 +53,11 @@ import {
 } from "@/lib/programme-regulations"
 import {
   bulkCreateProgrammeSemesters,
+  completeProgrammeSemester,
   listProgrammeSemesters,
+  startProgrammeSemester,
   type ProgrammeSemester,
+  type ProgrammeSemesterStatus,
 } from "@/lib/programme-semesters"
 import {
   activateProgrammeSemesterSubject,
@@ -487,6 +503,11 @@ function SemestersCard({
   const [linked, setLinked] = React.useState<ProgrammeSemester[]>([])
   const [loading, setLoading] = React.useState(true)
   const [busy, setBusy] = React.useState(false)
+  const [busyStatusId, setBusyStatusId] = React.useState<number | null>(null)
+  const [statusConfirm, setStatusConfirm] = React.useState<{
+    row: ProgrammeSemester
+    target: ProgrammeSemesterStatus
+  } | null>(null)
   const [sheet, setSheet] = React.useState<ManageSheetMode>({ kind: "closed" })
 
   const load = React.useCallback(async () => {
@@ -538,6 +559,56 @@ function SemestersCard({
   const activeCount = linked.filter((l) => l.is_active).length
   const inactiveCount = linked.length - activeCount
 
+  // Sequential progression: a semester can only be started once every earlier
+  // active linked semester is 'completed'. Build a per-row "blocker" so each
+  // card can both gate its own Start action and explain why it's blocked.
+  // Inactive predecessors are skipped — they were intentionally taken out by
+  // the admin and shouldn't gum up later semesters.
+  const blockerByRowId = React.useMemo(() => {
+    const sorted = linked
+      .slice()
+      .sort((a, b) => a.semester.sem_number - b.semester.sem_number)
+    const map = new Map<number, ProgrammeSemester | null>()
+    for (let i = 0; i < sorted.length; i++) {
+      const row = sorted[i]
+      let blocker: ProgrammeSemester | null = null
+      for (let j = i - 1; j >= 0; j--) {
+        const prev = sorted[j]
+        if (!prev.is_active) continue
+        if (prev.status !== "completed") {
+          blocker = prev
+          break
+        }
+      }
+      map.set(row.id, blocker)
+    }
+    return map
+  }, [linked])
+
+  const runStatusTransition = async (
+    row: ProgrammeSemester,
+    target: ProgrammeSemesterStatus,
+  ) => {
+    setBusyStatusId(row.id)
+    try {
+      const updated =
+        target === "ongoing"
+          ? await startProgrammeSemester(row.id)
+          : await completeProgrammeSemester(row.id)
+      toast.success(
+        `${updated.semester.code} marked ${STATUS_LABELS[updated.status]}.`,
+      )
+      await load()
+    } catch (err) {
+      toast.error("Couldn't update status", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setBusyStatusId(null)
+    }
+  }
+
   return (
     <SectionCard
       icon={LayoutGrid}
@@ -580,24 +651,29 @@ function SemestersCard({
           </div>
 
           {linked.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-1.5">
-              {linked.map((ps) => (
-                <span
-                  key={ps.id}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                    ps.is_active
-                      ? "bg-primary/10 text-primary"
-                      : "bg-muted text-muted-foreground line-through",
-                  )}
-                  title={`${ps.semester.code} — ${ps.semester.name}${ps.is_active ? "" : " (inactive)"}`}
-                >
-                  <span className="tabular-nums">{ps.semester.sem_number}</span>
-                  <span className="opacity-70">·</span>
-                  <span>{ps.semester.code}</span>
-                </span>
-              ))}
-            </div>
+            <>
+              <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>Status:</span>
+                <StatusLegendChip status="completed" />
+                <StatusLegendChip status="ongoing" />
+                <StatusLegendChip status="upcoming" />
+              </div>
+              <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {linked
+                  .filter((ps) => ps.is_active)
+                  .map((ps) => (
+                    <SemesterCard
+                      key={ps.id}
+                      row={ps}
+                      busy={busyStatusId === ps.id}
+                      blockedBy={blockerByRowId.get(ps.id) ?? null}
+                      onRequestTransition={(target) =>
+                        setStatusConfirm({ row: ps, target })
+                      }
+                    />
+                  ))}
+              </div>
+            </>
           )}
 
           <div className="flex flex-wrap items-center gap-2">
@@ -657,7 +733,234 @@ function SemestersCard({
           )}
         </SheetContent>
       </Sheet>
+
+      <ConfirmDialog
+        open={statusConfirm !== null}
+        onOpenChange={(o) => !o && setStatusConfirm(null)}
+        title={
+          statusConfirm
+            ? statusConfirm.target === "ongoing"
+              ? "Start this semester?"
+              : "Mark this semester completed?"
+            : ""
+        }
+        description={
+          statusConfirm ? (
+            <div>
+              {statusConfirm.target === "ongoing"
+                ? "Moving from Upcoming to Ongoing. Forward-only — you won't be able to revert."
+                : "Moving from Ongoing to Completed. Forward-only — you won't be able to revert."}
+              <div className="mt-2 font-medium text-foreground">
+                {statusConfirm.row.semester.code} —{" "}
+                {statusConfirm.row.semester.name}
+              </div>
+            </div>
+          ) : undefined
+        }
+        confirmLabel={
+          statusConfirm?.target === "ongoing"
+            ? "Start semester"
+            : "Mark completed"
+        }
+        tone={statusConfirm?.target === "completed" ? "success" : undefined}
+        loading={busyStatusId === statusConfirm?.row.id}
+        onConfirm={async () => {
+          if (!statusConfirm) return
+          const { row, target } = statusConfirm
+          await runStatusTransition(row, target)
+          setStatusConfirm(null)
+        }}
+      />
     </SectionCard>
+  )
+}
+
+const STATUS_LABELS: Record<ProgrammeSemesterStatus, string> = {
+  upcoming: "Upcoming",
+  ongoing: "Ongoing",
+  completed: "Completed",
+}
+
+// Tailwind classes for each lifecycle state. Kept here so the legend strip
+// and the per-card status pill stay in sync visually.
+const STATUS_STYLES: Record<ProgrammeSemesterStatus, string> = {
+  completed:
+    "bg-success/10 text-success border border-success/30",
+  ongoing:
+    "bg-warning/15 text-warning border border-warning/40",
+  upcoming:
+    "bg-muted text-muted-foreground border border-input",
+}
+
+// Card chrome per status — subtler than the pill so multiple cards don't
+// fight each other for attention. Border color carries the signal; the
+// background tint is barely there.
+const STATUS_CARD_STYLES: Record<ProgrammeSemesterStatus, string> = {
+  completed: "border-success/40 bg-success/[0.03]",
+  ongoing: "border-warning/50 bg-warning/[0.04]",
+  upcoming: "border-input bg-card",
+}
+
+function StatusLegendChip({ status }: { status: ProgrammeSemesterStatus }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
+        STATUS_STYLES[status],
+      )}
+    >
+      {STATUS_LABELS[status]}
+    </span>
+  )
+}
+
+function SemesterCard({
+  row,
+  busy,
+  blockedBy,
+  onRequestTransition,
+}: {
+  row: ProgrammeSemester
+  busy: boolean
+  // Earliest still-unfinished active predecessor, or null if this row is
+  // either Sem 1 or has every active predecessor already completed.
+  blockedBy: ProgrammeSemester | null
+  onRequestTransition: (target: ProgrammeSemesterStatus) => void
+}) {
+  const canStart = row.status === "upcoming" && blockedBy === null
+  const canComplete = row.status === "ongoing"
+  const hasAction = canStart || canComplete
+
+  return (
+    <div
+      className={cn(
+        "relative flex flex-col rounded-lg border p-3 text-card-foreground shadow-xs transition-colors",
+        STATUS_CARD_STYLES[row.status],
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Sem
+            </span>
+            <span className="text-lg font-semibold leading-none tabular-nums">
+              {row.semester.sem_number}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+            <span className="font-mono text-foreground">
+              {row.semester.code}
+            </span>
+            <span className="opacity-40">·</span>
+            <span>{row.semester.roman_format}</span>
+            <span className="opacity-40">·</span>
+            <span>{row.semester.year_sem_format}</span>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <span
+            className={cn(
+              "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+              STATUS_STYLES[row.status],
+            )}
+          >
+            {STATUS_LABELS[row.status]}
+          </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                disabled={busy}
+                className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={`Actions for ${row.semester.code}`}
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[14rem]">
+              <DropdownMenuLabel>
+                Currently {STATUS_LABELS[row.status]}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {row.status === "upcoming" && !blockedBy && (
+                <DropdownMenuItem
+                  onSelect={() => onRequestTransition("ongoing")}
+                >
+                  <Play />
+                  Start (mark ongoing)
+                </DropdownMenuItem>
+              )}
+              {row.status === "upcoming" && blockedBy && (
+                <DropdownMenuItem disabled>
+                  <Hourglass />
+                  Finish Sem {blockedBy.semester.sem_number} first
+                </DropdownMenuItem>
+              )}
+              {row.status === "ongoing" && (
+                <DropdownMenuItem
+                  onSelect={() => onRequestTransition("completed")}
+                >
+                  <CheckCircle2 />
+                  Mark completed
+                </DropdownMenuItem>
+              )}
+              {row.status === "completed" && (
+                <DropdownMenuItem disabled>
+                  <Hourglass />
+                  Already completed
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {/* Placeholder body — start/end dates and the per-semester checklist
+        will land here. Kept visible (rather than hidden) so each card has
+        consistent height and so the slot is obvious during design. */}
+      <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <CalendarRange className="size-3.5 opacity-60" />
+          <span className="italic">Dates not configured yet</span>
+        </div>
+        {row.status === "upcoming" && blockedBy && (
+          <div className="flex items-center gap-1.5">
+            <Hourglass className="size-3.5 opacity-60" />
+            <span>
+              Waiting for Sem {blockedBy.semester.sem_number} (
+              {blockedBy.semester.code}) to finish
+            </span>
+          </div>
+        )}
+      </div>
+
+      {hasAction && (
+        <div className="mt-3 flex justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-xs"
+            disabled={busy}
+            onClick={() =>
+              onRequestTransition(canStart ? "ongoing" : "completed")
+            }
+          >
+            {canStart ? (
+              <>
+                <Play />
+                Start
+              </>
+            ) : (
+              <>
+                <CheckCircle2 />
+                Mark completed
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 
