@@ -9,6 +9,16 @@ import { AdminUsersPage } from "@/pages/admin-users"
 import { AppLayout } from "@/layouts/app-layout"
 import { AuthLayout } from "@/layouts/auth-layout"
 import { LoginPage } from "@/pages/login"
+import { AdmissionYearsPage } from "@/pages/admission-years"
+import { DegreesPage } from "@/pages/degrees"
+import { DepartmentsPage } from "@/pages/departments"
+import { ProgrammeConfigurationPage } from "@/pages/programme-configuration"
+import { ProgrammeRegulationsPage } from "@/pages/programme-regulations"
+import { ProgrammeSemestersPage } from "@/pages/programme-semesters"
+import { ProgrammesPage } from "@/pages/programmes"
+import { RegulationsPage } from "@/pages/regulations"
+import { SemestersPage } from "@/pages/semesters"
+import { SubjectsPage } from "@/pages/subjects"
 import { MigrationsPage } from "@/pages/migrations"
 import { NotFoundPage } from "@/pages/not-found"
 import { ProfilePage } from "@/pages/profile"
@@ -80,6 +90,94 @@ const adminUsersRoute = createRoute({
   component: AdminUsersPage,
 })
 
+const mastersDegreesRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/degrees",
+  component: DegreesPage,
+})
+
+const mastersDepartmentsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/departments",
+  component: DepartmentsPage,
+})
+
+const mastersProgrammesRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programmes",
+  component: ProgrammesPage,
+})
+
+const mastersProgrammeSemestersRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programme-semesters",
+  component: ProgrammeSemestersPage,
+  validateSearch: (search: Record<string, unknown>): { programmeId?: number } => {
+    const raw = search.programmeId
+    const coerced =
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string"
+          ? Number(raw)
+          : Number.NaN
+    return Number.isInteger(coerced) && coerced > 0
+      ? { programmeId: coerced }
+      : {}
+  },
+})
+
+const mastersSemestersRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/semesters",
+  component: SemestersPage,
+})
+
+const mastersAdmissionYearsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/admission-years",
+  component: AdmissionYearsPage,
+})
+
+const mastersRegulationsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/regulations",
+  component: RegulationsPage,
+})
+
+const mastersSubjectsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/subjects",
+  component: SubjectsPage,
+})
+
+const mastersProgrammeRegulationsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programme-regulations",
+  component: ProgrammeRegulationsPage,
+})
+
+const mastersProgrammeConfigurationRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programme-configuration",
+  component: ProgrammeConfigurationPage,
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { programmeId?: number; admissionYearId?: number } => {
+    const out: { programmeId?: number; admissionYearId?: number } = {}
+    for (const key of ["programmeId", "admissionYearId"] as const) {
+      const raw = search[key]
+      const n =
+        typeof raw === "number"
+          ? raw
+          : typeof raw === "string"
+            ? Number(raw)
+            : Number.NaN
+      if (Number.isInteger(n) && n > 0) out[key] = n
+    }
+    return out
+  },
+})
+
 const profileSections = ["profile", "password", "security"] as const
 export type ProfileSection = (typeof profileSections)[number]
 
@@ -106,6 +204,16 @@ const routeTree = rootRoute.addChildren([
     welcomeRoute,
     migrationsRoute,
     adminUsersRoute,
+    mastersDegreesRoute,
+    mastersDepartmentsRoute,
+    mastersProgrammesRoute,
+    mastersProgrammeSemestersRoute,
+    mastersSemestersRoute,
+    mastersAdmissionYearsRoute,
+    mastersRegulationsRoute,
+    mastersSubjectsRoute,
+    mastersProgrammeRegulationsRoute,
+    mastersProgrammeConfigurationRoute,
     profileRoute,
   ]),
 ])

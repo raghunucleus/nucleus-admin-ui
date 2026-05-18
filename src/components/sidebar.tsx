@@ -4,6 +4,7 @@ import {
   ChevronRight,
   Database,
   Home,
+  Layers,
   PanelLeftClose,
   PanelLeftOpen,
   Sparkles,
@@ -27,6 +28,22 @@ type NavItem = NavLeaf | NavGroup
 const nav: NavItem[] = [
   { type: "leaf", to: "/", label: "Welcome", icon: Home, exact: true },
   { type: "leaf", to: "/admin-users", label: "Admin users", icon: Users },
+  {
+    type: "group",
+    key: "masters",
+    label: "Masters",
+    icon: Layers,
+    children: [
+      { to: "/masters/degrees", label: "Degree" },
+      { to: "/masters/departments", label: "Department" },
+      { to: "/masters/programmes", label: "Programme" },
+      { to: "/masters/semesters", label: "Semester" },
+      { to: "/masters/admission-years", label: "Admission years" },
+      { to: "/masters/regulations", label: "Regulation" },
+      { to: "/masters/subjects", label: "Subject" },
+      { to: "/masters/programme-configuration", label: "Programme configuration" },
+    ],
+  },
   { type: "leaf", to: "/migrations", label: "Migrations", icon: Database },
 ]
 
