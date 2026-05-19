@@ -22,6 +22,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Filter,
+  GraduationCap,
   Pencil,
   Plus,
   Power,
@@ -29,13 +30,13 @@ import {
   RefreshCw,
   Search,
   SearchX,
-  Users,
   X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -59,23 +60,25 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
-import { listDepartments, type Department } from "@/lib/departments"
-import { listDesignations, type Designation } from "@/lib/designations"
+import { listAdmissionYears, type AdmissionYear } from "@/lib/admission-years"
+import { listProgrammes, type Programme } from "@/lib/programmes"
 import {
+  BLOOD_GROUPS,
   GENDERS,
   GENDER_LABELS,
-  activateEmployee,
-  createEmployee,
-  deactivateEmployee,
-  listEmployees,
-  updateEmployee,
-  type Employee,
-  type EmployeeStatusFilter,
-  type EmployeesSortField,
-  type EmployeesSortOrder,
+  activateStudent,
+  createStudent,
+  deactivateStudent,
+  listStudents,
+  updateStudent,
+  type BloodGroup,
   type Gender,
-  type ListEmployeesParams,
-} from "@/lib/employees"
+  type ListStudentsParams,
+  type Student,
+  type StudentStatusFilter,
+  type StudentsSortField,
+  type StudentsSortOrder,
+} from "@/lib/students"
 
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -93,24 +96,10 @@ const STICKY_LEFT_HEAD = "sticky left-0 z-20 bg-card border-r"
 type Mode =
   | { kind: "list" }
   | { kind: "create" }
-  | { kind: "edit"; employee: Employee }
+  | { kind: "edit"; student: Student }
 
-const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-})
-
-function formatDateTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return "—"
-  return dateTimeFormatter.format(d)
-}
-
-export function EmployeesPage() {
-  const [employees, setEmployees] = React.useState<Employee[]>([])
+export function StudentsPage() {
+  const [students, setStudents] = React.useState<Student[]>([])
   const [total, setTotal] = React.useState(0)
   const [pageCount, setPageCount] = React.useState(0)
   const [loading, setLoading] = React.useState(true)
@@ -118,7 +107,7 @@ export function EmployeesPage() {
   const [loadFailed, setLoadFailed] = React.useState(false)
   const [busyId, setBusyId] = React.useState<number | null>(null)
   const [mode, setMode] = React.useState<Mode>({ kind: "list" })
-  const [confirmTarget, setConfirmTarget] = React.useState<Employee | null>(null)
+  const [confirmTarget, setConfirmTarget] = React.useState<Student | null>(null)
 
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "created_at", desc: true },
@@ -132,42 +121,48 @@ export function EmployeesPage() {
   const [searchRowOpen, setSearchRowOpen] = React.useState(false)
 
   const [pendingStatus, setPendingStatus] = React.useState<
-    EmployeeStatusFilter | undefined
+    StudentStatusFilter | undefined
   >(undefined)
   const [pendingGender, setPendingGender] = React.useState<Gender | undefined>(
     undefined,
   )
-  const [pendingDepartmentId, setPendingDepartmentId] = React.useState<
+  const [pendingBloodGroup, setPendingBloodGroup] = React.useState<
+    BloodGroup | undefined
+  >(undefined)
+  const [pendingProgrammeId, setPendingProgrammeId] = React.useState<
     number | undefined
   >(undefined)
-  const [pendingDesignationId, setPendingDesignationId] = React.useState<
+  const [pendingAdmissionYearId, setPendingAdmissionYearId] = React.useState<
     number | undefined
   >(undefined)
 
-  const [status, setStatus] = React.useState<EmployeeStatusFilter | undefined>(
+  const [status, setStatus] = React.useState<StudentStatusFilter | undefined>(
     undefined,
   )
   const [gender, setGender] = React.useState<Gender | undefined>(undefined)
-  const [departmentId, setDepartmentId] = React.useState<number | undefined>(
+  const [bloodGroup, setBloodGroup] = React.useState<BloodGroup | undefined>(
     undefined,
   )
-  const [designationId, setDesignationId] = React.useState<number | undefined>(
+  const [programmeId, setProgrammeId] = React.useState<number | undefined>(
     undefined,
   )
+  const [admissionYearId, setAdmissionYearId] = React.useState<
+    number | undefined
+  >(undefined)
 
   type ColumnSearchState = {
-    emp_code: string
-    emp_display_name: string
+    student_id: string
+    display_name: string
     email: string
     mobile_number: string
-    rm_emp_code: string
+    abc_id: string
   }
   const emptyColumnSearch: ColumnSearchState = {
-    emp_code: "",
-    emp_display_name: "",
+    student_id: "",
+    display_name: "",
     email: "",
     mobile_number: "",
-    rm_emp_code: "",
+    abc_id: "",
   }
   const [columnSearch, setColumnSearch] =
     React.useState<ColumnSearchState>(emptyColumnSearch)
@@ -179,16 +174,18 @@ export function EmployeesPage() {
     if (filterPanelOpen) {
       setPendingStatus(status)
       setPendingGender(gender)
-      setPendingDepartmentId(departmentId)
-      setPendingDesignationId(designationId)
+      setPendingBloodGroup(bloodGroup)
+      setPendingProgrammeId(programmeId)
+      setPendingAdmissionYearId(admissionYearId)
     }
-  }, [filterPanelOpen, status, gender, departmentId, designationId])
+  }, [filterPanelOpen, status, gender, bloodGroup, programmeId, admissionYearId])
 
   React.useEffect(() => {
     if (!searchRowOpen) {
       setColumnSearch(emptyColumnSearch)
       setAppliedColumnSearch(emptyColumnSearch)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchRowOpen])
 
   const handleColumnSearchChange = React.useCallback(
@@ -200,11 +197,11 @@ export function EmployeesPage() {
 
   const applyColumnSearch = () => {
     const next: ColumnSearchState = {
-      emp_code: columnSearch.emp_code.trim(),
-      emp_display_name: columnSearch.emp_display_name.trim(),
+      student_id: columnSearch.student_id.trim(),
+      display_name: columnSearch.display_name.trim(),
       email: columnSearch.email.trim(),
       mobile_number: columnSearch.mobile_number.trim(),
-      rm_emp_code: columnSearch.rm_emp_code.trim(),
+      abc_id: columnSearch.abc_id.trim(),
     }
     setColumnSearch(next)
     setAppliedColumnSearch(next)
@@ -220,57 +217,62 @@ export function EmployeesPage() {
   const applyFilters = () => {
     setStatus(pendingStatus)
     setGender(pendingGender)
-    setDepartmentId(pendingDepartmentId)
-    setDesignationId(pendingDesignationId)
+    setBloodGroup(pendingBloodGroup)
+    setProgrammeId(pendingProgrammeId)
+    setAdmissionYearId(pendingAdmissionYearId)
     setPagination((p) => ({ ...p, pageIndex: 0 }))
   }
 
   const resetFilters = () => {
     setPendingStatus(undefined)
     setPendingGender(undefined)
-    setPendingDepartmentId(undefined)
-    setPendingDesignationId(undefined)
+    setPendingBloodGroup(undefined)
+    setPendingProgrammeId(undefined)
+    setPendingAdmissionYearId(undefined)
     setStatus(undefined)
     setGender(undefined)
-    setDepartmentId(undefined)
-    setDesignationId(undefined)
+    setBloodGroup(undefined)
+    setProgrammeId(undefined)
+    setAdmissionYearId(undefined)
     setPagination((p) => ({ ...p, pageIndex: 0 }))
   }
 
   const filtersDirty =
     pendingStatus !== status ||
     pendingGender !== gender ||
-    pendingDepartmentId !== departmentId ||
-    pendingDesignationId !== designationId
+    pendingBloodGroup !== bloodGroup ||
+    pendingProgrammeId !== programmeId ||
+    pendingAdmissionYearId !== admissionYearId
   const columnSearchDirty =
-    columnSearch.emp_code.trim() !== appliedColumnSearch.emp_code ||
-    columnSearch.emp_display_name.trim() !== appliedColumnSearch.emp_display_name ||
+    columnSearch.student_id.trim() !== appliedColumnSearch.student_id ||
+    columnSearch.display_name.trim() !== appliedColumnSearch.display_name ||
     columnSearch.email.trim() !== appliedColumnSearch.email ||
     columnSearch.mobile_number.trim() !== appliedColumnSearch.mobile_number ||
-    columnSearch.rm_emp_code.trim() !== appliedColumnSearch.rm_emp_code
+    columnSearch.abc_id.trim() !== appliedColumnSearch.abc_id
   const columnSearchHasInput =
-    !!columnSearch.emp_code ||
-    !!columnSearch.emp_display_name ||
+    !!columnSearch.student_id ||
+    !!columnSearch.display_name ||
     !!columnSearch.email ||
     !!columnSearch.mobile_number ||
-    !!columnSearch.rm_emp_code
+    !!columnSearch.abc_id
 
   const activeFilterCount =
     (status ? 1 : 0) +
     (gender ? 1 : 0) +
-    (departmentId ? 1 : 0) +
-    (designationId ? 1 : 0) +
-    (appliedColumnSearch.emp_code ? 1 : 0) +
-    (appliedColumnSearch.emp_display_name ? 1 : 0) +
+    (bloodGroup ? 1 : 0) +
+    (programmeId ? 1 : 0) +
+    (admissionYearId ? 1 : 0) +
+    (appliedColumnSearch.student_id ? 1 : 0) +
+    (appliedColumnSearch.display_name ? 1 : 0) +
     (appliedColumnSearch.email ? 1 : 0) +
     (appliedColumnSearch.mobile_number ? 1 : 0) +
-    (appliedColumnSearch.rm_emp_code ? 1 : 0)
+    (appliedColumnSearch.abc_id ? 1 : 0)
 
-  const queryParams = React.useMemo<ListEmployeesParams>(() => {
+  const queryParams = React.useMemo<ListStudentsParams>(() => {
     const head = sorting[0]
-    const sortBy: EmployeesSortField =
-      (head?.id as EmployeesSortField | undefined) ?? "created_at"
-    const sortOrder: EmployeesSortOrder = head
+    const sortBy: StudentsSortField =
+      (head?.id as StudentsSortField | undefined) ?? "created_at"
+    const sortOrder: StudentsSortOrder = head
       ? head.desc
         ? "desc"
         : "asc"
@@ -280,15 +282,16 @@ export function EmployeesPage() {
       pageSize: pagination.pageSize,
       sortBy,
       sortOrder,
-      empCodeSearch: appliedColumnSearch.emp_code || undefined,
-      displayNameSearch: appliedColumnSearch.emp_display_name || undefined,
+      studentIdSearch: appliedColumnSearch.student_id || undefined,
+      displayNameSearch: appliedColumnSearch.display_name || undefined,
       emailSearch: appliedColumnSearch.email || undefined,
       mobileSearch: appliedColumnSearch.mobile_number || undefined,
-      rmEmpCodeSearch: appliedColumnSearch.rm_emp_code || undefined,
+      abcIdSearch: appliedColumnSearch.abc_id || undefined,
       status,
       gender,
-      departmentId,
-      designationId,
+      bloodGroup,
+      programmeId,
+      admissionYearId,
     }
   }, [
     pagination.pageIndex,
@@ -297,8 +300,9 @@ export function EmployeesPage() {
     appliedColumnSearch,
     status,
     gender,
-    departmentId,
-    designationId,
+    bloodGroup,
+    programmeId,
+    admissionYearId,
   ])
 
   const loadIdRef = React.useRef(0)
@@ -310,9 +314,9 @@ export function EmployeesPage() {
     if (initialLoadDoneRef.current) setRefreshing(true)
     else setLoading(true)
     try {
-      const result = await listEmployees(queryParams)
+      const result = await listStudents(queryParams)
       if (!isLatest()) return
-      setEmployees(result.rows)
+      setStudents(result.rows)
       setTotal(result.total)
       setPageCount(result.pageCount)
       setLoadFailed(false)
@@ -320,7 +324,7 @@ export function EmployeesPage() {
     } catch (err) {
       if (!isLatest()) return
       setLoadFailed(true)
-      toast.error("Couldn't load employees", {
+      toast.error("Couldn't load students", {
         description:
           err instanceof ApiError ? err.message : "Please try again.",
       })
@@ -336,45 +340,38 @@ export function EmployeesPage() {
     void load()
   }, [load])
 
-  // Departments, designations, and (potential) managers for filter/form selects.
-  const [departments, setDepartments] = React.useState<Department[]>([])
-  const [designations, setDesignations] = React.useState<Designation[]>([])
-  const [managers, setManagers] = React.useState<Employee[]>([])
-
-  const refreshManagers = React.useCallback(async () => {
-    try {
-      const result = await listEmployees({
-        status: "active",
-        pageSize: 100,
-        sortBy: "emp_display_name",
-        sortOrder: "asc",
-      })
-      setManagers(result.rows)
-    } catch {
-      // Non-fatal: manager dropdown will just be empty.
-    }
-  }, [])
+  const [programmes, setProgrammes] = React.useState<Programme[]>([])
+  const [admissionYears, setAdmissionYears] = React.useState<AdmissionYear[]>([])
 
   React.useEffect(() => {
     let cancelled = false
     void (async () => {
       try {
-        const [deps, des] = await Promise.all([
-          listDepartments({ status: "active", pageSize: 100, sortBy: "name", sortOrder: "asc" }),
-          listDesignations({ status: "active", pageSize: 100, sortBy: "name", sortOrder: "asc" }),
+        const [progs, years] = await Promise.all([
+          listProgrammes({
+            status: "active",
+            pageSize: 100,
+            sortBy: "name",
+            sortOrder: "asc",
+          }),
+          listAdmissionYears({
+            status: "active",
+            pageSize: 100,
+            sortBy: "year",
+            sortOrder: "desc",
+          }),
         ])
         if (cancelled) return
-        setDepartments(deps.rows)
-        setDesignations(des.rows)
+        setProgrammes(progs.rows)
+        setAdmissionYears(years.rows)
       } catch {
         // Non-fatal: filter/form selects will just be empty.
       }
     })()
-    void refreshManagers()
     return () => {
       cancelled = true
     }
-  }, [refreshManagers])
+  }, [])
 
   const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
     setSorting((prev) => (typeof updater === "function" ? updater(prev) : updater))
@@ -388,20 +385,20 @@ export function EmployeesPage() {
     })
   }
 
-  const requestToggleActive = (employee: Employee) => setConfirmTarget(employee)
+  const requestToggleActive = (student: Student) => setConfirmTarget(student)
 
-  const handleToggleActive = async (employee: Employee) => {
-    setBusyId(employee.id)
+  const handleToggleActive = async (student: Student) => {
+    setBusyId(student.id)
     try {
-      const updated = employee.is_active
-        ? await deactivateEmployee(employee.id)
-        : await activateEmployee(employee.id)
+      const updated = student.is_active
+        ? await deactivateStudent(student.id)
+        : await activateStudent(student.id)
       toast.success(
-        `${updated.emp_display_name} ${updated.is_active ? "activated" : "deactivated"}.`,
+        `${updated.display_name} ${updated.is_active ? "activated" : "deactivated"}.`,
       )
       await load()
     } catch (err) {
-      toast.error("Couldn't update employee status", {
+      toast.error("Couldn't update student status", {
         description:
           err instanceof ApiError ? err.message : "Please try again.",
       })
@@ -410,20 +407,20 @@ export function EmployeesPage() {
     }
   }
 
-  const handleSaved = async (updated: Employee, kind: "create" | "edit") => {
+  const handleSaved = async (updated: Student, kind: "create" | "edit") => {
     setMode({ kind: "list" })
     toast.success(
       kind === "create"
-        ? `${updated.emp_display_name} created.`
-        : `${updated.emp_display_name} updated.`,
+        ? `${updated.display_name} created.`
+        : `${updated.display_name} updated.`,
     )
-    await Promise.all([load(), refreshManagers()])
+    await load()
   }
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <h1 className="text-base font-semibold tracking-tight">Employees</h1>
+        <h1 className="text-base font-semibold tracking-tight">Students</h1>
         <div className="flex items-center gap-1.5">
           <Button
             size="sm"
@@ -431,7 +428,7 @@ export function EmployeesPage() {
             disabled={mode.kind !== "list"}
           >
             <Plus />
-            New employee
+            New student
           </Button>
           <div className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
           <ToolbarIconToggle
@@ -460,25 +457,23 @@ export function EmployeesPage() {
       >
         <SheetContent side="right" className="w-full sm:max-w-2xl">
           {mode.kind === "create" && (
-            <EmployeeForm
+            <StudentForm
               mode="create"
-              departments={departments}
-              designations={designations}
-              managers={managers}
+              programmes={programmes}
+              admissionYears={admissionYears}
               onCancel={() => setMode({ kind: "list" })}
-              onSaved={(e) => handleSaved(e, "create")}
+              onSaved={(s) => handleSaved(s, "create")}
             />
           )}
 
           {mode.kind === "edit" && (
-            <EmployeeForm
+            <StudentForm
               mode="edit"
-              employee={mode.employee}
-              departments={departments}
-              designations={designations}
-              managers={managers}
+              student={mode.student}
+              programmes={programmes}
+              admissionYears={admissionYears}
               onCancel={() => setMode({ kind: "list" })}
-              onSaved={(e) => handleSaved(e, "edit")}
+              onSaved={(s) => handleSaved(s, "edit")}
             />
           )}
         </SheetContent>
@@ -489,14 +484,16 @@ export function EmployeesPage() {
           <FilterPanel
             pendingStatus={pendingStatus}
             pendingGender={pendingGender}
-            pendingDepartmentId={pendingDepartmentId}
-            pendingDesignationId={pendingDesignationId}
-            departments={departments}
-            designations={designations}
+            pendingBloodGroup={pendingBloodGroup}
+            pendingProgrammeId={pendingProgrammeId}
+            pendingAdmissionYearId={pendingAdmissionYearId}
+            programmes={programmes}
+            admissionYears={admissionYears}
             onPendingStatusChange={setPendingStatus}
             onPendingGenderChange={setPendingGender}
-            onPendingDepartmentIdChange={setPendingDepartmentId}
-            onPendingDesignationIdChange={setPendingDesignationId}
+            onPendingBloodGroupChange={setPendingBloodGroup}
+            onPendingProgrammeIdChange={setPendingProgrammeId}
+            onPendingAdmissionYearIdChange={setPendingAdmissionYearId}
             onApply={applyFilters}
             onReset={resetFilters}
             onClose={() => setFilterPanelOpen(false)}
@@ -504,19 +501,21 @@ export function EmployeesPage() {
             resetDisabled={
               !status &&
               !gender &&
-              !departmentId &&
-              !designationId &&
+              !bloodGroup &&
+              !programmeId &&
+              !admissionYearId &&
               !pendingStatus &&
               !pendingGender &&
-              !pendingDepartmentId &&
-              !pendingDesignationId
+              !pendingBloodGroup &&
+              !pendingProgrammeId &&
+              !pendingAdmissionYearId
             }
           />
         )}
 
         <div className="min-w-0 flex-1 rounded-lg border bg-card text-card-foreground">
-          <EmployeesTable
-            employees={employees}
+          <StudentsTable
+            students={students}
             total={total}
             pageCount={pageCount}
             busyId={busyId}
@@ -535,18 +534,18 @@ export function EmployeesPage() {
             columnSearchApplyDisabled={!columnSearchDirty}
             columnSearchResetDisabled={
               !columnSearchHasInput &&
-              !appliedColumnSearch.emp_code &&
-              !appliedColumnSearch.emp_display_name &&
+              !appliedColumnSearch.student_id &&
+              !appliedColumnSearch.display_name &&
               !appliedColumnSearch.email &&
               !appliedColumnSearch.mobile_number &&
-              !appliedColumnSearch.rm_emp_code
+              !appliedColumnSearch.abc_id
             }
             hasActiveFilters={activeFilterCount > 0}
             onOpenFilters={() => setFilterPanelOpen(true)}
             onResetFilters={resetFilters}
             loadFailed={loadFailed}
             onRetry={() => void load()}
-            onEdit={(e) => setMode({ kind: "edit", employee: e })}
+            onEdit={(s) => setMode({ kind: "edit", student: s })}
             onToggleActive={requestToggleActive}
           />
         </div>
@@ -559,19 +558,19 @@ export function EmployeesPage() {
         }}
         title={
           confirmTarget?.is_active
-            ? "Deactivate employee?"
-            : "Activate employee?"
+            ? "Deactivate student?"
+            : "Activate student?"
         }
         description={
           confirmTarget ? (
             <>
               {confirmTarget.is_active
-                ? "Deactivated employees won't be selectable in dependent records."
-                : "Reactivated employees become available again."}
+                ? "Deactivated students won't be selectable in dependent records."
+                : "Reactivated students become available again."}
               <div className="mt-2 font-medium text-foreground">
-                {confirmTarget.emp_display_name}{" "}
+                {confirmTarget.display_name}{" "}
                 <span className="text-muted-foreground">
-                  ({confirmTarget.emp_code})
+                  ({confirmTarget.student_id})
                 </span>
               </div>
             </>
@@ -632,30 +631,34 @@ function ToolbarIconToggle({
 function FilterPanel({
   pendingStatus,
   pendingGender,
-  pendingDepartmentId,
-  pendingDesignationId,
-  departments,
-  designations,
+  pendingBloodGroup,
+  pendingProgrammeId,
+  pendingAdmissionYearId,
+  programmes,
+  admissionYears,
   onPendingStatusChange,
   onPendingGenderChange,
-  onPendingDepartmentIdChange,
-  onPendingDesignationIdChange,
+  onPendingBloodGroupChange,
+  onPendingProgrammeIdChange,
+  onPendingAdmissionYearIdChange,
   onApply,
   onReset,
   onClose,
   applyDisabled,
   resetDisabled,
 }: {
-  pendingStatus: EmployeeStatusFilter | undefined
+  pendingStatus: StudentStatusFilter | undefined
   pendingGender: Gender | undefined
-  pendingDepartmentId: number | undefined
-  pendingDesignationId: number | undefined
-  departments: Department[]
-  designations: Designation[]
-  onPendingStatusChange: (v: EmployeeStatusFilter | undefined) => void
+  pendingBloodGroup: BloodGroup | undefined
+  pendingProgrammeId: number | undefined
+  pendingAdmissionYearId: number | undefined
+  programmes: Programme[]
+  admissionYears: AdmissionYear[]
+  onPendingStatusChange: (v: StudentStatusFilter | undefined) => void
   onPendingGenderChange: (v: Gender | undefined) => void
-  onPendingDepartmentIdChange: (v: number | undefined) => void
-  onPendingDesignationIdChange: (v: number | undefined) => void
+  onPendingBloodGroupChange: (v: BloodGroup | undefined) => void
+  onPendingProgrammeIdChange: (v: number | undefined) => void
+  onPendingAdmissionYearIdChange: (v: number | undefined) => void
   onApply: () => void
   onReset: () => void
   onClose: () => void
@@ -686,7 +689,7 @@ function FilterPanel({
               onPendingStatusChange(
                 e.target.value === ""
                   ? undefined
-                  : (e.target.value as EmployeeStatusFilter),
+                  : (e.target.value as StudentStatusFilter),
               )
             }
             className={selectClass}
@@ -719,38 +722,61 @@ function FilterPanel({
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="filter-department">Department</Label>
+          <Label htmlFor="filter-blood-group">Blood group</Label>
+          <select
+            id="filter-blood-group"
+            value={pendingBloodGroup ?? ""}
+            onChange={(e) =>
+              onPendingBloodGroupChange(
+                e.target.value === ""
+                  ? undefined
+                  : (e.target.value as BloodGroup),
+              )
+            }
+            className={selectClass}
+          >
+            <option value="">All</option>
+            {BLOOD_GROUPS.map((bg) => (
+              <option key={bg} value={bg}>
+                {bg}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="filter-programme">Programme</Label>
           <Combobox
-            id="filter-department"
-            value={pendingDepartmentId ?? null}
-            options={departments.map((d) => ({
-              value: d.id,
-              label: d.name,
-              sublabel: d.code,
+            id="filter-programme"
+            value={pendingProgrammeId ?? null}
+            options={programmes.map((p) => ({
+              value: p.id,
+              label: p.name,
+              sublabel: p.code,
             }))}
-            onChange={(v) => onPendingDepartmentIdChange(v ?? undefined)}
-            placeholder="All departments"
-            searchPlaceholder="Search departments…"
-            emptyMessage="No departments match"
-            clearLabel="All departments"
+            onChange={(v) => onPendingProgrammeIdChange(v ?? undefined)}
+            placeholder="All programmes"
+            searchPlaceholder="Search programmes…"
+            emptyMessage="No programmes match"
+            clearLabel="All programmes"
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="filter-designation">Designation</Label>
+          <Label htmlFor="filter-admission-year">Admission year</Label>
           <Combobox
-            id="filter-designation"
-            value={pendingDesignationId ?? null}
-            options={designations.map((d) => ({
-              value: d.id,
-              label: d.name,
-              sublabel: d.code,
+            id="filter-admission-year"
+            value={pendingAdmissionYearId ?? null}
+            options={admissionYears.map((y) => ({
+              value: y.id,
+              label: y.display_year,
+              sublabel: String(y.year),
             }))}
-            onChange={(v) => onPendingDesignationIdChange(v ?? undefined)}
-            placeholder="All designations"
-            searchPlaceholder="Search designations…"
-            emptyMessage="No designations match"
-            clearLabel="All designations"
+            onChange={(v) => onPendingAdmissionYearIdChange(v ?? undefined)}
+            placeholder="All admission years"
+            searchPlaceholder="Search years…"
+            emptyMessage="No years match"
+            clearLabel="All admission years"
           />
         </div>
       </div>
@@ -772,15 +798,15 @@ function FilterPanel({
 }
 
 type ColumnSearchValues = {
-  emp_code: string
-  emp_display_name: string
+  student_id: string
+  display_name: string
   email: string
   mobile_number: string
-  rm_emp_code: string
+  abc_id: string
 }
 
-function EmployeesTable({
-  employees,
+function StudentsTable({
+  students,
   total,
   pageCount,
   busyId,
@@ -806,7 +832,7 @@ function EmployeesTable({
   onEdit,
   onToggleActive,
 }: {
-  employees: Employee[]
+  students: Student[]
   total: number
   pageCount: number
   busyId: number | null
@@ -829,15 +855,15 @@ function EmployeesTable({
   onResetFilters: () => void
   loadFailed: boolean
   onRetry: () => void
-  onEdit: (e: Employee) => void
-  onToggleActive: (e: Employee) => void
+  onEdit: (s: Student) => void
+  onToggleActive: (s: Student) => void
 }) {
-  const columns = React.useMemo<ColumnDef<Employee>[]>(
+  const columns = React.useMemo<ColumnDef<Student>[]>(
     () => [
       {
-        id: "emp_code",
-        header: "Emp code",
-        accessorKey: "emp_code",
+        id: "student_id",
+        header: "Student ID",
+        accessorKey: "student_id",
         meta: { sticky: "left" as const },
         cell: ({ getValue }) => (
           <span className="font-mono text-xs text-muted-foreground">
@@ -846,30 +872,30 @@ function EmployeesTable({
         ),
       },
       {
-        id: "emp_display_name",
+        id: "display_name",
         header: "Name",
-        accessorKey: "emp_display_name",
+        accessorKey: "display_name",
         cell: ({ getValue }) => (
           <div className="font-medium">{String(getValue() ?? "")}</div>
         ),
       },
       {
-        id: "department",
-        header: "Department",
+        id: "programme",
+        header: "Programme",
         enableSorting: false,
         cell: ({ row }) => (
           <span className="text-muted-foreground">
-            {row.original.department?.name ?? "—"}
+            {row.original.programme?.code ?? "—"}
           </span>
         ),
       },
       {
-        id: "designation",
-        header: "Designation",
+        id: "admission_year",
+        header: "Admission",
         enableSorting: false,
         cell: ({ row }) => (
-          <span className="text-muted-foreground">
-            {row.original.designation?.name ?? "—"}
+          <span className="text-muted-foreground tabular-nums">
+            {row.original.admission_year?.display_year ?? "—"}
           </span>
         ),
       },
@@ -889,7 +915,7 @@ function EmployeesTable({
         accessorKey: "mobile_number",
         cell: ({ row }) => (
           <span className="font-mono text-xs text-muted-foreground tabular-nums">
-            +{row.original.country_code} {row.original.mobile_number}
+            {row.original.mobile_number}
           </span>
         ),
       },
@@ -904,13 +930,26 @@ function EmployeesTable({
         ),
       },
       {
-        id: "rm_emp_code",
-        header: "Reports to",
-        accessorKey: "rm_emp_code",
+        id: "abc_id",
+        header: "ABC ID",
+        accessorKey: "abc_id",
         cell: ({ getValue }) => {
           const v = getValue() as string | null
           return (
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-xs text-muted-foreground tabular-nums">
+              {v ?? "—"}
+            </span>
+          )
+        },
+      },
+      {
+        id: "dob",
+        header: "DOB",
+        accessorKey: "dob",
+        cell: ({ getValue }) => {
+          const v = getValue() as string | null
+          return (
+            <span className="font-mono text-xs text-muted-foreground tabular-nums">
               {v ?? "—"}
             </span>
           )
@@ -919,14 +958,14 @@ function EmployeesTable({
       {
         id: "status",
         header: "Status",
-        accessorFn: (e) => (e.is_active ? "active" : "inactive"),
+        accessorFn: (s) => (s.is_active ? "active" : "inactive"),
         cell: ({ row }) => {
-          const e = row.original
+          const s = row.original
           return (
             <span
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
-                e.is_active
+                s.is_active
                   ? "bg-success/10 text-success"
                   : "bg-destructive/10 text-destructive",
               )}
@@ -935,10 +974,10 @@ function EmployeesTable({
                 aria-hidden="true"
                 className={cn(
                   "size-1.5 rounded-full",
-                  e.is_active ? "bg-success" : "bg-destructive",
+                  s.is_active ? "bg-success" : "bg-destructive",
                 )}
               />
-              {e.is_active ? "Active" : "Inactive"}
+              {s.is_active ? "Active" : "Inactive"}
             </span>
           )
         },
@@ -949,16 +988,16 @@ function EmployeesTable({
         enableSorting: false,
         meta: { align: "right" as const, sticky: "right" as const },
         cell: ({ row }) => {
-          const e = row.original
-          const isBusy = busyId === e.id
-          const toggleLabel = e.is_active ? "Deactivate" : "Activate"
+          const s = row.original
+          const isBusy = busyId === s.id
+          const toggleLabel = s.is_active ? "Deactivate" : "Activate"
           return (
             <div className="flex items-center justify-end gap-0.5">
               <Button
                 variant="ghost"
                 size="icon"
                 className="size-8 text-muted-foreground hover:text-foreground"
-                onClick={() => onEdit(e)}
+                onClick={() => onEdit(s)}
                 disabled={formOpen || isBusy}
                 title="Edit"
                 aria-label="Edit"
@@ -970,16 +1009,16 @@ function EmployeesTable({
                 size="icon"
                 className={cn(
                   "size-8",
-                  e.is_active
+                  s.is_active
                     ? "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     : "text-muted-foreground hover:bg-success/10 hover:text-success",
                 )}
-                onClick={() => onToggleActive(e)}
+                onClick={() => onToggleActive(s)}
                 disabled={isBusy || formOpen}
                 title={toggleLabel}
                 aria-label={toggleLabel}
               >
-                {e.is_active ? <PowerOff /> : <Power />}
+                {s.is_active ? <PowerOff /> : <Power />}
               </Button>
             </div>
           )
@@ -990,7 +1029,7 @@ function EmployeesTable({
   )
 
   const table = useReactTable({
-    data: employees,
+    data: students,
     columns,
     state: { sorting, pagination },
     onSortingChange,
@@ -1009,11 +1048,11 @@ function EmployeesTable({
   const lastRow = Math.min(total, (pageIndex + 1) * pageSize)
 
   const searchableColumns: Record<string, keyof ColumnSearchValues> = {
-    emp_code: "emp_code",
-    emp_display_name: "emp_display_name",
+    student_id: "student_id",
+    display_name: "display_name",
     email: "email",
     mobile_number: "mobile_number",
-    rm_emp_code: "rm_emp_code",
+    abc_id: "abc_id",
   }
 
   return (
@@ -1140,14 +1179,15 @@ function EmployeesTable({
                 {table.getAllLeafColumns().map((column) => {
                   const id = column.id
                   const widths: Record<string, string> = {
-                    emp_code: "w-20",
-                    emp_display_name: "w-40",
-                    department: "w-32",
-                    designation: "w-28",
+                    student_id: "w-24",
+                    display_name: "w-40",
+                    programme: "w-24",
+                    admission_year: "w-20",
                     gender: "w-16",
                     mobile_number: "w-28",
                     email: "w-48",
-                    rm_emp_code: "w-20",
+                    abc_id: "w-28",
+                    dob: "w-24",
                     status: "w-16",
                     actions: "w-16",
                   }
@@ -1184,7 +1224,7 @@ function EmployeesTable({
                 {loadFailed ? (
                   <EmptyState
                     icon={AlertTriangle}
-                    title="Couldn't load employees"
+                    title="Couldn't load students"
                     description="There was a problem reaching the server."
                     action={
                       <Button size="sm" onClick={onRetry}>
@@ -1197,7 +1237,7 @@ function EmployeesTable({
                   <EmptyState
                     icon={SearchX}
                     title="No matches found"
-                    description="No employees match the current filters."
+                    description="No students match the current filters."
                     action={
                       <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={onOpenFilters}>
@@ -1212,9 +1252,9 @@ function EmployeesTable({
                   />
                 ) : (
                   <EmptyState
-                    icon={Users}
-                    title="No employees yet"
-                    description="Create the first employee to get started."
+                    icon={GraduationCap}
+                    title="No students yet"
+                    description="Create the first student to get started."
                   />
                 )}
               </TableCell>
@@ -1403,7 +1443,7 @@ function getPageRange(current: number, totalPages: number): (number | "ellipsis"
   return items
 }
 
-const empCodeField = z
+const studentIdField = z
   .string()
   .trim()
   .min(1, "Required")
@@ -1412,33 +1452,21 @@ const empCodeField = z
   .pipe(
     z
       .string()
-      .regex(/^[A-Z0-9._-]+$/, "Use letters, numbers, dot, underscore, or dash"),
+      .regex(/^[A-Z0-9]+$/, "Use letters and numbers only"),
   )
 
-const employeeSchema = z.object({
-  emp_code: empCodeField,
-  emp_display_name: z.string().trim().min(1, "Name is required").max(128, "Too long"),
+const studentSchema = z.object({
+  student_id: studentIdField,
+  display_name: z.string().trim().min(1, "Name is required").max(128, "Too long"),
   gender: z.enum(GENDERS, { message: "Select a gender" }),
-  department_id: z
-    .number({ message: "Select a department" })
+  programme_id: z
+    .number({ message: "Select a programme" })
     .int()
-    .positive("Select a department"),
-  designation_id: z
-    .number({ message: "Select a designation" })
+    .positive("Select a programme"),
+  admission_year_id: z
+    .number({ message: "Select an admission year" })
     .int()
-    .positive("Select a designation"),
-  mobile_number: z
-    .string()
-    .trim()
-    .min(1, "Required")
-    .max(20, "Too long")
-    .regex(/^[0-9]+$/, "Digits only"),
-  country_code: z
-    .string()
-    .trim()
-    .min(1, "Required")
-    .max(8, "Too long")
-    .regex(/^[0-9]+$/, "Digits only"),
+    .positive("Select an admission year"),
   email: z
     .string()
     .trim()
@@ -1446,55 +1474,72 @@ const employeeSchema = z.object({
     .max(255, "Too long")
     .email("Enter a valid email")
     .transform((v) => v.toLowerCase()),
-  rm_emp_code: z
+  mobile_number: z
     .string()
     .trim()
-    .max(32, "Too long")
-    .optional()
-    .transform((v) => (v === undefined || v === "" ? "" : v.toUpperCase()))
+    .regex(/^[6-9]\d{9}$/, "Enter a 10-digit Indian mobile number"),
+  dob: z
+    .string()
+    .trim()
+    .min(1, "Date of birth is required")
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+  // Optional fields: keep them as plain strings so RHF + zodResolver stay happy
+  // (Zod's z.infer would otherwise split input/output types). The submit
+  // handler converts "" → null before sending to the API.
+  blood_group: z
+    .string()
+    .trim()
     .refine(
-      (v) => v === "" || /^[A-Z0-9._-]+$/.test(v),
-      "Use letters, numbers, dot, underscore, or dash",
+      (v) => v === "" || (BLOOD_GROUPS as readonly string[]).includes(v),
+      "Pick a blood group",
+    ),
+  abc_id: z
+    .string()
+    .trim()
+    .refine(
+      (v) => v === "" || /^\d{12}$/.test(v),
+      "ABC ID must be exactly 12 digits",
     ),
 })
 
-type EmployeeFormValues = z.infer<typeof employeeSchema>
+type StudentFormValues = z.infer<typeof studentSchema>
 
-function EmployeeForm(
+function StudentForm(
   props: (
     | { mode: "create" }
-    | { mode: "edit"; employee: Employee }
+    | { mode: "edit"; student: Student }
   ) & {
-    departments: Department[]
-    designations: Designation[]
-    managers: Employee[]
+    programmes: Programme[]
+    admissionYears: AdmissionYear[]
     onCancel: () => void
-    onSaved: (e: Employee) => void
+    onSaved: (s: Student) => void
   },
 ) {
-  const defaults: EmployeeFormValues =
+  const defaults: StudentFormValues =
     props.mode === "edit"
       ? {
-          emp_code: props.employee.emp_code,
-          emp_display_name: props.employee.emp_display_name,
-          gender: props.employee.gender,
-          department_id: props.employee.department_id,
-          designation_id: props.employee.designation_id,
-          mobile_number: props.employee.mobile_number,
-          country_code: props.employee.country_code,
-          email: props.employee.email,
-          rm_emp_code: props.employee.rm_emp_code ?? "",
+          student_id: props.student.student_id,
+          display_name: props.student.display_name,
+          gender: props.student.gender,
+          programme_id: props.student.programme_id,
+          admission_year_id: props.student.admission_year_id,
+          email: props.student.email,
+          mobile_number: props.student.mobile_number,
+          dob: props.student.dob ?? "",
+          blood_group: props.student.blood_group ?? "",
+          abc_id: props.student.abc_id ?? "",
         }
       : {
-          emp_code: "",
-          emp_display_name: "",
+          student_id: "",
+          display_name: "",
           gender: "male",
-          department_id: 0,
-          designation_id: 0,
-          mobile_number: "",
-          country_code: "91",
+          programme_id: 0,
+          admission_year_id: 0,
           email: "",
-          rm_emp_code: "",
+          mobile_number: "",
+          dob: "",
+          blood_group: "",
+          abc_id: "",
         }
 
   const {
@@ -1502,106 +1547,60 @@ function EmployeeForm(
     handleSubmit,
     control,
     formState: { errors, isSubmitting, isDirty },
-  } = useForm<EmployeeFormValues>({
-    resolver: zodResolver(employeeSchema),
+  } = useForm<StudentFormValues>({
+    resolver: zodResolver(studentSchema),
     defaultValues: defaults,
     values: defaults,
   })
 
-  const departmentOptions: ComboboxOption[] = React.useMemo(
+  const programmeOptions: ComboboxOption[] = React.useMemo(
     () =>
-      props.departments.map((d) => ({
-        value: d.id,
-        label: d.name,
-        sublabel: d.code,
+      props.programmes.map((p) => ({
+        value: p.id,
+        label: p.name,
+        sublabel: p.code,
       })),
-    [props.departments],
+    [props.programmes],
   )
 
-  const designationOptions: ComboboxOption[] = React.useMemo(
+  const admissionYearOptions: ComboboxOption[] = React.useMemo(
     () =>
-      props.designations.map((d) => ({
-        value: d.id,
-        label: d.name,
-        sublabel: d.code,
+      props.admissionYears.map((y) => ({
+        value: y.id,
+        label: y.display_year,
+        sublabel: String(y.year),
       })),
-    [props.designations],
-  )
-
-  const selfEmpCode = props.mode === "edit" ? props.employee.emp_code : null
-  const initialRmEmpCode =
-    props.mode === "edit" ? props.employee.rm_emp_code : null
-
-  // Manager options: active employees minus self. If editing and the stored
-  // rm_emp_code points to someone not in the active list (e.g. inactive),
-  // surface a synthetic row so the current value stays visible & selectable.
-  const managerOptions: ComboboxOption[] = React.useMemo(() => {
-    const base = props.managers
-      .filter((m) => m.emp_code !== selfEmpCode)
-      .map((m) => ({
-        value: m.id,
-        label: m.emp_display_name,
-        sublabel: m.emp_code,
-      }))
-    if (
-      initialRmEmpCode &&
-      !props.managers.some((m) => m.emp_code === initialRmEmpCode)
-    ) {
-      base.unshift({
-        value: -1,
-        label: initialRmEmpCode,
-        sublabel: "current",
-      })
-    }
-    return base
-  }, [props.managers, selfEmpCode, initialRmEmpCode])
-
-  const rmEmpCodeToId = React.useCallback(
-    (empCode: string): number | null => {
-      if (!empCode) return null
-      const found = props.managers.find((m) => m.emp_code === empCode)
-      if (found) return found.id
-      if (empCode === initialRmEmpCode) return -1
-      return null
-    },
-    [props.managers, initialRmEmpCode],
-  )
-
-  const rmIdToEmpCode = React.useCallback(
-    (id: number | null): string => {
-      if (id === null) return ""
-      if (id === -1) return initialRmEmpCode ?? ""
-      return props.managers.find((m) => m.id === id)?.emp_code ?? ""
-    },
-    [props.managers, initialRmEmpCode],
+    [props.admissionYears],
   )
 
   const onSubmit = handleSubmit(async (values) => {
     const payload = {
-      emp_code: values.emp_code,
-      emp_display_name: values.emp_display_name,
+      student_id: values.student_id,
+      programme_id: values.programme_id,
+      admission_year_id: values.admission_year_id,
+      display_name: values.display_name,
       gender: values.gender,
-      department_id: values.department_id,
-      designation_id: values.designation_id,
+      dob: values.dob,
+      blood_group:
+        values.blood_group === "" ? null : (values.blood_group as BloodGroup),
+      abc_id: values.abc_id === "" ? null : values.abc_id,
       mobile_number: values.mobile_number,
-      country_code: values.country_code,
       email: values.email,
-      rm_emp_code: values.rm_emp_code === "" ? null : values.rm_emp_code,
     }
 
     try {
       if (props.mode === "create") {
-        const created = await createEmployee(payload)
+        const created = await createStudent(payload)
         props.onSaved(created)
       } else {
-        const updated = await updateEmployee(props.employee.id, payload)
+        const updated = await updateStudent(props.student.id, payload)
         props.onSaved(updated)
       }
     } catch (err) {
       toast.error(
         props.mode === "create"
-          ? "Couldn't create employee"
-          : "Couldn't update employee",
+          ? "Couldn't create student"
+          : "Couldn't update student",
         {
           description:
             err instanceof ApiError ? err.message : "Please try again.",
@@ -1615,24 +1614,29 @@ function EmployeeForm(
       <SheetHeader>
         <SheetTitle>
           {props.mode === "create"
-            ? "Create employee"
-            : `Edit ${props.employee.emp_display_name}`}
+            ? "Create student"
+            : `Edit ${props.student.display_name}`}
         </SheetTitle>
         <SheetDescription>
           {props.mode === "create"
-            ? "Add a new employee record."
-            : "Update the employee details."}
+            ? "Add a new student record."
+            : "Update the student details."}
         </SheetDescription>
       </SheetHeader>
 
       <SheetBody className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Employee code" error={errors.emp_code?.message} htmlFor="e-code" required>
+          <Field
+            label="Student ID"
+            error={errors.student_id?.message}
+            htmlFor="s-id"
+            required
+          >
             <Input
-              id="e-code"
+              id="s-id"
               autoComplete="off"
               className="uppercase font-mono"
-              {...register("emp_code", {
+              {...register("student_id", {
                 onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
                   const upper = e.target.value.toUpperCase()
                   if (upper !== e.target.value) e.target.value = upper
@@ -1643,15 +1647,65 @@ function EmployeeForm(
 
           <Field
             label="Display name"
-            error={errors.emp_display_name?.message}
-            htmlFor="e-name"
+            error={errors.display_name?.message}
+            htmlFor="s-name"
             required
           >
-            <Input id="e-name" autoComplete="off" {...register("emp_display_name")} />
+            <Input id="s-name" autoComplete="off" {...register("display_name")} />
           </Field>
 
-          <Field label="Gender" error={errors.gender?.message} htmlFor="e-gender" required>
-            <select id="e-gender" {...register("gender")} className={selectClass}>
+          <Field
+            label="Programme"
+            error={errors.programme_id?.message}
+            htmlFor="s-prog"
+            required
+          >
+            <Controller
+              control={control}
+              name="programme_id"
+              render={({ field, fieldState }) => (
+                <Combobox
+                  id="s-prog"
+                  value={field.value || null}
+                  options={programmeOptions}
+                  onChange={(v) => field.onChange(v ?? 0)}
+                  placeholder="Select a programme"
+                  searchPlaceholder="Search programmes…"
+                  emptyMessage="No programmes match"
+                  disabled={programmeOptions.length === 0}
+                  invalid={!!fieldState.error}
+                />
+              )}
+            />
+          </Field>
+
+          <Field
+            label="Admission year"
+            error={errors.admission_year_id?.message}
+            htmlFor="s-year"
+            required
+          >
+            <Controller
+              control={control}
+              name="admission_year_id"
+              render={({ field, fieldState }) => (
+                <Combobox
+                  id="s-year"
+                  value={field.value || null}
+                  options={admissionYearOptions}
+                  onChange={(v) => field.onChange(v ?? 0)}
+                  placeholder="Select an admission year"
+                  searchPlaceholder="Search years…"
+                  emptyMessage="No years match"
+                  disabled={admissionYearOptions.length === 0}
+                  invalid={!!fieldState.error}
+                />
+              )}
+            />
+          </Field>
+
+          <Field label="Gender" error={errors.gender?.message} htmlFor="s-gender" required>
+            <select id="s-gender" {...register("gender")} className={selectClass}>
               {GENDERS.map((g) => (
                 <option key={g} value={g}>
                   {GENDER_LABELS[g]}
@@ -1661,134 +1715,84 @@ function EmployeeForm(
           </Field>
 
           <Field
-            label="Department"
-            error={errors.department_id?.message}
-            htmlFor="e-dept"
+            label="Date of birth"
+            error={errors.dob?.message}
+            htmlFor="s-dob"
             required
           >
             <Controller
               control={control}
-              name="department_id"
+              name="dob"
               render={({ field, fieldState }) => (
-                <Combobox
-                  id="e-dept"
-                  value={field.value || null}
-                  options={departmentOptions}
-                  onChange={(v) => field.onChange(v ?? 0)}
-                  placeholder="Select a department"
-                  searchPlaceholder="Search departments…"
-                  emptyMessage="No departments match"
-                  disabled={departmentOptions.length === 0}
+                <DatePicker
+                  id="s-dob"
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="Select date of birth"
                   invalid={!!fieldState.error}
                 />
               )}
             />
           </Field>
 
-          <Field
-            label="Designation"
-            error={errors.designation_id?.message}
-            htmlFor="e-desig"
-            required
-          >
-            <Controller
-              control={control}
-              name="designation_id"
-              render={({ field, fieldState }) => (
-                <Combobox
-                  id="e-desig"
-                  value={field.value || null}
-                  options={designationOptions}
-                  onChange={(v) => field.onChange(v ?? 0)}
-                  placeholder="Select a designation"
-                  searchPlaceholder="Search designations…"
-                  emptyMessage="No designations match"
-                  disabled={designationOptions.length === 0}
-                  invalid={!!fieldState.error}
-                />
-              )}
-            />
-          </Field>
-
-          <Field label="Email" error={errors.email?.message} htmlFor="e-email" required>
+          <Field label="Email" error={errors.email?.message} htmlFor="s-email" required>
             <Input
-              id="e-email"
+              id="s-email"
               autoComplete="off"
               type="email"
               {...register("email")}
             />
           </Field>
 
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>
-              Mobile
-              <span aria-hidden="true" className="ml-0.5 text-destructive">
-                *
-              </span>
-            </Label>
-            <div className="flex gap-2">
-              <div className="w-24">
-                <Input
-                  aria-label="Country code"
-                  className="font-mono"
-                  placeholder="91"
-                  {...register("country_code")}
-                />
-              </div>
-              <div className="flex-1">
-                <Input
-                  aria-label="Mobile number"
-                  className="font-mono"
-                  inputMode="numeric"
-                  {...register("mobile_number")}
-                />
-              </div>
-            </div>
-            {(errors.country_code?.message || errors.mobile_number?.message) && (
-              <p className="text-xs text-destructive">
-                {errors.country_code?.message ?? errors.mobile_number?.message}
-              </p>
-            )}
-          </div>
+          <Field
+            label="Mobile (10-digit)"
+            error={errors.mobile_number?.message}
+            htmlFor="s-mobile"
+            required
+          >
+            <Input
+              id="s-mobile"
+              autoComplete="off"
+              className="font-mono"
+              inputMode="numeric"
+              maxLength={10}
+              {...register("mobile_number")}
+            />
+          </Field>
 
           <Field
-            label="Reporting manager"
-            error={errors.rm_emp_code?.message}
-            htmlFor="e-rm"
-            hint="Leave blank if none."
+            label="Blood group"
+            error={errors.blood_group?.message}
+            htmlFor="s-bg"
+            hint="Optional"
           >
-            <Controller
-              control={control}
-              name="rm_emp_code"
-              render={({ field, fieldState }) => (
-                <div className="flex items-center gap-2">
-                  <Combobox
-                    id="e-rm"
-                    value={rmEmpCodeToId(field.value)}
-                    options={managerOptions}
-                    onChange={(v) => field.onChange(rmIdToEmpCode(v))}
-                    placeholder="No reporting manager"
-                    searchPlaceholder="Search by name or emp code…"
-                    emptyMessage="No employees match"
-                    clearLabel="No reporting manager"
-                    disabled={managerOptions.length === 0}
-                    invalid={!!fieldState.error}
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-9 shrink-0 text-muted-foreground hover:text-foreground"
-                    onClick={() => field.onChange("")}
-                    disabled={!field.value}
-                    title="Clear reporting manager"
-                    aria-label="Clear reporting manager"
-                  >
-                    <X />
-                  </Button>
-                </div>
-              )}
+            <select
+              id="s-bg"
+              {...register("blood_group")}
+              className={selectClass}
+            >
+              <option value="">—</option>
+              {BLOOD_GROUPS.map((bg) => (
+                <option key={bg} value={bg}>
+                  {bg}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field
+            label="ABC ID"
+            error={errors.abc_id?.message}
+            htmlFor="s-abc"
+            hint="Optional · 12-digit Academic Bank of Credits ID"
+          >
+            <Input
+              id="s-abc"
+              autoComplete="off"
+              className="font-mono tabular-nums"
+              inputMode="numeric"
+              maxLength={12}
+              {...register("abc_id")}
             />
           </Field>
         </div>
@@ -1816,7 +1820,7 @@ function EmployeeForm(
               ? "Creating…"
               : "Saving…"
             : props.mode === "create"
-              ? "Create employee"
+              ? "Create student"
               : "Save changes"}
         </Button>
       </SheetFooter>

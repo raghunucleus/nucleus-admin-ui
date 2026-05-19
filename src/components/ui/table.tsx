@@ -32,7 +32,11 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
     <thead
       data-slot="table-header"
       className={cn(
-        "sticky top-0 z-10 bg-muted [&_tr]:border-b",
+        // z-30 keeps the sticky header above body cells that are themselves
+        // sticky on the horizontal axis — without this, body sticky cells
+        // (z-10) paint over header cells (same z, later in DOM order) and
+        // the header appears to scroll away under the rows.
+        "sticky top-0 z-30 bg-muted [&_tr]:border-b",
         className,
       )}
       {...props}

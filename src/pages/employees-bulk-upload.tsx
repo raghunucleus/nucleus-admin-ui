@@ -54,6 +54,22 @@ const COLUMNS = [
 
 type ColumnKey = (typeof COLUMNS)[number]["key"]
 
+// ExcelJS dataValidations API shape (missing from the package's shipped .d.ts).
+type DataValidationsApi = {
+  add: (
+    range: string,
+    dv: {
+      type: "list"
+      allowBlank?: boolean
+      formulae: string[]
+      showErrorMessage?: boolean
+      errorStyle?: "stop" | "warning" | "information"
+      errorTitle?: string
+      error?: string
+    },
+  ) => void
+}
+
 // A row in the grid: raw string values per column + transient client-side
 // validation errors keyed by column. `serverErrors` holds messages that came
 // back from a failed submit, cleared as soon as the user edits any cell.
@@ -188,26 +204,58 @@ export function EmployeesBulkUploadPage() {
     [rows],
   )
 
-  const handleDownloadTemplate = () => {
-    const sample: Record<ColumnKey, string> = {
-      emp_code: "EMP001",
-      emp_display_name: "Asha Rao",
-      gender: "female",
-      department_code: departments[0]?.code ?? "DEPT-CSE",
-      designation_code: designations[0]?.code ?? "DESIG-LEC",
-      mobile_number: "9876543210",
-      country_code: "91",
-      email: "asha.rao@example.com",
-      rm_emp_code: "",
+  const handleDownloadTemplate = async () => {
+    // Lazy-load ExcelJS so writes (which need data validations) don't bloat
+    // the main bundle. Reads still use xlsx — it's smaller and doesn't need
+    // DV support.
+    const ExcelJSModule = await import("exceljs")
+    const ExcelJS = ExcelJSModule.default ?? ExcelJSModule
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet("Employees")
+    ws.addRow(COLUMNS.map((c) => c.label))
+
+    // Size each column wider than its header text so the full label is
+    // legible without resizing. Excel column units are roughly 1 per
+    // character at the default font; +4 leaves room for the dropdown arrow
+    // and a comfortable margin. Email gets an explicit override since real
+    // addresses dwarf the short "email" header.
+    const EXCEL_WIDTH_OVERRIDES: Partial<Record<ColumnKey, number>> = {
+      email: 28,
     }
-    const header = COLUMNS.map((c) => c.label)
-    const sheet = XLSX.utils.aoa_to_sheet([
-      header,
-      header.map((h) => sample[h as ColumnKey]),
-    ])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, sheet, "Employees")
-    XLSX.writeFile(wb, "employees-template.xlsx")
+    COLUMNS.forEach((c, i) => {
+      const override = EXCEL_WIDTH_OVERRIDES[c.key]
+      ws.getColumn(i + 1).width =
+        override ?? Math.max(c.label.length + 4, 14)
+    })
+
+    // Real Excel dropdown for gender. We attach it to rows 2..1000 so the
+    // dropdown is available as users fill the sheet, not just where data
+    // already exists.
+    //
+    // ExcelJS exposes `worksheet.dataValidations.add(range, dv)` at runtime
+    // but the property is missing from its shipped .d.ts as of 4.4.x — cast
+    // through a typed shape rather than littering with `any`.
+    const genderIndex = COLUMNS.findIndex((c) => c.key === "gender") + 1
+    if (genderIndex > 0) {
+      const dv = (ws as unknown as { dataValidations: DataValidationsApi })
+        .dataValidations
+      const letter = colLetter(genderIndex)
+      dv.add(`${letter}2:${letter}1000`, {
+        type: "list",
+        allowBlank: true,
+        formulae: [`"${GENDERS.join(",")}"`],
+        showErrorMessage: true,
+        errorStyle: "stop",
+        errorTitle: "Invalid value",
+        error: `Pick one of: ${GENDERS.join(", ")}`,
+      })
+    }
+
+    const buf = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buf], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })
+    triggerDownload(blob, "employees-template.xlsx")
   }
 
   const handleFile = async (file: File) => {
@@ -240,8 +288,15 @@ export function EmployeesBulkUploadPage() {
           email: "",
           rm_emp_code: "",
         }
+        // Normalize headers (strip "(...)" hints, trim, lowercase) so the parser
+        // matches "gender (male/female/other)" → col.key "gender" regardless of
+        // stray spaces or casing the user introduces.
+        const normalized: Record<string, unknown> = {}
+        for (const k of Object.keys(raw)) {
+          normalized[normalizeHeader(k)] = raw[k]
+        }
         for (const col of COLUMNS) {
-          const raw_v = raw[col.label]
+          const raw_v = normalized[col.key]
           const v = raw_v === undefined || raw_v === null ? "" : String(raw_v).trim()
           if (v !== "") values[col.key] = v
         }
@@ -788,6 +843,40 @@ function countAffectedRows(errors: BulkRowError[]): number {
 // sometimes raises NotReadableError when another app (e.g. Excel) holds an
 // exclusive lock; the older FileReader API occasionally succeeds where the
 // modern one fails. If both throw, the caller surfaces a friendlier message.
+// Header normalizer: strip a trailing "(...)" hint, trim, lowercase. Keeps
+// the parser tolerant of headers like "gender (male/female/other)" or a
+// casual "Emp_Code " typed by a user.
+function normalizeHeader(h: string): string {
+  return h
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .trim()
+    .toLowerCase()
+}
+
+// 1-indexed Excel column letter: 1→A, 26→Z, 27→AA. Used to address data
+// validation ranges when generating the template.
+function colLetter(index: number): string {
+  let s = ""
+  let n = index
+  while (n > 0) {
+    const r = (n - 1) % 26
+    s = String.fromCharCode(65 + r) + s
+    n = Math.floor((n - 1) / 26)
+  }
+  return s
+}
+
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 async function readFileBytes(file: File): Promise<ArrayBuffer> {
   try {
     return await file.arrayBuffer()

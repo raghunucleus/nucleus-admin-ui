@@ -2,9 +2,14 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Input({ className, type, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
+  ref?: React.Ref<HTMLInputElement>
+}
+
+function Input({ className, type, ref, ...props }: InputProps) {
   return (
     <input
+      ref={ref}
       type={type}
       data-slot="input"
       className={cn(

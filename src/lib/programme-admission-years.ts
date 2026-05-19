@@ -115,3 +115,19 @@ export async function deactivateProgrammeAdmissionYear(
     { method: "POST" },
   )
 }
+
+export type ProgrammeAdmissionYearMatrixCell = {
+  id: number
+  programme_id: number
+  admission_year_id: number
+  is_active: boolean
+}
+
+export async function getProgrammeAdmissionYearMatrix(): Promise<
+  ProgrammeAdmissionYearMatrixCell[]
+> {
+  return api<ProgrammeAdmissionYearMatrixCell[]>(
+    "/admin/programme-admission-years/matrix",
+    { method: "GET" },
+  )
+}

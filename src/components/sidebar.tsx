@@ -4,6 +4,7 @@ import {
   Briefcase,
   ChevronRight,
   Database,
+  GraduationCap,
   Home,
   Layers,
   PanelLeftClose,
@@ -28,6 +29,7 @@ type NavItem = NavLeaf | NavGroup
 
 const nav: NavItem[] = [
   { type: "leaf", to: "/", label: "Welcome", icon: Home, exact: true },
+  { type: "leaf", to: "/migrations", label: "Migrations", icon: Database },
   { type: "leaf", to: "/admin-users", label: "Admin users", icon: Users },
   {
     type: "group",
@@ -56,7 +58,17 @@ const nav: NavItem[] = [
       { to: "/employees/bulk-upload", label: "Emp Bulk upload" },
     ],
   },
-  { type: "leaf", to: "/migrations", label: "Migrations", icon: Database },
+  {
+    type: "group",
+    key: "students",
+    label: "Students",
+    icon: GraduationCap,
+    children: [
+      { to: "/students/all", label: "All Students" },
+      { to: "/students/bulk-upload", label: "Students Bulk Upload" },
+    ],
+  },
+
 ]
 
 export function Sidebar() {

@@ -21,6 +21,8 @@ import { ProgrammeSemestersPage } from "@/pages/programme-semesters"
 import { ProgrammesPage } from "@/pages/programmes"
 import { RegulationsPage } from "@/pages/regulations"
 import { SemestersPage } from "@/pages/semesters"
+import { StudentsPage } from "@/pages/students"
+import { StudentsBulkUploadPage } from "@/pages/students-bulk-upload"
 import { SubjectsPage } from "@/pages/subjects"
 import { MigrationsPage } from "@/pages/migrations"
 import { NotFoundPage } from "@/pages/not-found"
@@ -199,6 +201,18 @@ const employeesBulkUploadRoute = createRoute({
   component: EmployeesBulkUploadPage,
 })
 
+const studentsAllRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/students/all",
+  component: StudentsPage,
+})
+
+const studentsBulkUploadRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/students/bulk-upload",
+  component: StudentsBulkUploadPage,
+})
+
 const profileSections = ["profile", "password", "security"] as const
 export type ProfileSection = (typeof profileSections)[number]
 
@@ -238,6 +252,8 @@ const routeTree = rootRoute.addChildren([
     employeesDesignationsRoute,
     employeesAllRoute,
     employeesBulkUploadRoute,
+    studentsAllRoute,
+    studentsBulkUploadRoute,
     profileRoute,
   ]),
 ])
