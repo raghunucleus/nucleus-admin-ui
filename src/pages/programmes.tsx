@@ -1533,11 +1533,12 @@ function ProgrammeForm(
             error={errors.name?.message}
             htmlFor="p-name"
             hint="e.g. B.Tech in Computer Science and Engineering"
+            required
           >
             <Input id="p-name" autoComplete="off" {...register("name")} />
           </Field>
           <div className="grid gap-4 hd:grid-cols-2">
-            <Field label="Code" error={errors.code?.message} htmlFor="p-code">
+            <Field label="Code" error={errors.code?.message} htmlFor="p-code" required>
               <Input
                 id="p-code"
                 autoComplete="off"
@@ -1555,6 +1556,7 @@ function ProgrammeForm(
               error={errors.display_name?.message}
               htmlFor="p-display"
               hint="Short label, e.g. B.Tech CSE"
+              required
             >
               <Input
                 id="p-display"
@@ -1566,6 +1568,7 @@ function ProgrammeForm(
               label="Degree"
               error={errors.degree_id?.message}
               htmlFor="p-degree"
+              required
             >
               <Controller
                 control={control}
@@ -1589,6 +1592,7 @@ function ProgrammeForm(
               label="Department"
               error={errors.department_id?.message}
               htmlFor="p-dept"
+              required
             >
               <Controller
                 control={control}
@@ -1652,17 +1656,26 @@ function Field({
   htmlFor,
   error,
   hint,
+  required,
   children,
 }: {
   label: string
   htmlFor: string
   error?: string
   hint?: string
+  required?: boolean
   children: React.ReactNode
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={htmlFor}>{label}</Label>
+      <Label htmlFor={htmlFor}>
+        {label}
+        {required && (
+          <span aria-hidden="true" className="ml-0.5 text-destructive">
+            *
+          </span>
+        )}
+      </Label>
       {children}
       {error ? (
         <p className="text-xs text-destructive">{error}</p>

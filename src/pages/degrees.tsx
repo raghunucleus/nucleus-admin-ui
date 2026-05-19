@@ -1307,10 +1307,10 @@ function DegreeForm(
 
       <SheetBody className="space-y-5">
         <div className="grid gap-4 hd:grid-cols-2">
-          <Field label="Name" error={errors.name?.message} htmlFor="d-name">
+          <Field label="Name" error={errors.name?.message} htmlFor="d-name" required>
             <Input id="d-name" autoComplete="off" {...register("name")} />
           </Field>
-          <Field label="Code" error={errors.code?.message} htmlFor="d-code">
+          <Field label="Code" error={errors.code?.message} htmlFor="d-code" required>
             <Input
               id="d-code"
               autoComplete="off"
@@ -1327,6 +1327,7 @@ function DegreeForm(
             label="Short name"
             error={errors.short_name?.message}
             htmlFor="d-short"
+            required
           >
             <Input id="d-short" autoComplete="off" {...register("short_name")} />
           </Field>
@@ -1334,6 +1335,7 @@ function DegreeForm(
             label="Academic level"
             error={errors.academic_level?.message}
             htmlFor="d-level"
+            required
           >
             <select
               id="d-level"
@@ -1351,6 +1353,7 @@ function DegreeForm(
             label="Course duration"
             error={errors.duration_years?.message}
             htmlFor="d-duration"
+            required
           >
             <select
               id="d-duration"
@@ -1402,17 +1405,26 @@ function Field({
   htmlFor,
   error,
   hint,
+  required,
   children,
 }: {
   label: string
   htmlFor: string
   error?: string
   hint?: string
+  required?: boolean
   children: React.ReactNode
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={htmlFor}>{label}</Label>
+      <Label htmlFor={htmlFor}>
+        {label}
+        {required && (
+          <span aria-hidden="true" className="ml-0.5 text-destructive">
+            *
+          </span>
+        )}
+      </Label>
       {children}
       {error ? (
         <p className="text-xs text-destructive">{error}</p>

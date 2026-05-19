@@ -2,7 +2,6 @@ import * as React from "react"
 import {
   AlertTriangle,
   CheckCircle2,
-  Database,
   Loader2,
   Play,
   RefreshCw,
@@ -89,18 +88,10 @@ export function MigrationsPage() {
   const canRun = !!status && runEnabled && pending.length > 0 && !running
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 py-2">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Database className="size-4" /> Database
-          </div>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">Migrations</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Run database migrations and review the status of executed and pending changes.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="mx-auto max-w-7xl space-y-4 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
+        <h1 className="text-base font-semibold tracking-tight">Migrations</h1>
+        <div className="flex items-center gap-1.5">
           <Button
             variant="outline"
             size="sm"
@@ -232,7 +223,7 @@ function MigrationList({
   emptyHint: string
 }) {
   return (
-    <div className="rounded-lg border bg-card text-card-foreground">
+    <div className="flex flex-col rounded-lg border bg-card text-card-foreground">
       <div className="flex items-center justify-between border-b px-5 py-3">
         <div>
           <div className="text-sm font-semibold">{title}</div>
@@ -252,7 +243,7 @@ function MigrationList({
           </span>
         )}
       </div>
-      <div className="px-2 py-2">
+      <div className="thin-scrollbar max-h-[32rem] overflow-y-auto px-2 py-2">
         {loading ? (
           <ul className="divide-y divide-border/60">
             {Array.from({ length: 4 }).map((_, i) => (

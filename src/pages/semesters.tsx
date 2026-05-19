@@ -1275,6 +1275,7 @@ function SemesterForm(
             label="Sem number"
             error={errors.sem_number?.message}
             htmlFor="s-num"
+            required
             hint="Positive whole number (1–16)"
           >
             <Input
@@ -1287,7 +1288,7 @@ function SemesterForm(
               {...register("sem_number")}
             />
           </Field>
-          <Field label="Code" error={errors.code?.message} htmlFor="s-code">
+          <Field label="Code" error={errors.code?.message} htmlFor="s-code" required>
             <Input
               id="s-code"
               autoComplete="off"
@@ -1300,13 +1301,14 @@ function SemesterForm(
               })}
             />
           </Field>
-          <Field label="Name" error={errors.name?.message} htmlFor="s-name">
+          <Field label="Name" error={errors.name?.message} htmlFor="s-name" required>
             <Input id="s-name" autoComplete="off" {...register("name")} />
           </Field>
           <Field
             label="Year-sem format"
             error={errors.year_sem_format?.message}
             htmlFor="s-ysf"
+            required
             hint="e.g. 1-1, 2-2"
           >
             <Input
@@ -1319,6 +1321,7 @@ function SemesterForm(
             label="Roman format"
             error={errors.roman_format?.message}
             htmlFor="s-roman"
+            required
             hint="e.g. I, II, VIII"
           >
             <Input id="s-roman" autoComplete="off" {...register("roman_format")} />
@@ -1361,17 +1364,26 @@ function Field({
   htmlFor,
   error,
   hint,
+  required,
   children,
 }: {
   label: string
   htmlFor: string
   error?: string
   hint?: string
+  required?: boolean
   children: React.ReactNode
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={htmlFor}>{label}</Label>
+      <Label htmlFor={htmlFor}>
+        {label}
+        {required && (
+          <span aria-hidden="true" className="ml-0.5 text-destructive">
+            *
+          </span>
+        )}
+      </Label>
       {children}
       {error ? (
         <p className="text-xs text-destructive">{error}</p>

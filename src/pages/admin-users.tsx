@@ -1334,10 +1334,10 @@ function CreateForm({
 
       <SheetBody className="space-y-5">
         <div className="grid gap-4 hd:grid-cols-2">
-          <Field label="Username" error={errors.username?.message} htmlFor="cu-username">
+          <Field label="Username" error={errors.username?.message} htmlFor="cu-username" required>
             <Input id="cu-username" autoComplete="off" {...register("username")} />
           </Field>
-          <Field label="Email" error={errors.email?.message} htmlFor="cu-email">
+          <Field label="Email" error={errors.email?.message} htmlFor="cu-email" required>
             <Input id="cu-email" type="email" autoComplete="off" {...register("email")} />
           </Field>
           <Field label="First name" error={errors.first_name?.message} htmlFor="cu-first">
@@ -1358,7 +1358,7 @@ function CreateForm({
               invalid={!!errors.mobile_local}
             />
           </Field>
-          <Field label="Password" error={errors.password?.message} htmlFor="cu-password">
+          <Field label="Password" error={errors.password?.message} htmlFor="cu-password" required>
             <Input
               id="cu-password"
               type="password"
@@ -1436,7 +1436,7 @@ function EditForm({
 
       <SheetBody className="space-y-5">
         <div className="grid gap-4 hd:grid-cols-2">
-          <Field label="Email" error={errors.email?.message} htmlFor="eu-email">
+          <Field label="Email" error={errors.email?.message} htmlFor="eu-email" required>
             <Input id="eu-email" type="email" autoComplete="off" {...register("email")} />
           </Field>
           <Field label="Username" htmlFor="eu-username">
@@ -1498,17 +1498,26 @@ function Field({
   htmlFor,
   error,
   hint,
+  required,
   children,
 }: {
   label: string
   htmlFor: string
   error?: string
   hint?: string
+  required?: boolean
   children: React.ReactNode
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={htmlFor}>{label}</Label>
+      <Label htmlFor={htmlFor}>
+        {label}
+        {required && (
+          <span aria-hidden="true" className="ml-0.5 text-destructive">
+            *
+          </span>
+        )}
+      </Label>
       {children}
       {error ? (
         <p className="text-xs text-destructive">{error}</p>

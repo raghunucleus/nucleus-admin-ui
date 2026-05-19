@@ -1214,6 +1214,7 @@ function AdmissionYearForm(
             label="Year of admission"
             error={errors.year?.message}
             htmlFor="ay-year"
+            required
             hint="Four-digit year (e.g. 2026)"
           >
             <Input
@@ -1247,6 +1248,7 @@ function AdmissionYearForm(
             label="Display year"
             error={errors.display_year?.message}
             htmlFor="ay-display"
+            required
             hint="Shown to users (e.g. 2026-2027)"
           >
             <Input
@@ -1293,17 +1295,26 @@ function Field({
   htmlFor,
   error,
   hint,
+  required,
   children,
 }: {
   label: string
   htmlFor: string
   error?: string
   hint?: string
+  required?: boolean
   children: React.ReactNode
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={htmlFor}>{label}</Label>
+      <Label htmlFor={htmlFor}>
+        {label}
+        {required && (
+          <span aria-hidden="true" className="ml-0.5 text-destructive">
+            *
+          </span>
+        )}
+      </Label>
       {children}
       {error ? (
         <p className="text-xs text-destructive">{error}</p>
