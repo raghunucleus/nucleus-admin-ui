@@ -46,10 +46,10 @@ export function AppLayout() {
     .toUpperCase() || "?"
 
   return (
-    <div className="flex min-h-full bg-background text-foreground">
+    <div className="flex h-screen bg-background text-foreground">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b bg-card px-4">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-4">
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"

@@ -3,7 +3,7 @@ import type { AdmissionYear } from "@/lib/admission-years"
 import type { Programme } from "@/lib/programmes"
 import type { Regulation } from "@/lib/regulations"
 
-export type ProgrammeRegulation = {
+export type ProgrammeAdmissionYear = {
   id: number
   programme_id: number
   programme: Programme
@@ -16,17 +16,17 @@ export type ProgrammeRegulation = {
   updated_at: string
 }
 
-export type CreateProgrammeRegulationInput = {
+export type CreateProgrammeAdmissionYearInput = {
   programme_id: number
   admission_year_id: number
   regulation_id: number
 }
 
-export type UpdateProgrammeRegulationInput = {
+export type UpdateProgrammeAdmissionYearInput = {
   regulation_id: number
 }
 
-export type ProgrammeRegulationsSortField =
+export type ProgrammeAdmissionYearsSortField =
   | "programme"
   | "admission_year"
   | "regulation"
@@ -34,32 +34,32 @@ export type ProgrammeRegulationsSortField =
   | "created_at"
   | "updated_at"
 
-export type ProgrammeRegulationsSortOrder = "asc" | "desc"
+export type ProgrammeAdmissionYearsSortOrder = "asc" | "desc"
 
-export type ProgrammeRegulationStatusFilter = "active" | "inactive"
+export type ProgrammeAdmissionYearStatusFilter = "active" | "inactive"
 
-export type ListProgrammeRegulationsParams = {
+export type ListProgrammeAdmissionYearsParams = {
   page?: number
   pageSize?: number
-  sortBy?: ProgrammeRegulationsSortField
-  sortOrder?: ProgrammeRegulationsSortOrder
-  status?: ProgrammeRegulationStatusFilter
+  sortBy?: ProgrammeAdmissionYearsSortField
+  sortOrder?: ProgrammeAdmissionYearsSortOrder
+  status?: ProgrammeAdmissionYearStatusFilter
   programmeId?: number
   admissionYearId?: number
   regulationId?: number
 }
 
-export type ListProgrammeRegulationsResult = {
-  rows: ProgrammeRegulation[]
+export type ListProgrammeAdmissionYearsResult = {
+  rows: ProgrammeAdmissionYear[]
   total: number
   page: number
   pageSize: number
   pageCount: number
 }
 
-export async function listProgrammeRegulations(
-  params: ListProgrammeRegulationsParams = {},
-): Promise<ListProgrammeRegulationsResult> {
+export async function listProgrammeAdmissionYears(
+  params: ListProgrammeAdmissionYearsParams = {},
+): Promise<ListProgrammeAdmissionYearsResult> {
   const qs = new URLSearchParams()
   if (params.page !== undefined) qs.set("page", String(params.page))
   if (params.pageSize !== undefined) qs.set("pageSize", String(params.pageSize))
@@ -73,45 +73,45 @@ export async function listProgrammeRegulations(
   if (params.regulationId !== undefined)
     qs.set("regulationId", String(params.regulationId))
   const suffix = qs.toString() ? `?${qs.toString()}` : ""
-  return api<ListProgrammeRegulationsResult>(
-    `/admin/programme-regulations${suffix}`,
+  return api<ListProgrammeAdmissionYearsResult>(
+    `/admin/programme-admission-years${suffix}`,
     { method: "GET" },
   )
 }
 
-export async function createProgrammeRegulation(
-  input: CreateProgrammeRegulationInput,
-): Promise<ProgrammeRegulation> {
-  return api<ProgrammeRegulation>("/admin/programme-regulations", {
+export async function createProgrammeAdmissionYear(
+  input: CreateProgrammeAdmissionYearInput,
+): Promise<ProgrammeAdmissionYear> {
+  return api<ProgrammeAdmissionYear>("/admin/programme-admission-years", {
     method: "POST",
     body: input,
   })
 }
 
-export async function updateProgrammeRegulation(
+export async function updateProgrammeAdmissionYear(
   id: number,
-  patch: UpdateProgrammeRegulationInput,
-): Promise<ProgrammeRegulation> {
-  return api<ProgrammeRegulation>(`/admin/programme-regulations/${id}`, {
+  patch: UpdateProgrammeAdmissionYearInput,
+): Promise<ProgrammeAdmissionYear> {
+  return api<ProgrammeAdmissionYear>(`/admin/programme-admission-years/${id}`, {
     method: "PATCH",
     body: patch,
   })
 }
 
-export async function activateProgrammeRegulation(
+export async function activateProgrammeAdmissionYear(
   id: number,
-): Promise<ProgrammeRegulation> {
-  return api<ProgrammeRegulation>(
-    `/admin/programme-regulations/${id}/activate`,
+): Promise<ProgrammeAdmissionYear> {
+  return api<ProgrammeAdmissionYear>(
+    `/admin/programme-admission-years/${id}/activate`,
     { method: "POST" },
   )
 }
 
-export async function deactivateProgrammeRegulation(
+export async function deactivateProgrammeAdmissionYear(
   id: number,
-): Promise<ProgrammeRegulation> {
-  return api<ProgrammeRegulation>(
-    `/admin/programme-regulations/${id}/deactivate`,
+): Promise<ProgrammeAdmissionYear> {
+  return api<ProgrammeAdmissionYear>(
+    `/admin/programme-admission-years/${id}/deactivate`,
     { method: "POST" },
   )
 }

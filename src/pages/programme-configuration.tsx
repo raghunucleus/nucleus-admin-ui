@@ -46,11 +46,11 @@ import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
 import { listAdmissionYears, type AdmissionYear } from "@/lib/admission-years"
 import {
-  createProgrammeRegulation,
-  listProgrammeRegulations,
-  updateProgrammeRegulation,
-  type ProgrammeRegulation,
-} from "@/lib/programme-regulations"
+  createProgrammeAdmissionYear,
+  listProgrammeAdmissionYears,
+  updateProgrammeAdmissionYear,
+  type ProgrammeAdmissionYear,
+} from "@/lib/programme-admission-years"
 import {
   bulkCreateProgrammeSemesters,
   completeProgrammeSemester,
@@ -156,7 +156,7 @@ export function ProgrammeConfigurationPage() {
   // disabled until a regulation has been assigned for this batch). The
   // RegulationCard reports its current row via `onAssignmentChange`.
   const [currentRegulation, setCurrentRegulation] =
-    React.useState<ProgrammeRegulation | null>(null)
+    React.useState<ProgrammeAdmissionYear | null>(null)
 
   // Whenever the (programme, year) tuple changes, clear the cached assignment
   // so we don't carry one batch's state into another while the new card is
@@ -339,9 +339,9 @@ function RegulationCard({
   programmeId: number
   admissionYearId: number
   regulationOptions: Regulation[]
-  onAssignmentChange: (link: ProgrammeRegulation | null) => void
+  onAssignmentChange: (link: ProgrammeAdmissionYear | null) => void
 }) {
-  const [current, setCurrent] = React.useState<ProgrammeRegulation | null>(null)
+  const [current, setCurrent] = React.useState<ProgrammeAdmissionYear | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [busy, setBusy] = React.useState(false)
   const [selectedId, setSelectedId] = React.useState<number | null>(null)
@@ -349,7 +349,7 @@ function RegulationCard({
   const load = React.useCallback(async () => {
     setLoading(true)
     try {
-      const result = await listProgrammeRegulations({
+      const result = await listProgrammeAdmissionYears({
         programmeId,
         admissionYearId,
         pageSize: 1,
@@ -401,12 +401,12 @@ function RegulationCard({
     setBusy(true)
     try {
       if (current) {
-        const updated = await updateProgrammeRegulation(current.id, {
+        const updated = await updateProgrammeAdmissionYear(current.id, {
           regulation_id: selectedId,
         })
         toast.success(`Regulation updated to ${updated.regulation.code}.`)
       } else {
-        const created = await createProgrammeRegulation({
+        const created = await createProgrammeAdmissionYear({
           programme_id: programmeId,
           admission_year_id: admissionYearId,
           regulation_id: selectedId,

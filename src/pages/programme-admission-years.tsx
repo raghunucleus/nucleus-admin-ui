@@ -60,17 +60,17 @@ import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
 import { listAdmissionYears, type AdmissionYear } from "@/lib/admission-years"
 import {
-  activateProgrammeRegulation,
-  createProgrammeRegulation,
-  deactivateProgrammeRegulation,
-  listProgrammeRegulations,
-  updateProgrammeRegulation,
-  type ListProgrammeRegulationsParams,
-  type ProgrammeRegulation,
-  type ProgrammeRegulationStatusFilter,
-  type ProgrammeRegulationsSortField,
-  type ProgrammeRegulationsSortOrder,
-} from "@/lib/programme-regulations"
+  activateProgrammeAdmissionYear,
+  createProgrammeAdmissionYear,
+  deactivateProgrammeAdmissionYear,
+  listProgrammeAdmissionYears,
+  updateProgrammeAdmissionYear,
+  type ListProgrammeAdmissionYearsParams,
+  type ProgrammeAdmissionYear,
+  type ProgrammeAdmissionYearStatusFilter,
+  type ProgrammeAdmissionYearsSortField,
+  type ProgrammeAdmissionYearsSortOrder,
+} from "@/lib/programme-admission-years"
 import { listProgrammes, type Programme } from "@/lib/programmes"
 import { listRegulations, type Regulation } from "@/lib/regulations"
 
@@ -85,7 +85,7 @@ declare module "@tanstack/react-table" {
 type Mode =
   | { kind: "list" }
   | { kind: "create" }
-  | { kind: "edit"; link: ProgrammeRegulation }
+  | { kind: "edit"; link: ProgrammeAdmissionYear }
 
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
@@ -114,8 +114,8 @@ const STICKY_ACTIONS_SKELETON_CELL = cn(
   STICKY_ACTIONS_SHADOW,
 )
 
-export function ProgrammeRegulationsPage() {
-  const [rows, setRows] = React.useState<ProgrammeRegulation[]>([])
+export function ProgrammeAdmissionYearsPage() {
+  const [rows, setRows] = React.useState<ProgrammeAdmissionYear[]>([])
   const [total, setTotal] = React.useState(0)
   const [pageCount, setPageCount] = React.useState(0)
   const [loading, setLoading] = React.useState(true)
@@ -124,7 +124,7 @@ export function ProgrammeRegulationsPage() {
   const [busyId, setBusyId] = React.useState<number | null>(null)
   const [mode, setMode] = React.useState<Mode>({ kind: "list" })
   const [confirmTarget, setConfirmTarget] =
-    React.useState<ProgrammeRegulation | null>(null)
+    React.useState<ProgrammeAdmissionYear | null>(null)
 
   // Active-only option lists for filters + create/edit form.
   const [programmeOptions, setProgrammeOptions] = React.useState<Programme[]>([])
@@ -201,7 +201,7 @@ export function ProgrammeRegulationsPage() {
   const [filterPanelOpen, setFilterPanelOpen] = React.useState(true)
 
   const [pendingStatus, setPendingStatus] = React.useState<
-    ProgrammeRegulationStatusFilter | undefined
+    ProgrammeAdmissionYearStatusFilter | undefined
   >(undefined)
   const [pendingProgrammeId, setPendingProgrammeId] = React.useState<
     number | undefined
@@ -210,7 +210,7 @@ export function ProgrammeRegulationsPage() {
     number | undefined
   >(undefined)
   const [status, setStatus] = React.useState<
-    ProgrammeRegulationStatusFilter | undefined
+    ProgrammeAdmissionYearStatusFilter | undefined
   >(undefined)
   const [programmeId, setProgrammeId] = React.useState<number | undefined>(
     undefined,
@@ -256,11 +256,11 @@ export function ProgrammeRegulationsPage() {
     (programmeId !== undefined ? 1 : 0) +
     (regulationId !== undefined ? 1 : 0)
 
-  const queryParams = React.useMemo<ListProgrammeRegulationsParams>(() => {
+  const queryParams = React.useMemo<ListProgrammeAdmissionYearsParams>(() => {
     const head = sorting[0]
-    const sortBy: ProgrammeRegulationsSortField =
-      (head?.id as ProgrammeRegulationsSortField | undefined) ?? "created_at"
-    const sortOrder: ProgrammeRegulationsSortOrder = head
+    const sortBy: ProgrammeAdmissionYearsSortField =
+      (head?.id as ProgrammeAdmissionYearsSortField | undefined) ?? "created_at"
+    const sortOrder: ProgrammeAdmissionYearsSortOrder = head
       ? head.desc
         ? "desc"
         : "asc"
@@ -295,7 +295,7 @@ export function ProgrammeRegulationsPage() {
     if (initialLoadDoneRef.current) setRefreshing(true)
     else setLoading(true)
     try {
-      const result = await listProgrammeRegulations(queryParams)
+      const result = await listProgrammeAdmissionYears(queryParams)
       if (!isLatest()) return
       setRows(result.rows)
       setTotal(result.total)
@@ -333,14 +333,14 @@ export function ProgrammeRegulationsPage() {
     })
   }
 
-  const requestToggleActive = (row: ProgrammeRegulation) => setConfirmTarget(row)
+  const requestToggleActive = (row: ProgrammeAdmissionYear) => setConfirmTarget(row)
 
-  const handleToggleActive = async (row: ProgrammeRegulation) => {
+  const handleToggleActive = async (row: ProgrammeAdmissionYear) => {
     setBusyId(row.id)
     try {
       const updated = row.is_active
-        ? await deactivateProgrammeRegulation(row.id)
-        : await activateProgrammeRegulation(row.id)
+        ? await deactivateProgrammeAdmissionYear(row.id)
+        : await activateProgrammeAdmissionYear(row.id)
       toast.success(
         `${updated.programme.code} • ${updated.regulation.code} ${
           updated.is_active ? "activated" : "deactivated"
@@ -358,7 +358,7 @@ export function ProgrammeRegulationsPage() {
   }
 
   const handleSaved = async (
-    updated: ProgrammeRegulation,
+    updated: ProgrammeAdmissionYear,
     kind: "create" | "edit",
   ) => {
     setMode({ kind: "list" })
@@ -483,7 +483,7 @@ export function ProgrammeRegulationsPage() {
         )}
 
         <div className="min-w-0 flex-1 rounded-lg border bg-card text-card-foreground">
-          <ProgrammeRegulationsTable
+          <ProgrammeAdmissionYearsTable
             rows={rows}
             total={total}
             pageCount={pageCount}
@@ -602,12 +602,12 @@ function FilterPanel({
   applyDisabled,
   resetDisabled,
 }: {
-  pendingStatus: ProgrammeRegulationStatusFilter | undefined
+  pendingStatus: ProgrammeAdmissionYearStatusFilter | undefined
   pendingProgrammeId: number | undefined
   pendingRegulationId: number | undefined
   programmeOptions: Programme[]
   regulationOptions: Regulation[]
-  onPendingStatusChange: (v: ProgrammeRegulationStatusFilter | undefined) => void
+  onPendingStatusChange: (v: ProgrammeAdmissionYearStatusFilter | undefined) => void
   onPendingProgrammeChange: (v: number | undefined) => void
   onPendingRegulationChange: (v: number | undefined) => void
   onApply: () => void
@@ -640,7 +640,7 @@ function FilterPanel({
               onPendingStatusChange(
                 e.target.value === ""
                   ? undefined
-                  : (e.target.value as ProgrammeRegulationStatusFilter),
+                  : (e.target.value as ProgrammeAdmissionYearStatusFilter),
               )
             }
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -704,7 +704,7 @@ function FilterPanel({
   )
 }
 
-function ProgrammeRegulationsTable({
+function ProgrammeAdmissionYearsTable({
   rows,
   total,
   pageCount,
@@ -727,7 +727,7 @@ function ProgrammeRegulationsTable({
   canCreate,
   onCreate,
 }: {
-  rows: ProgrammeRegulation[]
+  rows: ProgrammeAdmissionYear[]
   total: number
   pageCount: number
   busyId: number | null
@@ -743,13 +743,13 @@ function ProgrammeRegulationsTable({
   onResetFilters: () => void
   loadFailed: boolean
   onRetry: () => void
-  onEdit: (r: ProgrammeRegulation) => void
-  onToggleActive: (r: ProgrammeRegulation) => void
+  onEdit: (r: ProgrammeAdmissionYear) => void
+  onToggleActive: (r: ProgrammeAdmissionYear) => void
   yearLabel: string | undefined
   canCreate: boolean
   onCreate: () => void
 }) {
-  const columns = React.useMemo<ColumnDef<ProgrammeRegulation>[]>(
+  const columns = React.useMemo<ColumnDef<ProgrammeAdmissionYear>[]>(
     () => [
       {
         id: "programme",
@@ -1239,14 +1239,14 @@ function AssignRegulationForm(
         programmeOptions: Programme[]
         regulationOptions: Regulation[]
         onCancel: () => void
-        onSaved: (r: ProgrammeRegulation) => void
+        onSaved: (r: ProgrammeAdmissionYear) => void
       }
     | {
         mode: "edit"
-        link: ProgrammeRegulation
+        link: ProgrammeAdmissionYear
         regulationOptions: Regulation[]
         onCancel: () => void
-        onSaved: (r: ProgrammeRegulation) => void
+        onSaved: (r: ProgrammeAdmissionYear) => void
       },
 ) {
   // For edit mode, programme + admission year are display-only; only
@@ -1309,14 +1309,14 @@ function AssignRegulationForm(
   const onSubmit = handleSubmit(async (values) => {
     try {
       if (isCreate) {
-        const created = await createProgrammeRegulation({
+        const created = await createProgrammeAdmissionYear({
           programme_id: values.programme_id,
           admission_year_id: props.admissionYear.id,
           regulation_id: values.regulation_id,
         })
         props.onSaved(created)
       } else {
-        const updated = await updateProgrammeRegulation(props.link.id, {
+        const updated = await updateProgrammeAdmissionYear(props.link.id, {
           regulation_id: values.regulation_id,
         })
         props.onSaved(updated)

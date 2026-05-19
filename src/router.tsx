@@ -12,8 +12,11 @@ import { LoginPage } from "@/pages/login"
 import { AdmissionYearsPage } from "@/pages/admission-years"
 import { DegreesPage } from "@/pages/degrees"
 import { DepartmentsPage } from "@/pages/departments"
+import { DesignationsPage } from "@/pages/designations"
+import { EmployeesPage } from "@/pages/employees"
+import { EmployeesBulkUploadPage } from "@/pages/employees-bulk-upload"
 import { ProgrammeConfigurationPage } from "@/pages/programme-configuration"
-import { ProgrammeRegulationsPage } from "@/pages/programme-regulations"
+import { ProgrammeAdmissionYearsPage } from "@/pages/programme-admission-years"
 import { ProgrammeSemestersPage } from "@/pages/programme-semesters"
 import { ProgrammesPage } from "@/pages/programmes"
 import { RegulationsPage } from "@/pages/regulations"
@@ -150,10 +153,10 @@ const mastersSubjectsRoute = createRoute({
   component: SubjectsPage,
 })
 
-const mastersProgrammeRegulationsRoute = createRoute({
+const mastersProgrammeAdmissionYearsRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
-  path: "/masters/programme-regulations",
-  component: ProgrammeRegulationsPage,
+  path: "/masters/programme-admission-years",
+  component: ProgrammeAdmissionYearsPage,
 })
 
 const mastersProgrammeConfigurationRoute = createRoute({
@@ -176,6 +179,24 @@ const mastersProgrammeConfigurationRoute = createRoute({
     }
     return out
   },
+})
+
+const employeesDesignationsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/employees/designations",
+  component: DesignationsPage,
+})
+
+const employeesAllRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/employees/all",
+  component: EmployeesPage,
+})
+
+const employeesBulkUploadRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/employees/bulk-upload",
+  component: EmployeesBulkUploadPage,
 })
 
 const profileSections = ["profile", "password", "security"] as const
@@ -212,8 +233,11 @@ const routeTree = rootRoute.addChildren([
     mastersAdmissionYearsRoute,
     mastersRegulationsRoute,
     mastersSubjectsRoute,
-    mastersProgrammeRegulationsRoute,
+    mastersProgrammeAdmissionYearsRoute,
     mastersProgrammeConfigurationRoute,
+    employeesDesignationsRoute,
+    employeesAllRoute,
+    employeesBulkUploadRoute,
     profileRoute,
   ]),
 ])

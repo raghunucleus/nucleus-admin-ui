@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Link, useLocation } from "@tanstack/react-router"
 import {
+  Briefcase,
   ChevronRight,
   Database,
   Home,
@@ -34,14 +35,25 @@ const nav: NavItem[] = [
     label: "Masters",
     icon: Layers,
     children: [
+      { to: "/masters/admission-years", label: "Admission years" },
       { to: "/masters/degrees", label: "Degree" },
       { to: "/masters/departments", label: "Department" },
-      { to: "/masters/programmes", label: "Programme" },
       { to: "/masters/semesters", label: "Semester" },
-      { to: "/masters/admission-years", label: "Admission years" },
       { to: "/masters/regulations", label: "Regulation" },
       { to: "/masters/subjects", label: "Subject" },
-      { to: "/masters/programme-configuration", label: "Programme configuration" },
+      { to: "/masters/programmes", label: "Programme" },
+      { to: "/masters/programme-configuration", label: "Programme Configuration" },
+    ],
+  },
+  {
+    type: "group",
+    key: "employees",
+    label: "Employees",
+    icon: Briefcase,
+    children: [
+      { to: "/employees/designations", label: "Designations" },
+      { to: "/employees/all", label: "All Employees" },
+      { to: "/employees/bulk-upload", label: "Emp Bulk upload" },
     ],
   },
   { type: "leaf", to: "/migrations", label: "Migrations", icon: Database },
