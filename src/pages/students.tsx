@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useNavigate } from "@tanstack/react-router"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -21,8 +22,10 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Eye,
   Filter,
   GraduationCap,
+  MoreVertical,
   Pencil,
   Plus,
   Power,
@@ -37,6 +40,12 @@ import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { DatePicker } from "@/components/ui/date-picker"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -108,6 +117,7 @@ export function StudentsPage() {
   const [busyId, setBusyId] = React.useState<number | null>(null)
   const [mode, setMode] = React.useState<Mode>({ kind: "list" })
   const [confirmTarget, setConfirmTarget] = React.useState<Student | null>(null)
+  const navigate = useNavigate()
 
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "created_at", desc: true },
@@ -547,6 +557,12 @@ export function StudentsPage() {
             onRetry={() => void load()}
             onEdit={(s) => setMode({ kind: "edit", student: s })}
             onToggleActive={requestToggleActive}
+            onViewDetails={(s) =>
+              navigate({
+                to: "/students/$studentId",
+                params: { studentId: String(s.id) },
+              })
+            }
           />
         </div>
       </div>
@@ -831,6 +847,7 @@ function StudentsTable({
   onRetry,
   onEdit,
   onToggleActive,
+  onViewDetails,
 }: {
   students: Student[]
   total: number
@@ -857,6 +874,7 @@ function StudentsTable({
   onRetry: () => void
   onEdit: (s: Student) => void
   onToggleActive: (s: Student) => void
+  onViewDetails: (s: Student) => void
 }) {
   const columns = React.useMemo<ColumnDef<Student>[]>(
     () => [
@@ -1004,28 +1022,43 @@ function StudentsTable({
               >
                 <Pencil />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "size-8",
-                  s.is_active
-                    ? "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                    : "text-muted-foreground hover:bg-success/10 hover:text-success",
-                )}
-                onClick={() => onToggleActive(s)}
-                disabled={isBusy || formOpen}
-                title={toggleLabel}
-                aria-label={toggleLabel}
-              >
-                {s.is_active ? <PowerOff /> : <Power />}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:text-foreground"
+                    disabled={formOpen || isBusy}
+                    title="More actions"
+                    aria-label="More actions"
+                  >
+                    <MoreVertical />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onSelect={() => onViewDetails(s)}>
+                    <Eye />
+                    View details
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => onToggleActive(s)}
+                    className={cn(
+                      s.is_active
+                        ? "text-destructive data-[highlighted]:text-destructive"
+                        : "text-success data-[highlighted]:text-success",
+                    )}
+                  >
+                    {s.is_active ? <PowerOff /> : <Power />}
+                    {toggleLabel}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )
         },
       },
     ],
-    [busyId, formOpen, onEdit, onToggleActive],
+    [busyId, formOpen, onEdit, onToggleActive, onViewDetails],
   )
 
   const table = useReactTable({

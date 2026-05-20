@@ -23,6 +23,7 @@ import { RegulationsPage } from "@/pages/regulations"
 import { SemestersPage } from "@/pages/semesters"
 import { StudentsPage } from "@/pages/students"
 import { StudentsBulkUploadPage } from "@/pages/students-bulk-upload"
+import { StudentDetailsPage } from "@/pages/student-details"
 import { SubjectsPage } from "@/pages/subjects"
 import { MigrationsPage } from "@/pages/migrations"
 import { NotFoundPage } from "@/pages/not-found"
@@ -213,6 +214,14 @@ const studentsBulkUploadRoute = createRoute({
   component: StudentsBulkUploadPage,
 })
 
+// Dynamic detail route. Static siblings (/students/all, /students/bulk-upload)
+// always win over this param route, so there's no collision.
+const studentDetailsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/students/$studentId",
+  component: StudentDetailsPage,
+})
+
 const profileSections = ["profile", "password", "security"] as const
 export type ProfileSection = (typeof profileSections)[number]
 
@@ -254,6 +263,7 @@ const routeTree = rootRoute.addChildren([
     employeesBulkUploadRoute,
     studentsAllRoute,
     studentsBulkUploadRoute,
+    studentDetailsRoute,
     profileRoute,
   ]),
 ])

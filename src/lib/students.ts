@@ -134,6 +134,10 @@ export async function listStudents(
   return api<ListStudentsResult>(`/admin/students${suffix}`, { method: "GET" })
 }
 
+export async function getStudent(id: number): Promise<Student> {
+  return api<Student>(`/admin/students/${id}`, { method: "GET" })
+}
+
 export async function createStudent(
   input: CreateStudentInput,
 ): Promise<Student> {
@@ -153,6 +157,35 @@ export async function activateStudent(id: number): Promise<Student> {
 
 export async function deactivateStudent(id: number): Promise<Student> {
   return api<Student>(`/admin/students/${id}/deactivate`, { method: "POST" })
+}
+
+/**
+ * Provision (or reset) the student's login. The server generates a random
+ * temporary password, emails it to the student's registered address, forces a
+ * change on first sign-in, and revokes any active sessions. Returns the
+ * address the email was sent to.
+ */
+export async function resetStudentLoginPassword(
+  id: number,
+): Promise<{ email: string }> {
+  return api<{ email: string }>(`/admin/students/${id}/reset-password`, {
+    method: "POST",
+  })
+}
+
+/**
+ * Directly set the student's login password to an admin-chosen value. No email
+ * is sent; the student is still forced to change it on first sign-in, and any
+ * active sessions are revoked.
+ */
+export async function setStudentLoginPassword(
+  id: number,
+  password: string,
+): Promise<void> {
+  return api<void>(`/admin/students/${id}/set-password`, {
+    method: "POST",
+    body: { password },
+  })
 }
 
 export type BulkCreateStudentRow = {
