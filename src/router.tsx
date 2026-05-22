@@ -20,6 +20,10 @@ import { ProgrammeAdmissionYearsPage } from "@/pages/programme-admission-years"
 import { ProgrammeSemestersPage } from "@/pages/programme-semesters"
 import { ProgrammesPage } from "@/pages/programmes"
 import { RegulationsPage } from "@/pages/regulations"
+import { ProgrammeAttendanceGroupsPage } from "@/pages/programme-attendance-groups"
+import { SemesterFacultyPage } from "@/pages/semester-faculty"
+import { SemesterSettingsPage } from "@/pages/semester-settings"
+import { SemesterSubjectsPage } from "@/pages/semester-subjects"
 import { SemestersPage } from "@/pages/semesters"
 import { StudentsPage } from "@/pages/students"
 import { StudentsBulkUploadPage } from "@/pages/students-bulk-upload"
@@ -162,26 +166,63 @@ const mastersProgrammeAdmissionYearsRoute = createRoute({
   component: ProgrammeAdmissionYearsPage,
 })
 
+// Shared by the programme-configuration screen and its per-semester settings
+// sub-screens — coerces ?programmeId / ?admissionYearId from the URL.
+function validateProgrammeBatchSearch(
+  search: Record<string, unknown>,
+): { programmeId?: number; admissionYearId?: number } {
+  const out: { programmeId?: number; admissionYearId?: number } = {}
+  for (const key of ["programmeId", "admissionYearId"] as const) {
+    const raw = search[key]
+    const n =
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string"
+          ? Number(raw)
+          : Number.NaN
+    if (Number.isInteger(n) && n > 0) out[key] = n
+  }
+  return out
+}
+
 const mastersProgrammeConfigurationRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
   path: "/masters/programme-configuration",
   component: ProgrammeConfigurationPage,
-  validateSearch: (
-    search: Record<string, unknown>,
-  ): { programmeId?: number; admissionYearId?: number } => {
-    const out: { programmeId?: number; admissionYearId?: number } = {}
-    for (const key of ["programmeId", "admissionYearId"] as const) {
-      const raw = search[key]
-      const n =
-        typeof raw === "number"
-          ? raw
-          : typeof raw === "string"
-            ? Number(raw)
-            : Number.NaN
-      if (Number.isInteger(n) && n > 0) out[key] = n
-    }
-    return out
-  },
+  validateSearch: validateProgrammeBatchSearch,
+})
+
+// Per-semester settings hub (bento) reached from a semester card.
+const mastersSemesterSettingsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programme-configuration/semester/$programmeSemesterId",
+  component: SemesterSettingsPage,
+  validateSearch: validateProgrammeBatchSearch,
+})
+
+// Configuration sections opened from the semester settings bento.
+const mastersSemesterSubjectsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programme-configuration/semester/$programmeSemesterId/subjects",
+  component: SemesterSubjectsPage,
+  validateSearch: validateProgrammeBatchSearch,
+})
+
+const mastersSemesterFacultyRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programme-configuration/semester/$programmeSemesterId/faculty",
+  component: SemesterFacultyPage,
+  validateSearch: validateProgrammeBatchSearch,
+})
+
+// Attendance groups are configured once per programme × admission-year batch
+// (shared across every semester), so this screen is scoped to the batch — not
+// nested under a semester.
+const mastersProgrammeAttendanceGroupsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programme-configuration/attendance-groups",
+  component: ProgrammeAttendanceGroupsPage,
+  validateSearch: validateProgrammeBatchSearch,
 })
 
 const employeesDesignationsRoute = createRoute({
@@ -258,6 +299,10 @@ const routeTree = rootRoute.addChildren([
     mastersSubjectsRoute,
     mastersProgrammeAdmissionYearsRoute,
     mastersProgrammeConfigurationRoute,
+    mastersSemesterSettingsRoute,
+    mastersSemesterSubjectsRoute,
+    mastersSemesterFacultyRoute,
+    mastersProgrammeAttendanceGroupsRoute,
     employeesDesignationsRoute,
     employeesAllRoute,
     employeesBulkUploadRoute,

@@ -3,20 +3,16 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
   ArrowRight,
-  BookMarked,
   CalendarRange,
   CheckCircle2,
   GraduationCap,
   Hourglass,
   LayoutGrid,
   MoreHorizontal,
-  Pencil,
   Play,
-  Plus,
-  Power,
-  PowerOff,
   ScrollText,
   Settings2,
+  UsersRound,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -30,7 +26,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
   Sheet,
@@ -59,24 +54,15 @@ import {
   type ProgrammeSemester,
   type ProgrammeSemesterStatus,
 } from "@/lib/programme-semesters"
-import {
-  activateProgrammeSemesterSubject,
-  createProgrammeSemesterSubject,
-  deactivateProgrammeSemesterSubject,
-  listProgrammeSemesterSubjects,
-  updateProgrammeSemesterSubject,
-  type ProgrammeSemesterSubject,
-} from "@/lib/programme-semester-subjects"
 import { listProgrammes, type Programme } from "@/lib/programmes"
 import { listRegulations, type Regulation } from "@/lib/regulations"
 import { listSemesters, type Semester } from "@/lib/semesters"
-import { listSubjects, type Subject } from "@/lib/subjects"
+import {
+  listAttendanceGroups,
+  type AttendanceGroup,
+} from "@/lib/attendance-groups"
 
 type ManageSheetMode = { kind: "closed" } | { kind: "semesters" }
-type SubjectEntryMode =
-  | { kind: "closed" }
-  | { kind: "create" }
-  | { kind: "edit"; entry: ProgrammeSemesterSubject }
 
 export function ProgrammeConfigurationPage() {
   const navigate = useNavigate()
@@ -192,7 +178,7 @@ export function ProgrammeConfigurationPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
+      <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-16 before:bg-background before:content-[''] after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-4 after:bg-background after:content-['']">
         <div>
           <h1 className="text-base font-semibold tracking-tight">
             Programme configuration
@@ -285,12 +271,11 @@ export function ProgrammeConfigurationPage() {
             admissionYearId={yearId}
             programme={selectedProgramme}
             semesterOptions={semesterOptions}
-            regulationAssigned={currentRegulation !== null}
+            regulationId={currentRegulation?.regulation_id ?? null}
           />
-          <SubjectsCard
+          <AttendanceGroupsCard
             programmeId={programmeId}
             admissionYearId={yearId}
-            regulationId={currentRegulation?.regulation_id ?? null}
           />
           <ComingSoonCard />
         </>
@@ -492,14 +477,16 @@ function SemestersCard({
   admissionYearId,
   programme,
   semesterOptions,
-  regulationAssigned,
+  regulationId,
 }: {
   programmeId: number
   admissionYearId: number
   programme: Programme | undefined
   semesterOptions: Semester[]
-  regulationAssigned: boolean
+  regulationId: number | null
 }) {
+  const navigate = useNavigate()
+  const regulationAssigned = regulationId !== null
   const [linked, setLinked] = React.useState<ProgrammeSemester[]>([])
   const [loading, setLoading] = React.useState(true)
   const [busy, setBusy] = React.useState(false)
@@ -670,6 +657,13 @@ function SemestersCard({
                       onRequestTransition={(target) =>
                         setStatusConfirm({ row: ps, target })
                       }
+                      onOpenSettings={() =>
+                        void navigate({
+                          to: "/masters/programme-configuration/semester/$programmeSemesterId",
+                          params: { programmeSemesterId: String(ps.id) },
+                          search: { programmeId, admissionYearId },
+                        })
+                      }
                     />
                   ))}
               </div>
@@ -819,6 +813,7 @@ function SemesterCard({
   busy,
   blockedBy,
   onRequestTransition,
+  onOpenSettings,
 }: {
   row: ProgrammeSemester
   busy: boolean
@@ -826,6 +821,7 @@ function SemesterCard({
   // either Sem 1 or has every active predecessor already completed.
   blockedBy: ProgrammeSemester | null
   onRequestTransition: (target: ProgrammeSemesterStatus) => void
+  onOpenSettings: () => void
 }) {
   const canStart = row.status === "upcoming" && blockedBy === null
   const canComplete = row.status === "ongoing"
@@ -935,8 +931,17 @@ function SemesterCard({
         )}
       </div>
 
-      {hasAction && (
-        <div className="mt-3 flex justify-end">
+      <div className="mt-3 flex items-center justify-between gap-2 border-t pt-2.5">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+          onClick={onOpenSettings}
+        >
+          <Settings2 className="size-3.5" />
+          Configure
+        </Button>
+        {hasAction && (
           <Button
             size="sm"
             variant="outline"
@@ -958,8 +963,8 @@ function SemesterCard({
               </>
             )}
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -1104,807 +1109,88 @@ function BulkLinkSemestersForm({
 
 // --------------------------------------------------------------------- card 3
 
-function SubjectsCard({
+function AttendanceGroupsCard({
   programmeId,
   admissionYearId,
-  regulationId,
 }: {
   programmeId: number
   admissionYearId: number
-  regulationId: number | null
 }) {
-  // Linked & active programme_semester rows for the batch — these are the
-  // semesters the admin can attach subjects to.
-  const [linkedSemesters, setLinkedSemesters] = React.useState<
-    ProgrammeSemester[]
-  >([])
-  const [semestersLoading, setSemestersLoading] = React.useState(true)
+  const navigate = useNavigate()
+  const [groups, setGroups] = React.useState<AttendanceGroup[] | null>(null)
+  const [loading, setLoading] = React.useState(true)
 
-  // Subjects under the batch's regulation — used to populate the "real
-  // subject" picker. Empty when no regulation assigned.
-  const [subjects, setSubjects] = React.useState<Subject[]>([])
-
-  // Entries (real + elective) attached to the currently-selected semester.
-  const [entries, setEntries] = React.useState<ProgrammeSemesterSubject[]>([])
-  const [entriesLoading, setEntriesLoading] = React.useState(true)
-
-  const [selectedSemesterId, setSelectedSemesterId] = React.useState<
-    number | undefined
-  >(undefined)
-
-  const [mode, setMode] = React.useState<SubjectEntryMode>({ kind: "closed" })
-  const [busy, setBusy] = React.useState(false)
-  const [confirmToggle, setConfirmToggle] =
-    React.useState<ProgrammeSemesterSubject | null>(null)
-
-  // Reset everything when the batch identity changes — stops a previous
-  // batch's selection from leaking into the new one.
-  React.useEffect(() => {
-    setSelectedSemesterId(undefined)
-    setEntries([])
-    setLinkedSemesters([])
-    setSubjects([])
-  }, [programmeId, admissionYearId, regulationId])
-
-  // Load linked semesters whenever the batch changes (active only).
-  React.useEffect(() => {
-    let cancelled = false
-    if (regulationId === null) {
-      setSemestersLoading(false)
-      return
-    }
-    setSemestersLoading(true)
-    listProgrammeSemesters({
-      programmeId,
-      admissionYearId,
-      status: "active",
-      pageSize: 100,
-      sortBy: "semester",
-      sortOrder: "asc",
-    })
-      .then((r) => {
-        if (cancelled) return
-        setLinkedSemesters(r.rows)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        toast.error("Couldn't load linked semesters", {
-          description:
-            err instanceof ApiError ? err.message : "Please try again.",
-        })
-      })
-      .finally(() => {
-        if (!cancelled) setSemestersLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [programmeId, admissionYearId, regulationId])
-
-  // Auto-pick the first linked semester once they're available.
-  React.useEffect(() => {
-    if (selectedSemesterId === undefined && linkedSemesters.length > 0) {
-      setSelectedSemesterId(linkedSemesters[0].id)
-    }
-  }, [selectedSemesterId, linkedSemesters])
-
-  // Load subject catalog scoped to the batch's regulation.
-  React.useEffect(() => {
-    let cancelled = false
-    if (regulationId === null) return
-    listSubjects({
-      regulationId,
-      status: "active",
-      pageSize: 100,
-      sortBy: "code",
-      sortOrder: "asc",
-    })
-      .then((r) => {
-        if (!cancelled) setSubjects(r.rows)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        toast.error("Couldn't load subject catalog", {
-          description:
-            err instanceof ApiError ? err.message : "Please try again.",
-        })
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [regulationId])
-
-  const loadEntries = React.useCallback(async () => {
-    if (selectedSemesterId === undefined) {
-      setEntries([])
-      setEntriesLoading(false)
-      return
-    }
-    setEntriesLoading(true)
+  const load = React.useCallback(async () => {
+    setLoading(true)
     try {
-      const r = await listProgrammeSemesterSubjects({
-        programmeSemesterId: selectedSemesterId,
-        pageSize: 100,
-        sortBy: "created_at",
-        sortOrder: "asc",
-      })
-      setEntries(r.rows)
+      setGroups(await listAttendanceGroups(programmeId, admissionYearId))
     } catch (err) {
-      toast.error("Couldn't load configured subjects", {
+      toast.error("Couldn't load attendance groups", {
         description:
           err instanceof ApiError ? err.message : "Please try again.",
       })
     } finally {
-      setEntriesLoading(false)
+      setLoading(false)
     }
-  }, [selectedSemesterId])
+  }, [programmeId, admissionYearId])
 
   React.useEffect(() => {
-    void loadEntries()
-  }, [loadEntries])
+    void load()
+  }, [load])
 
-  const totalCredits = entries
-    .filter((e) => e.is_active)
-    .reduce((sum, e) => sum + Number(e.credits || 0), 0)
-
-  const onToggleActive = async (entry: ProgrammeSemesterSubject) => {
-    setBusy(true)
-    try {
-      const updated = entry.is_active
-        ? await deactivateProgrammeSemesterSubject(entry.id)
-        : await activateProgrammeSemesterSubject(entry.id)
-      toast.success(
-        `${displayName(updated)} ${updated.is_active ? "activated" : "deactivated"}.`,
-      )
-      await loadEntries()
-    } catch (err) {
-      toast.error("Couldn't update", {
-        description:
-          err instanceof ApiError ? err.message : "Please try again.",
-      })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  // Gating ----------------------------------------------------------------
-  if (regulationId === null) {
-    return (
-      <SectionCard
-        icon={BookMarked}
-        title="Subjects"
-        description="Configure subjects for each linked semester."
-      >
-        <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-          Assign a regulation above first — the subject catalog is scoped to
-          the batch's regulation.
-        </div>
-      </SectionCard>
-    )
-  }
-
-  if (semestersLoading) {
-    return (
-      <SectionCard
-        icon={BookMarked}
-        title="Subjects"
-        description="Configure subjects for each linked semester."
-      >
-        <Skeleton className="h-9 w-64" />
-      </SectionCard>
-    )
-  }
-
-  if (linkedSemesters.length === 0) {
-    return (
-      <SectionCard
-        icon={BookMarked}
-        title="Subjects"
-        description="Configure subjects for each linked semester."
-      >
-        <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-          Link at least one semester above first — subjects are configured
-          per semester.
-        </div>
-      </SectionCard>
-    )
-  }
-
-  const selectedLinkedSemester = linkedSemesters.find(
-    (l) => l.id === selectedSemesterId,
+  const groupCount = groups?.length ?? 0
+  const groupedStudents = React.useMemo(
+    () => (groups ?? []).reduce((n, g) => n + g.members.length, 0),
+    [groups],
   )
 
   return (
     <SectionCard
-      icon={BookMarked}
-      title="Subjects"
-      description="Configure real subjects and open-elective slots for each linked semester."
+      icon={UsersRound}
+      title="Attendance groups"
+      description="Split this batch's students into groups — defined once for the batch and shared across every semester. Each group later follows its own timetable."
     >
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="cfg-sub-semester" className="text-xs text-muted-foreground">
-            Semester
-          </Label>
-          <div className="w-56">
-            <Combobox
-              id="cfg-sub-semester"
-              value={selectedSemesterId ?? null}
-              options={linkedSemesters.map((l) => ({
-                value: l.id,
-                label: l.semester.code,
-                sublabel: `${l.semester.roman_format} · ${l.semester.name}`,
-              }))}
-              onChange={(v) => {
-                if (v == null) return
-                setSelectedSemesterId(v)
-              }}
-              placeholder="Select a semester"
-              searchPlaceholder="Search semesters…"
-              emptyMessage="No semesters"
-              disabled={linkedSemesters.length === 0}
-            />
-          </div>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          {selectedLinkedSemester && entries.length > 0 && (
-            <div className="text-xs text-muted-foreground">
-              Total credits:{" "}
-              <span className="font-medium text-foreground tabular-nums">
-                {totalCredits.toFixed(1)}
-              </span>
-            </div>
-          )}
-          <Button
-            size="sm"
-            onClick={() => setMode({ kind: "create" })}
-            disabled={busy || selectedSemesterId === undefined}
-          >
-            <Plus />
-            Add subject
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-3 rounded-md border bg-background">
-        {entriesLoading ? (
-          <div className="px-3 py-6">
-            <Skeleton className="h-4 w-48" />
-          </div>
-        ) : entries.length === 0 ? (
-          <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            No subjects configured for this semester yet.
-          </div>
-        ) : (
-          <ul className="divide-y">
-            {entries.map((e) => {
-              const isReal = e.subject_id !== null && e.subject !== null
-              const isBusy = busy
-              return (
-                <li
-                  key={e.id}
-                  className={cn(
-                    "flex flex-wrap items-center gap-3 px-3 py-2 text-sm",
-                    !e.is_active && "opacity-60",
-                  )}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{displayName(e)}</span>
-                      {isReal && e.subject && (
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {e.subject.code}
-                        </span>
-                      )}
-                      {!isReal && (
-                        <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warning">
-                          Elective slot
-                        </span>
-                      )}
-                      {!e.is_active && <StatusPill active={false} />}
-                    </div>
-                    {!isReal && e.options.length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        {e.options.map((o) => (
-                          <span
-                            key={o.id}
-                            className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
-                            title={o.subject?.name ?? ""}
-                          >
-                            <span className="font-mono">{o.subject?.code}</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="shrink-0 text-sm font-medium tabular-nums">
-                    {Number(e.credits).toFixed(1)}{" "}
-                    <span className="text-xs font-normal text-muted-foreground">
-                      cr
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 text-muted-foreground hover:text-foreground"
-                      onClick={() => setMode({ kind: "edit", entry: e })}
-                      disabled={isBusy}
-                      title="Edit"
-                      aria-label="Edit"
-                    >
-                      <Pencil />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={cn(
-                        "size-8",
-                        e.is_active
-                          ? "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                          : "text-muted-foreground hover:bg-success/10 hover:text-success",
-                      )}
-                      onClick={() => setConfirmToggle(e)}
-                      disabled={isBusy}
-                      title={e.is_active ? "Deactivate" : "Activate"}
-                      aria-label={e.is_active ? "Deactivate" : "Activate"}
-                    >
-                      {e.is_active ? <PowerOff /> : <Power />}
-                    </Button>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </div>
-
-      <Sheet
-        open={mode.kind !== "closed"}
-        onOpenChange={(o) => !o && setMode({ kind: "closed" })}
-      >
-        <SheetContent side="right" className="w-full sm:max-w-lg">
-          {mode.kind !== "closed" && selectedSemesterId !== undefined && (
-            <SubjectEntryForm
-              mode={mode.kind}
-              programmeSemesterId={selectedSemesterId}
-              subjects={subjects}
-              entries={entries}
-              entry={mode.kind === "edit" ? mode.entry : undefined}
-              onCancel={() => setMode({ kind: "closed" })}
-              onSaved={async () => {
-                setMode({ kind: "closed" })
-                await loadEntries()
-              }}
-            />
-          )}
-        </SheetContent>
-      </Sheet>
-
-      <ConfirmDialog
-        open={!!confirmToggle}
-        onOpenChange={(o) => !o && setConfirmToggle(null)}
-        title={
-          confirmToggle?.is_active
-            ? "Deactivate subject entry?"
-            : "Activate subject entry?"
-        }
-        description={
-          confirmToggle ? (
-            <div>
-              {confirmToggle.is_active
-                ? "Deactivated entries won't be selectable in dependent records."
-                : "Reactivated entries become available again."}
-              <div className="mt-2 font-medium text-foreground">
-                {displayName(confirmToggle)}
-              </div>
-            </div>
-          ) : undefined
-        }
-        confirmLabel={confirmToggle?.is_active ? "Deactivate" : "Activate"}
-        tone={confirmToggle?.is_active ? "destructive" : "success"}
-        loading={busy}
-        onConfirm={async () => {
-          if (!confirmToggle) return
-          const target = confirmToggle
-          await onToggleActive(target)
-          setConfirmToggle(null)
-        }}
-      />
-    </SectionCard>
-  )
-}
-
-function displayName(e: ProgrammeSemesterSubject): string {
-  if (e.subject) return e.subject.name
-  return e.placeholder_name ?? "(unnamed)"
-}
-
-// --------------------------------------------------------------------- card 3 form
-
-function SubjectEntryForm({
-  mode,
-  programmeSemesterId,
-  subjects,
-  entries,
-  entry,
-  onCancel,
-  onSaved,
-}: {
-  mode: "create" | "edit"
-  programmeSemesterId: number
-  subjects: Subject[]
-  entries: ProgrammeSemesterSubject[]
-  entry: ProgrammeSemesterSubject | undefined
-  onCancel: () => void
-  onSaved: () => void | Promise<void>
-}) {
-  const initialKind: "subject" | "elective" =
-    entry?.subject_id != null ? "subject" : entry ? "elective" : "subject"
-
-  const [kind, setKind] = React.useState<"subject" | "elective">(initialKind)
-  const [subjectId, setSubjectId] = React.useState<number | null>(
-    entry?.subject_id ?? null,
-  )
-  const [placeholder, setPlaceholder] = React.useState<string>(
-    entry?.placeholder_name ?? "",
-  )
-  // Candidate subject pool for elective slots. Ordered set kept in insertion
-  // order to make the chip row's UX predictable; we dedupe on add.
-  const [optionIds, setOptionIds] = React.useState<number[]>(
-    entry?.options.map((o) => o.subject_id) ?? [],
-  )
-  const [credits, setCredits] = React.useState<string>(
-    entry ? Number(entry.credits).toFixed(1) : "3.0",
-  )
-  const [submitting, setSubmitting] = React.useState(false)
-
-  // Subjects already configured under THIS semester (excluding the entry
-  // being edited) — hide them from the picker so the user can't pick a dupe.
-  const takenSubjectIds = React.useMemo(() => {
-    const taken = new Set<number>()
-    for (const e of entries) {
-      if (e.subject_id != null && e.id !== entry?.id) taken.add(e.subject_id)
-    }
-    return taken
-  }, [entries, entry?.id])
-
-  // If the entry being edited references a since-deactivated subject, inject
-  // it at the top of options so the form doesn't silently switch values.
-  const subjectOptions = React.useMemo<ComboboxOption[]>(() => {
-    const base = subjects
-      .filter((s) => !takenSubjectIds.has(s.id))
-      .map((s) => ({
-        value: s.id,
-        label: s.code,
-        sublabel: s.name,
-      }))
-    if (entry?.subject && !subjects.some((s) => s.id === entry.subject!.id)) {
-      base.unshift({
-        value: entry.subject.id,
-        label: entry.subject.code,
-        sublabel: entry.subject.name,
-      })
-    }
-    return base
-  }, [subjects, takenSubjectIds, entry])
-
-  const creditsNumber = Number(credits)
-  const creditsValid =
-    Number.isFinite(creditsNumber) &&
-    creditsNumber >= 0.5 &&
-    creditsNumber <= 30 &&
-    (creditsNumber * 10) % 5 === 0
-
-  const isValid =
-    creditsValid &&
-    (kind === "subject"
-      ? subjectId !== null
-      : placeholder.trim().length > 0 &&
-        placeholder.trim().length <= 64 &&
-        optionIds.length > 0)
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!isValid) return
-    setSubmitting(true)
-    try {
-      if (mode === "create") {
-        await createProgrammeSemesterSubject({
-          programme_semester_id: programmeSemesterId,
-          subject_id: kind === "subject" ? subjectId! : undefined,
-          placeholder_name: kind === "elective" ? placeholder.trim() : undefined,
-          option_subject_ids: kind === "elective" ? optionIds : undefined,
-          credits: creditsNumber,
-        })
-        toast.success("Subject added.")
-      } else if (entry) {
-        await updateProgrammeSemesterSubject(entry.id, {
-          subject_id: kind === "subject" ? subjectId : null,
-          placeholder_name: kind === "elective" ? placeholder.trim() : null,
-          // For real subjects we don't send an option pool. For electives,
-          // always send the current set so server keeps it in sync with the
-          // form's snapshot.
-          option_subject_ids: kind === "elective" ? optionIds : undefined,
-          credits: creditsNumber,
-        })
-        toast.success("Subject updated.")
-      }
-      await onSaved()
-    } catch (err) {
-      toast.error("Couldn't save", {
-        description:
-          err instanceof ApiError ? err.message : "Please try again.",
-      })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <form noValidate onSubmit={onSubmit} className="flex h-full flex-col">
-      <SheetHeader>
-        <SheetTitle>
-          {mode === "create" ? "Add subject" : "Edit subject"}
-        </SheetTitle>
-        <SheetDescription>
-          Either pick a real subject from this batch's regulation, or add an
-          open-elective slot the student will choose to fill later.
-        </SheetDescription>
-      </SheetHeader>
-
-      <SheetBody className="space-y-5">
+      {loading ? (
         <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Type</Label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setKind("subject")}
-              className={cn(
-                "rounded-md border p-3 text-left text-sm transition-colors",
-                kind === "subject"
-                  ? "border-primary/60 bg-primary/5 text-foreground"
-                  : "border-input bg-background text-muted-foreground hover:bg-accent/40",
-              )}
-            >
-              <div className="font-medium">Real subject</div>
-              <div className="text-xs text-muted-foreground">
-                Pick from the regulation's subject catalog.
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setKind("elective")}
-              className={cn(
-                "rounded-md border p-3 text-left text-sm transition-colors",
-                kind === "elective"
-                  ? "border-primary/60 bg-primary/5 text-foreground"
-                  : "border-input bg-background text-muted-foreground hover:bg-accent/40",
-              )}
-            >
-              <div className="font-medium">Open-elective slot</div>
-              <div className="text-xs text-muted-foreground">
-                Student picks from a candidate pool.
-              </div>
-            </button>
-          </div>
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-8 w-52" />
         </div>
-
-        {kind === "subject" ? (
-          <div className="space-y-1.5">
-            <Label htmlFor="entry-subject">Subject</Label>
-            <Combobox
-              id="entry-subject"
-              value={subjectId ?? null}
-              options={subjectOptions}
-              onChange={(v) => setSubjectId(v)}
-              placeholder="Select a subject"
-              searchPlaceholder="Search subjects…"
-              emptyMessage={
-                subjects.length === 0
-                  ? "No subjects under this regulation"
-                  : "All subjects already configured"
-              }
-            />
-            {subjects.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                No subjects exist under this regulation yet. Add subjects from
-                Masters → Subject first.
-              </p>
+      ) : (
+        <>
+          <div className="mb-3 text-sm text-muted-foreground">
+            {groupCount === 0 ? (
+              "No attendance groups yet."
+            ) : (
+              <>
+                <span className="font-medium text-foreground tabular-nums">
+                  {groupCount}
+                </span>{" "}
+                group{groupCount === 1 ? "" : "s"}
+                {" · "}
+                <span className="font-medium text-foreground tabular-nums">
+                  {groupedStudents}
+                </span>{" "}
+                student{groupedStudents === 1 ? "" : "s"} grouped
+              </>
             )}
           </div>
-        ) : (
-          <>
-            <div className="space-y-1.5">
-              <Label htmlFor="entry-placeholder">Slot name</Label>
-              <Input
-                id="entry-placeholder"
-                maxLength={64}
-                autoComplete="off"
-                value={placeholder}
-                onChange={(e) => setPlaceholder(e.target.value)}
-                placeholder="e.g. Open Elective 1"
-              />
-              <p className="text-xs text-muted-foreground">
-                Label shown to students when they pick what fills this slot.
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="entry-options">Candidate subjects</Label>
-              <ElectiveOptionsPicker
-                id="entry-options"
-                subjects={subjects}
-                selectedIds={optionIds}
-                fallbackSubjects={
-                  entry?.options.map((o) => o.subject).filter(Boolean) as
-                    | Subject[]
-                    | undefined
-                }
-                onChange={setOptionIds}
-              />
-              <p className="text-xs text-muted-foreground">
-                Add the subjects students may choose from for this slot. They
-                pick one at registration time.
-              </p>
-              {optionIds.length === 0 && (
-                <p className="text-xs text-destructive">
-                  Pick at least one candidate subject.
-                </p>
-              )}
-            </div>
-          </>
-        )}
-
-        <div className="space-y-1.5">
-          <Label htmlFor="entry-credits">Credits</Label>
-          <Input
-            id="entry-credits"
-            type="number"
-            inputMode="decimal"
-            min={0.5}
-            max={30}
-            step={0.5}
-            autoComplete="off"
-            value={credits}
-            onChange={(e) => setCredits(e.target.value)}
-            className="w-32"
-          />
-          {!creditsValid && credits !== "" && (
-            <p className="text-xs text-destructive">
-              Credits must be between 0.5 and 30, in steps of 0.5.
-            </p>
-          )}
-        </div>
-      </SheetBody>
-
-      <SheetFooter>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={submitting}
-          onClick={onCancel}
-        >
-          Cancel
-        </Button>
-        <Button type="submit" disabled={submitting || !isValid}>
-          {submitting
-            ? "Saving…"
-            : mode === "create"
-              ? "Add"
-              : "Save changes"}
-        </Button>
-      </SheetFooter>
-    </form>
-  )
-}
-
-// Multi-pick UI for the elective slot's candidate subject pool. Uses the
-// existing single-select Combobox to add one subject at a time; selected
-// subjects appear as removable chips below. `fallbackSubjects` lets us
-// show subjects that have since been deactivated (so editing an existing
-// slot doesn't silently drop them from view).
-function ElectiveOptionsPicker({
-  id,
-  subjects,
-  selectedIds,
-  fallbackSubjects,
-  onChange,
-}: {
-  id?: string
-  subjects: Subject[]
-  selectedIds: number[]
-  fallbackSubjects?: Subject[]
-  onChange: (next: number[]) => void
-}) {
-  const byId = React.useMemo(() => {
-    const map = new Map<number, Subject>()
-    for (const s of subjects) map.set(s.id, s)
-    for (const s of fallbackSubjects ?? []) {
-      if (!map.has(s.id)) map.set(s.id, s)
-    }
-    return map
-  }, [subjects, fallbackSubjects])
-
-  // Reset to null after each pick so the user can keep adding from the
-  // same Combobox. The picker hides already-selected ids from the options.
-  const [, setPickerVersion] = React.useState(0)
-
-  const pickerOptions = React.useMemo<ComboboxOption[]>(
-    () =>
-      subjects
-        .filter((s) => !selectedIds.includes(s.id))
-        .map((s) => ({ value: s.id, label: s.code, sublabel: s.name })),
-    [subjects, selectedIds],
-  )
-
-  const add = (subjectId: number) => {
-    if (selectedIds.includes(subjectId)) return
-    onChange([...selectedIds, subjectId])
-    setPickerVersion((v) => v + 1)
-  }
-
-  const remove = (subjectId: number) => {
-    onChange(selectedIds.filter((x) => x !== subjectId))
-  }
-
-  return (
-    <div className="space-y-2">
-      <Combobox
-        id={id}
-        value={null}
-        options={pickerOptions}
-        onChange={(v) => v != null && add(v)}
-        placeholder={
-          subjects.length === 0
-            ? "No subjects under this regulation"
-            : pickerOptions.length === 0
-              ? "All subjects added"
-              : "Add a candidate subject…"
-        }
-        searchPlaceholder="Search subjects…"
-        emptyMessage={
-          subjects.length === 0
-            ? "No subjects under this regulation"
-            : "No matches"
-        }
-        disabled={subjects.length === 0 || pickerOptions.length === 0}
-      />
-      {selectedIds.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {selectedIds.map((sid) => {
-            const s = byId.get(sid)
-            return (
-              <span
-                key={sid}
-                className="inline-flex items-center gap-1.5 rounded-full border border-input bg-background px-2 py-0.5 text-xs"
-                title={s?.name ?? ""}
-              >
-                <span className="font-mono">{s?.code ?? `#${sid}`}</span>
-                {s?.name && (
-                  <span className="text-muted-foreground">— {s.name}</span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => remove(sid)}
-                  aria-label={`Remove ${s?.code ?? sid}`}
-                  className="ml-0.5 grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <span className="sr-only">Remove</span>
-                  <svg viewBox="0 0 12 12" className="size-3" aria-hidden="true">
-                    <path
-                      d="M3 3l6 6M9 3l-6 6"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
-              </span>
-            )
-          })}
-        </div>
+          <Button
+            size="sm"
+            onClick={() =>
+              void navigate({
+                to: "/masters/programme-configuration/attendance-groups",
+                search: { programmeId, admissionYearId },
+              })
+            }
+          >
+            <UsersRound />
+            {groupCount === 0
+              ? "Set up attendance groups"
+              : "Manage attendance groups"}
+          </Button>
+        </>
       )}
-    </div>
+    </SectionCard>
   )
 }
 

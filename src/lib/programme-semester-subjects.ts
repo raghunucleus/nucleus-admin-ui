@@ -1,12 +1,34 @@
 import { api } from "@/lib/api"
+import type { Employee } from "@/lib/employees"
 import type { ProgrammeSemester } from "@/lib/programme-semesters"
 import type { Subject } from "@/lib/subjects"
+
+// One faculty (employee) allocated to teach an elective candidate subject.
+export type ProgrammeSemesterSubjectOptionFaculty = {
+  id: number
+  programme_semester_subject_option_id: number
+  employee_id: number
+  employee: Employee
+  created_at: string
+}
 
 export type ProgrammeSemesterSubjectOption = {
   id: number
   programme_semester_subject_id: number
   subject_id: number
   subject: Subject
+  /** Faculty allocated to teach this candidate subject (may be more than one). */
+  faculty: ProgrammeSemesterSubjectOptionFaculty[]
+  created_at: string
+}
+
+// One faculty (employee) allocated to teach a configured subject. A subject
+// may have several — multiple rows share programme_semester_subject_id.
+export type ProgrammeSemesterSubjectFaculty = {
+  id: number
+  programme_semester_subject_id: number
+  employee_id: number
+  employee: Employee
   created_at: string
 }
 
@@ -21,6 +43,8 @@ export type ProgrammeSemesterSubject = {
   credits: string
   /** Candidate subjects for elective slots. Empty for real-subject rows. */
   options: ProgrammeSemesterSubjectOption[]
+  /** Faculty allocated to teach this subject (may be more than one). */
+  faculty: ProgrammeSemesterSubjectFaculty[]
   is_active: boolean
   created_at: string
   updated_at: string
@@ -118,5 +142,33 @@ export async function deactivateProgrammeSemesterSubject(
   return api<ProgrammeSemesterSubject>(
     `/admin/programme-semester-subjects/${id}/deactivate`,
     { method: "POST" },
+  )
+}
+
+/**
+ * Replace the faculty roster for a subject entry. Send the complete list of
+ * employee ids; an empty array clears all allocated faculty.
+ */
+export async function setProgrammeSemesterSubjectFaculty(
+  id: number,
+  employeeIds: number[],
+): Promise<ProgrammeSemesterSubject> {
+  return api<ProgrammeSemesterSubject>(
+    `/admin/programme-semester-subjects/${id}/faculty`,
+    { method: "PUT", body: { employee_ids: employeeIds } },
+  )
+}
+
+/**
+ * Replace the faculty roster for one candidate subject of an open-elective
+ * slot. Returns the parent subject entry with the full refreshed graph.
+ */
+export async function setProgrammeSemesterSubjectOptionFaculty(
+  optionId: number,
+  employeeIds: number[],
+): Promise<ProgrammeSemesterSubject> {
+  return api<ProgrammeSemesterSubject>(
+    `/admin/programme-semester-subjects/options/${optionId}/faculty`,
+    { method: "PUT", body: { employee_ids: employeeIds } },
   )
 }
