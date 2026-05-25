@@ -20,16 +20,21 @@ import { ProgrammeAdmissionYearsPage } from "@/pages/programme-admission-years"
 import { ProgrammeSemestersPage } from "@/pages/programme-semesters"
 import { ProgrammesPage } from "@/pages/programmes"
 import { RegulationsPage } from "@/pages/regulations"
+import { RegulationMarkStructuresPage } from "@/pages/regulation-mark-structures"
+import { MarkStructureEditorPage } from "@/pages/mark-structure-editor"
 import { ProgrammeAttendanceGroupsPage } from "@/pages/programme-attendance-groups"
 import { SemesterFacultyPage } from "@/pages/semester-faculty"
 import { SemesterSettingsPage } from "@/pages/semester-settings"
+import { SemesterStudentAllocationPage } from "@/pages/semester-student-allocation"
 import { SemesterSubjectsPage } from "@/pages/semester-subjects"
+import { SlotEnrollmentsPage } from "@/pages/slot-enrollments"
 import { SemesterTimetablesPage } from "@/pages/semester-timetables"
 import { SemestersPage } from "@/pages/semesters"
 import { StudentsPage } from "@/pages/students"
 import { StudentsBulkUploadPage } from "@/pages/students-bulk-upload"
 import { StudentDetailsPage } from "@/pages/student-details"
 import { SubjectsPage } from "@/pages/subjects"
+import { SubjectTypesPage } from "@/pages/subject-types"
 import { TimetableEditorPage } from "@/pages/timetable-editor"
 import { MigrationsPage } from "@/pages/migrations"
 import { NotFoundPage } from "@/pages/not-found"
@@ -156,10 +161,28 @@ const mastersRegulationsRoute = createRoute({
   component: RegulationsPage,
 })
 
+const mastersRegulationMarkStructuresRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/regulations/$regulationId/mark-structures",
+  component: RegulationMarkStructuresPage,
+})
+
+const mastersMarkStructureEditorRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/regulations/$regulationId/mark-structures/$subjectTypeId",
+  component: MarkStructureEditorPage,
+})
+
 const mastersSubjectsRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
   path: "/masters/subjects",
   component: SubjectsPage,
+})
+
+const mastersSubjectTypesRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/subject-types",
+  component: SubjectTypesPage,
 })
 
 const mastersProgrammeAdmissionYearsRoute = createRoute({
@@ -214,6 +237,23 @@ const mastersSemesterFacultyRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
   path: "/masters/programme-configuration/semester/$programmeSemesterId/faculty",
   component: SemesterFacultyPage,
+  validateSearch: validateProgrammeBatchSearch,
+})
+
+// Student allocation hub — lists every slot in the semester and links into
+// the per-slot enrollment matrix. Sibling of Faculty allocation.
+const mastersSemesterStudentAllocationRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programme-configuration/semester/$programmeSemesterId/student-allocation",
+  component: SemesterStudentAllocationPage,
+  validateSearch: validateProgrammeBatchSearch,
+})
+
+// Per-slot enrollment matrix — students of the batch × candidate subjects.
+const mastersSlotEnrollmentsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programme-configuration/semester/$programmeSemesterId/subjects/$slotId/enrollments",
+  component: SlotEnrollmentsPage,
   validateSearch: validateProgrammeBatchSearch,
 })
 
@@ -313,12 +353,17 @@ const routeTree = rootRoute.addChildren([
     mastersSemestersRoute,
     mastersAdmissionYearsRoute,
     mastersRegulationsRoute,
+    mastersRegulationMarkStructuresRoute,
+    mastersMarkStructureEditorRoute,
     mastersSubjectsRoute,
+    mastersSubjectTypesRoute,
     mastersProgrammeAdmissionYearsRoute,
     mastersProgrammeConfigurationRoute,
     mastersSemesterSettingsRoute,
     mastersSemesterSubjectsRoute,
     mastersSemesterFacultyRoute,
+    mastersSemesterStudentAllocationRoute,
+    mastersSlotEnrollmentsRoute,
     mastersSemesterTimetablesRoute,
     mastersTimetableEditorRoute,
     mastersProgrammeAttendanceGroupsRoute,

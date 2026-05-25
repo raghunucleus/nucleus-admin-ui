@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ClipboardList,
   GraduationCap,
+  UserCheck,
   Users,
 } from "lucide-react"
 
@@ -218,6 +219,18 @@ export function SemesterSettingsPage() {
                 onClick={() =>
                   void navigate({
                     to: "/masters/programme-configuration/semester/$programmeSemesterId/faculty",
+                    params: { programmeSemesterId: String(id) },
+                    search: { programmeId, admissionYearId },
+                  })
+                }
+              />
+              <BentoCard
+                icon={UserCheck}
+                title="Student allocation"
+                description="For each elective / honors / minors slot, pick which subject offered + faculty each student is enrolled in."
+                onClick={() =>
+                  void navigate({
+                    to: "/masters/programme-configuration/semester/$programmeSemesterId/student-allocation",
                     params: { programmeSemesterId: String(id) },
                     search: { programmeId, admissionYearId },
                   })

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useForm } from "react-hook-form"
+import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import { z } from "zod"
@@ -34,6 +34,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
@@ -70,6 +71,7 @@ import {
   type DepartmentsSortOrder,
   type ListDepartmentsParams,
 } from "@/lib/departments"
+import { listEmployees, type Employee } from "@/lib/employees"
 
 declare module "@tanstack/react-table" {
   // Allow columns to declare per-column horizontal alignment.
@@ -116,6 +118,29 @@ export function DepartmentsPage() {
     pageIndex: 0,
     pageSize: 10,
   })
+
+  const [employees, setEmployees] = React.useState<Employee[]>([])
+
+  React.useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const result = await listEmployees({
+          status: "active",
+          pageSize: 100,
+          sortBy: "emp_display_name",
+          sortOrder: "asc",
+        })
+        if (cancelled) return
+        setEmployees(result.rows)
+      } catch {
+        // Non-fatal: HOD dropdown will just be empty.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const [filterPanelOpen, setFilterPanelOpen] = React.useState(false)
   const [searchRowOpen, setSearchRowOpen] = React.useState(false)
@@ -350,6 +375,7 @@ export function DepartmentsPage() {
           {mode.kind === "create" && (
             <DepartmentForm
               mode="create"
+              employees={employees}
               onCancel={() => setMode({ kind: "list" })}
               onSaved={(d) => handleSaved(d, "create")}
             />
@@ -359,6 +385,7 @@ export function DepartmentsPage() {
             <DepartmentForm
               mode="edit"
               department={mode.department}
+              employees={employees}
               onCancel={() => setMode({ kind: "list" })}
               onSaved={(d) => handleSaved(d, "edit")}
             />
@@ -647,6 +674,26 @@ function DepartmentsTable({
         ),
       },
       {
+        id: "hod",
+        header: "HOD",
+        enableSorting: false,
+        accessorFn: (d) => d.hod?.emp_display_name ?? "",
+        cell: ({ row }) => {
+          const hod = row.original.hod
+          if (!hod) {
+            return <span className="text-muted-foreground">—</span>
+          }
+          return (
+            <div className="flex flex-col leading-tight">
+              <span>{hod.emp_display_name}</span>
+              <span className="font-mono text-[11px] text-muted-foreground">
+                {hod.emp_code}
+              </span>
+            </div>
+          )
+        },
+      },
+      {
         id: "status",
         header: "Status",
         accessorFn: (d) => (d.is_active ? "active" : "inactive"),
@@ -879,6 +926,7 @@ function DepartmentsTable({
                     name: "w-48",
                     code: "w-20",
                     short_name: "w-24",
+                    hod: "w-40",
                     status: "w-16",
                     created_at: "w-32",
                     updated_at: "w-32",
@@ -1146,16 +1194,23 @@ const departmentSchema = z.object({
     .trim()
     .min(1, "Short name is required")
     .max(64, "Too long"),
+  hod_employee_id: z.number().int().positive().nullable(),
 })
 
 type DepartmentFormValues = z.infer<typeof departmentSchema>
 
 function DepartmentForm(
   props:
-    | { mode: "create"; onCancel: () => void; onSaved: (d: Department) => void }
+    | {
+        mode: "create"
+        employees: Employee[]
+        onCancel: () => void
+        onSaved: (d: Department) => void
+      }
     | {
         mode: "edit"
         department: Department
+        employees: Employee[]
         onCancel: () => void
         onSaved: (d: Department) => void
       },
@@ -1166,22 +1221,46 @@ function DepartmentForm(
           name: props.department.name,
           code: props.department.code,
           short_name: props.department.short_name,
+          hod_employee_id: props.department.hod_employee_id ?? null,
         }
       : {
           name: "",
           code: "",
           short_name: "",
+          hod_employee_id: null,
         }
 
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<DepartmentFormValues>({
     resolver: zodResolver(departmentSchema),
     defaultValues: defaults,
     values: defaults,
   })
+
+  // If editing and the current HOD isn't in the active-employee list (e.g.
+  // they've been deactivated since), surface them as a synthetic option so
+  // the value stays visible until the user picks someone else.
+  const initialHod =
+    props.mode === "edit" ? (props.department.hod ?? null) : null
+  const hodOptions: ComboboxOption[] = React.useMemo(() => {
+    const base = props.employees.map((e) => ({
+      value: e.id,
+      label: e.emp_display_name,
+      sublabel: e.emp_code,
+    }))
+    if (initialHod && !props.employees.some((e) => e.id === initialHod.id)) {
+      base.unshift({
+        value: initialHod.id,
+        label: initialHod.emp_display_name,
+        sublabel: `${initialHod.emp_code} · current`,
+      })
+    }
+    return base
+  }, [props.employees, initialHod])
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -1190,6 +1269,7 @@ function DepartmentForm(
           name: values.name,
           code: values.code,
           short_name: values.short_name,
+          hod_employee_id: values.hod_employee_id,
         })
         props.onSaved(created)
       } else {
@@ -1197,6 +1277,7 @@ function DepartmentForm(
           name: values.name,
           code: values.code,
           short_name: values.short_name,
+          hod_employee_id: values.hod_employee_id,
         })
         props.onSaved(updated)
       }
@@ -1253,6 +1334,31 @@ function DepartmentForm(
             required
           >
             <Input id="dept-short" autoComplete="off" {...register("short_name")} />
+          </Field>
+          <Field
+            label="HOD"
+            error={errors.hod_employee_id?.message}
+            htmlFor="dept-hod"
+            hint="Leave blank if none."
+          >
+            <Controller
+              control={control}
+              name="hod_employee_id"
+              render={({ field, fieldState }) => (
+                <Combobox
+                  id="dept-hod"
+                  value={field.value}
+                  options={hodOptions}
+                  onChange={(v) => field.onChange(v)}
+                  placeholder="No HOD"
+                  searchPlaceholder="Search by name or emp code…"
+                  emptyMessage="No employees match"
+                  clearLabel="No HOD"
+                  disabled={hodOptions.length === 0}
+                  invalid={!!fieldState.error}
+                />
+              )}
+            />
           </Field>
         </div>
 

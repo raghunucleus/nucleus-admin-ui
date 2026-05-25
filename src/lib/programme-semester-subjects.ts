@@ -32,6 +32,12 @@ export type ProgrammeSemesterSubjectFaculty = {
   created_at: string
 }
 
+/** Category of a slot row. Null on real-subject rows. */
+export type ProgrammeSemesterSubjectSlotType =
+  | "open_elective"
+  | "honors"
+  | "minors"
+
 export type ProgrammeSemesterSubject = {
   id: number
   programme_semester_id: number
@@ -39,9 +45,11 @@ export type ProgrammeSemesterSubject = {
   subject_id: number | null
   subject: Subject | null
   placeholder_name: string | null
+  /** Set on slot rows (subject_id null); null on real-subject rows. */
+  slot_type: ProgrammeSemesterSubjectSlotType | null
   /** PG returns numeric as a string to avoid precision loss; parse with Number() for display. */
   credits: string
-  /** Candidate subjects for elective slots. Empty for real-subject rows. */
+  /** Candidate subjects for slot rows. Empty for real-subject rows. */
   options: ProgrammeSemesterSubjectOption[]
   /** Faculty allocated to teach this subject (may be more than one). */
   faculty: ProgrammeSemesterSubjectFaculty[]
@@ -54,7 +62,9 @@ export type CreateProgrammeSemesterSubjectInput = {
   programme_semester_id: number
   subject_id?: number
   placeholder_name?: string
-  /** Required when this row is an open-elective slot. */
+  /** Required when this row is a slot. */
+  slot_type?: ProgrammeSemesterSubjectSlotType
+  /** Required when this row is a slot. */
   option_subject_ids?: number[]
   credits: number
 }
@@ -62,6 +72,7 @@ export type CreateProgrammeSemesterSubjectInput = {
 export type UpdateProgrammeSemesterSubjectInput = {
   subject_id?: number | null
   placeholder_name?: string | null
+  slot_type?: ProgrammeSemesterSubjectSlotType | null
   credits?: number
   /** Replaces the candidate pool wholesale when provided. */
   option_subject_ids?: number[]

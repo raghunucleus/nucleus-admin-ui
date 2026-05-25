@@ -17,7 +17,6 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  BookMarked,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -30,11 +29,11 @@ import {
   RefreshCw,
   Search,
   SearchX,
+  Tags,
   X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Combobox } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
@@ -59,23 +58,20 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
-import { listRegulations, type Regulation } from "@/lib/regulations"
 import {
-  activateSubject,
-  createSubject,
-  deactivateSubject,
-  listSubjects,
-  updateSubject,
-  type ListSubjectsParams,
-  type Subject,
-  type SubjectStatusFilter,
-  type SubjectsSortField,
-  type SubjectsSortOrder,
-} from "@/lib/subjects"
-import { listSubjectTypes, type SubjectType } from "@/lib/subject-types"
+  activateSubjectType,
+  createSubjectType,
+  deactivateSubjectType,
+  listSubjectTypes,
+  updateSubjectType,
+  type ListSubjectTypesParams,
+  type SubjectType,
+  type SubjectTypeStatusFilter,
+  type SubjectTypesSortField,
+  type SubjectTypesSortOrder,
+} from "@/lib/subject-types"
 
 declare module "@tanstack/react-table" {
-  // Allow columns to declare per-column horizontal alignment.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends unknown, TValue> {
     align?: "left" | "right" | "center"
@@ -85,7 +81,7 @@ declare module "@tanstack/react-table" {
 type Mode =
   | { kind: "list" }
   | { kind: "create" }
-  | { kind: "edit"; subject: Subject }
+  | { kind: "edit"; subjectType: SubjectType }
 
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
@@ -101,21 +97,8 @@ function formatDateTime(iso: string): string {
   return dateTimeFormatter.format(d)
 }
 
-// Sticky Actions column — same recipe as the other tables.
-const STICKY_ACTIONS_HEAD = "sticky right-0 z-20"
-const STICKY_ACTIONS_SHADOW = "shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]"
-const STICKY_ACTIONS_CELL = cn(
-  "sticky right-0 z-[1] bg-card",
-  "group-hover:bg-[color-mix(in_oklab,_var(--muted)_40%,_var(--card))]",
-  STICKY_ACTIONS_SHADOW,
-)
-const STICKY_ACTIONS_SKELETON_CELL = cn(
-  "sticky right-0 z-[1] bg-card",
-  STICKY_ACTIONS_SHADOW,
-)
-
-export function SubjectsPage() {
-  const [subjects, setSubjects] = React.useState<Subject[]>([])
+export function SubjectTypesPage() {
+  const [subjectTypes, setSubjectTypes] = React.useState<SubjectType[]>([])
   const [total, setTotal] = React.useState(0)
   const [pageCount, setPageCount] = React.useState(0)
   const [loading, setLoading] = React.useState(true)
@@ -123,67 +106,9 @@ export function SubjectsPage() {
   const [loadFailed, setLoadFailed] = React.useState(false)
   const [busyId, setBusyId] = React.useState<number | null>(null)
   const [mode, setMode] = React.useState<Mode>({ kind: "list" })
-  const [confirmTarget, setConfirmTarget] = React.useState<Subject | null>(null)
-
-  // Active-only regulation + subject-type lists for the header selector + form.
-  const [regulationOptions, setRegulationOptions] = React.useState<Regulation[]>([])
-  const [subjectTypeOptions, setSubjectTypeOptions] = React.useState<SubjectType[]>(
-    [],
+  const [confirmTarget, setConfirmTarget] = React.useState<SubjectType | null>(
+    null,
   )
-  const [optionsLoading, setOptionsLoading] = React.useState(true)
-
-  React.useEffect(() => {
-    let cancelled = false
-    async function loadOptions() {
-      setOptionsLoading(true)
-      try {
-        const [r, st] = await Promise.all([
-          listRegulations({
-            status: "active",
-            pageSize: 100,
-            sortBy: "year_of_regulation",
-            sortOrder: "desc",
-          }),
-          listSubjectTypes({
-            status: "active",
-            pageSize: 100,
-            sortBy: "name",
-            sortOrder: "asc",
-          }),
-        ])
-        if (cancelled) return
-        setRegulationOptions(r.rows)
-        setSubjectTypeOptions(st.rows)
-      } catch (err) {
-        if (cancelled) return
-        toast.error("Couldn't load options", {
-          description:
-            err instanceof ApiError ? err.message : "Please try again.",
-        })
-      } finally {
-        if (!cancelled) setOptionsLoading(false)
-      }
-    }
-    void loadOptions()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  // Regulation is the mandatory primary axis of this page. Initialized below
-  // once options arrive.
-  const [regulationId, setRegulationId] = React.useState<number | undefined>(
-    undefined,
-  )
-
-  // Auto-pick the latest regulation year once options arrive.
-  React.useEffect(() => {
-    if (regulationId === undefined && regulationOptions.length > 0) {
-      setRegulationId(regulationOptions[0].id)
-    }
-  }, [regulationId, regulationOptions])
-
-  const selectedRegulation = regulationOptions.find((r) => r.id === regulationId)
 
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "created_at", desc: true },
@@ -193,22 +118,21 @@ export function SubjectsPage() {
     pageSize: 10,
   })
 
-  // Closed by default — open it from the Filters toolbar toggle.
   const [filterPanelOpen, setFilterPanelOpen] = React.useState(false)
   const [searchRowOpen, setSearchRowOpen] = React.useState(false)
 
   const [pendingStatus, setPendingStatus] = React.useState<
-    SubjectStatusFilter | undefined
+    SubjectTypeStatusFilter | undefined
   >(undefined)
-  const [status, setStatus] = React.useState<SubjectStatusFilter | undefined>(
-    undefined,
-  )
+  const [status, setStatus] = React.useState<
+    SubjectTypeStatusFilter | undefined
+  >(undefined)
 
   type ColumnSearchState = {
-    code: string
     name: string
+    code: string
   }
-  const emptyColumnSearch: ColumnSearchState = { code: "", name: "" }
+  const emptyColumnSearch: ColumnSearchState = { name: "", code: "" }
   const [columnSearch, setColumnSearch] =
     React.useState<ColumnSearchState>(emptyColumnSearch)
   const [appliedColumnSearch, setAppliedColumnSearch] =
@@ -216,7 +140,9 @@ export function SubjectsPage() {
   const initialLoadDoneRef = React.useRef(false)
 
   React.useEffect(() => {
-    if (filterPanelOpen) setPendingStatus(status)
+    if (filterPanelOpen) {
+      setPendingStatus(status)
+    }
   }, [filterPanelOpen, status])
 
   React.useEffect(() => {
@@ -235,8 +161,8 @@ export function SubjectsPage() {
 
   const applyColumnSearch = () => {
     const next: ColumnSearchState = {
-      code: columnSearch.code.trim(),
       name: columnSearch.name.trim(),
+      code: columnSearch.code.trim(),
     }
     setColumnSearch(next)
     setAppliedColumnSearch(next)
@@ -258,58 +184,58 @@ export function SubjectsPage() {
     setPendingStatus(undefined)
     setStatus(undefined)
     setPagination((p) => ({ ...p, pageIndex: 0 }))
-    // regulationId intentionally not reset — it's mandatory.
   }
 
   const filtersDirty = pendingStatus !== status
   const columnSearchDirty =
-    columnSearch.code.trim() !== appliedColumnSearch.code ||
-    columnSearch.name.trim() !== appliedColumnSearch.name
-  const columnSearchHasInput = !!columnSearch.code || !!columnSearch.name
+    columnSearch.name.trim() !== appliedColumnSearch.name ||
+    columnSearch.code.trim() !== appliedColumnSearch.code
+  const columnSearchHasInput = !!columnSearch.name || !!columnSearch.code
 
   const activeFilterCount =
     (status ? 1 : 0) +
-    (appliedColumnSearch.code ? 1 : 0) +
-    (appliedColumnSearch.name ? 1 : 0)
+    (appliedColumnSearch.name ? 1 : 0) +
+    (appliedColumnSearch.code ? 1 : 0)
 
-  const queryParams = React.useMemo<ListSubjectsParams>(() => {
+  const queryParams = React.useMemo<ListSubjectTypesParams>(() => {
     const head = sorting[0]
-    const sortBy: SubjectsSortField =
-      (head?.id as SubjectsSortField | undefined) ?? "created_at"
-    const sortOrder: SubjectsSortOrder = head ? (head.desc ? "desc" : "asc") : "desc"
+    const sortBy: SubjectTypesSortField =
+      (head?.id as SubjectTypesSortField | undefined) ?? "created_at"
+    const sortOrder: SubjectTypesSortOrder = head
+      ? head.desc
+        ? "desc"
+        : "asc"
+      : "desc"
     return {
       page: pagination.pageIndex + 1,
       pageSize: pagination.pageSize,
       sortBy,
       sortOrder,
-      codeSearch: appliedColumnSearch.code || undefined,
       nameSearch: appliedColumnSearch.name || undefined,
+      codeSearch: appliedColumnSearch.code || undefined,
       status,
-      regulationId,
     }
   }, [
     pagination.pageIndex,
     pagination.pageSize,
     sorting,
-    appliedColumnSearch.code,
     appliedColumnSearch.name,
+    appliedColumnSearch.code,
     status,
-    regulationId,
   ])
 
   const loadIdRef = React.useRef(0)
-  const load = React.useCallback(async () => {
-    if (regulationId === undefined) return
 
+  const load = React.useCallback(async () => {
     const callId = ++loadIdRef.current
     const isLatest = () => callId === loadIdRef.current
 
     if (initialLoadDoneRef.current) setRefreshing(true)
     else setLoading(true)
     try {
-      const result = await listSubjects(queryParams)
+      const result = await listSubjectTypes(queryParams)
       if (!isLatest()) return
-      setSubjects(result.rows)
+      setSubjectTypes(result.rows)
       setTotal(result.total)
       setPageCount(result.pageCount)
       setLoadFailed(false)
@@ -317,7 +243,7 @@ export function SubjectsPage() {
     } catch (err) {
       if (!isLatest()) return
       setLoadFailed(true)
-      toast.error("Couldn't load subjects", {
+      toast.error("Couldn't load subject types", {
         description:
           err instanceof ApiError ? err.message : "Please try again.",
       })
@@ -327,7 +253,7 @@ export function SubjectsPage() {
         setRefreshing(false)
       }
     }
-  }, [queryParams, regulationId])
+  }, [queryParams])
 
   React.useEffect(() => {
     void load()
@@ -345,20 +271,21 @@ export function SubjectsPage() {
     })
   }
 
-  const requestToggleActive = (subject: Subject) => setConfirmTarget(subject)
+  const requestToggleActive = (subjectType: SubjectType) =>
+    setConfirmTarget(subjectType)
 
-  const handleToggleActive = async (subject: Subject) => {
-    setBusyId(subject.id)
+  const handleToggleActive = async (subjectType: SubjectType) => {
+    setBusyId(subjectType.id)
     try {
-      const updated = subject.is_active
-        ? await deactivateSubject(subject.id)
-        : await activateSubject(subject.id)
+      const updated = subjectType.is_active
+        ? await deactivateSubjectType(subjectType.id)
+        : await activateSubjectType(subjectType.id)
       toast.success(
-        `${updated.code} ${updated.is_active ? "activated" : "deactivated"}.`,
+        `${updated.name} ${updated.is_active ? "activated" : "deactivated"}.`,
       )
       await load()
     } catch (err) {
-      toast.error("Couldn't update subject status", {
+      toast.error("Couldn't update subject type status", {
         description:
           err instanceof ApiError ? err.message : "Please try again.",
       })
@@ -367,10 +294,10 @@ export function SubjectsPage() {
     }
   }
 
-  const handleSaved = async (updated: Subject, kind: "create" | "edit") => {
+  const handleSaved = async (updated: SubjectType, kind: "create" | "edit") => {
     setMode({ kind: "list" })
     toast.success(
-      kind === "create" ? `${updated.code} created.` : `${updated.code} updated.`,
+      kind === "create" ? `${updated.name} created.` : `${updated.name} updated.`,
     )
     await load()
   }
@@ -378,57 +305,15 @@ export function SubjectsPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <h1 className="text-base font-semibold tracking-tight">Subjects</h1>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="flex items-center gap-2">
-            <Label
-              htmlFor="page-regulation"
-              className="text-xs text-muted-foreground"
-            >
-              Regulation
-            </Label>
-            <div className="w-48">
-              <Combobox
-                id="page-regulation"
-                value={regulationId ?? null}
-                options={regulationOptions.map((r) => ({
-                  value: r.id,
-                  label: r.code,
-                  sublabel: r.name,
-                }))}
-                onChange={(v) => {
-                  // Mandatory — ignore an unexpected null clear.
-                  if (v == null) return
-                  setRegulationId(v)
-                  setPagination((p) => ({ ...p, pageIndex: 0 }))
-                }}
-                placeholder={optionsLoading ? "Loading…" : "Select a regulation"}
-                searchPlaceholder="Search regulations…"
-                emptyMessage="No regulations available"
-                disabled={optionsLoading || regulationOptions.length === 0}
-              />
-            </div>
-          </div>
-          <div className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
+        <h1 className="text-base font-semibold tracking-tight">Subject types</h1>
+        <div className="flex items-center gap-1.5">
           <Button
             size="sm"
             onClick={() => setMode({ kind: "create" })}
-            disabled={
-              mode.kind !== "list" ||
-              optionsLoading ||
-              regulationId === undefined ||
-              subjectTypeOptions.length === 0
-            }
-            title={
-              optionsLoading
-                ? "Loading options…"
-                : subjectTypeOptions.length === 0
-                  ? "Create an active subject type first"
-                  : undefined
-            }
+            disabled={mode.kind !== "list"}
           >
             <Plus />
-            New subject
+            New subject type
           </Button>
           <div className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
           <ToolbarIconToggle
@@ -456,24 +341,20 @@ export function SubjectsPage() {
         }}
       >
         <SheetContent side="right" className="w-full sm:max-w-lg">
-          {mode.kind === "create" && selectedRegulation && (
-            <SubjectForm
+          {mode.kind === "create" && (
+            <SubjectTypeForm
               mode="create"
-              regulation={selectedRegulation}
-              subjectTypeOptions={subjectTypeOptions}
               onCancel={() => setMode({ kind: "list" })}
-              onSaved={(s) => handleSaved(s, "create")}
+              onSaved={(d) => handleSaved(d, "create")}
             />
           )}
 
           {mode.kind === "edit" && (
-            <SubjectForm
+            <SubjectTypeForm
               mode="edit"
-              subject={mode.subject}
-              regulation={mode.subject.regulation}
-              subjectTypeOptions={subjectTypeOptions}
+              subjectType={mode.subjectType}
               onCancel={() => setMode({ kind: "list" })}
-              onSaved={(s) => handleSaved(s, "edit")}
+              onSaved={(d) => handleSaved(d, "edit")}
             />
           )}
         </SheetContent>
@@ -493,8 +374,8 @@ export function SubjectsPage() {
         )}
 
         <div className="min-w-0 flex-1 rounded-lg border bg-card text-card-foreground">
-          <SubjectsTable
-            subjects={subjects}
+          <SubjectTypesTable
+            subjectTypes={subjectTypes}
             total={total}
             pageCount={pageCount}
             busyId={busyId}
@@ -513,19 +394,16 @@ export function SubjectsPage() {
             columnSearchApplyDisabled={!columnSearchDirty}
             columnSearchResetDisabled={
               !columnSearchHasInput &&
-              !appliedColumnSearch.code &&
-              !appliedColumnSearch.name
+              !appliedColumnSearch.name &&
+              !appliedColumnSearch.code
             }
             hasActiveFilters={activeFilterCount > 0}
             onOpenFilters={() => setFilterPanelOpen(true)}
             onResetFilters={resetFilters}
             loadFailed={loadFailed}
             onRetry={() => void load()}
-            onEdit={(s) => setMode({ kind: "edit", subject: s })}
+            onEdit={(d) => setMode({ kind: "edit", subjectType: d })}
             onToggleActive={requestToggleActive}
-            regulationLabel={selectedRegulation?.code}
-            canCreate={regulationId !== undefined}
-            onCreate={() => setMode({ kind: "create" })}
           />
         </div>
       </div>
@@ -536,18 +414,20 @@ export function SubjectsPage() {
           if (!open) setConfirmTarget(null)
         }}
         title={
-          confirmTarget?.is_active ? "Deactivate subject?" : "Activate subject?"
+          confirmTarget?.is_active
+            ? "Deactivate subject type?"
+            : "Activate subject type?"
         }
         description={
           confirmTarget ? (
             <>
               {confirmTarget.is_active
-                ? "Deactivated subjects won't be selectable in dependent records."
-                : "Reactivated subjects become available again."}
+                ? "Deactivated subject types won't be selectable in dependent records."
+                : "Reactivated subject types become available again."}
               <div className="mt-2 font-medium text-foreground">
-                {confirmTarget.code}{" "}
+                {confirmTarget.name}{" "}
                 <span className="text-muted-foreground">
-                  — {confirmTarget.name}
+                  ({confirmTarget.code})
                 </span>
               </div>
             </>
@@ -614,8 +494,8 @@ function FilterPanel({
   applyDisabled,
   resetDisabled,
 }: {
-  pendingStatus: SubjectStatusFilter | undefined
-  onPendingStatusChange: (v: SubjectStatusFilter | undefined) => void
+  pendingStatus: SubjectTypeStatusFilter | undefined
+  onPendingStatusChange: (v: SubjectTypeStatusFilter | undefined) => void
   onApply: () => void
   onReset: () => void
   onClose: () => void
@@ -646,7 +526,7 @@ function FilterPanel({
               onPendingStatusChange(
                 e.target.value === ""
                   ? undefined
-                  : (e.target.value as SubjectStatusFilter),
+                  : (e.target.value as SubjectTypeStatusFilter),
               )
             }
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -675,12 +555,12 @@ function FilterPanel({
 }
 
 type ColumnSearchValues = {
-  code: string
   name: string
+  code: string
 }
 
-function SubjectsTable({
-  subjects,
+function SubjectTypesTable({
+  subjectTypes,
   total,
   pageCount,
   busyId,
@@ -705,11 +585,8 @@ function SubjectsTable({
   onRetry,
   onEdit,
   onToggleActive,
-  regulationLabel,
-  canCreate,
-  onCreate,
 }: {
-  subjects: Subject[]
+  subjectTypes: SubjectType[]
   total: number
   pageCount: number
   busyId: number | null
@@ -732,24 +609,11 @@ function SubjectsTable({
   onResetFilters: () => void
   loadFailed: boolean
   onRetry: () => void
-  onEdit: (s: Subject) => void
-  onToggleActive: (s: Subject) => void
-  regulationLabel: string | undefined
-  canCreate: boolean
-  onCreate: () => void
+  onEdit: (d: SubjectType) => void
+  onToggleActive: (d: SubjectType) => void
 }) {
-  const columns = React.useMemo<ColumnDef<Subject>[]>(
+  const columns = React.useMemo<ColumnDef<SubjectType>[]>(
     () => [
-      {
-        id: "code",
-        header: "Code",
-        accessorKey: "code",
-        cell: ({ getValue }) => (
-          <span className="font-mono text-xs font-medium">
-            {String(getValue() ?? "")}
-          </span>
-        ),
-      },
       {
         id: "name",
         header: "Name",
@@ -759,26 +623,26 @@ function SubjectsTable({
         ),
       },
       {
-        id: "subject_type",
-        header: "Subject type",
-        enableSorting: false,
-        cell: ({ row }) => {
-          const st = row.original.subject_type
-          if (!st) return <span className="text-xs text-muted-foreground">—</span>
-          return <span className="text-xs">{st.name}</span>
-        },
+        id: "code",
+        header: "Code",
+        accessorKey: "code",
+        cell: ({ getValue }) => (
+          <span className="font-mono text-xs text-muted-foreground">
+            {String(getValue() ?? "")}
+          </span>
+        ),
       },
       {
         id: "status",
         header: "Status",
-        accessorFn: (s) => (s.is_active ? "active" : "inactive"),
+        accessorFn: (d) => (d.is_active ? "active" : "inactive"),
         cell: ({ row }) => {
-          const s = row.original
+          const d = row.original
           return (
             <span
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
-                s.is_active
+                d.is_active
                   ? "bg-success/10 text-success"
                   : "bg-destructive/10 text-destructive",
               )}
@@ -787,10 +651,10 @@ function SubjectsTable({
                 aria-hidden="true"
                 className={cn(
                   "size-1.5 rounded-full",
-                  s.is_active ? "bg-success" : "bg-destructive",
+                  d.is_active ? "bg-success" : "bg-destructive",
                 )}
               />
-              {s.is_active ? "Active" : "Inactive"}
+              {d.is_active ? "Active" : "Inactive"}
             </span>
           )
         },
@@ -821,16 +685,16 @@ function SubjectsTable({
         enableSorting: false,
         meta: { align: "right" as const },
         cell: ({ row }) => {
-          const s = row.original
-          const isBusy = busyId === s.id
-          const toggleLabel = s.is_active ? "Deactivate" : "Activate"
+          const d = row.original
+          const isBusy = busyId === d.id
+          const toggleLabel = d.is_active ? "Deactivate" : "Activate"
           return (
             <div className="flex items-center justify-end gap-0.5">
               <Button
                 variant="ghost"
                 size="icon"
                 className="size-8 text-muted-foreground hover:text-foreground"
-                onClick={() => onEdit(s)}
+                onClick={() => onEdit(d)}
                 disabled={formOpen || isBusy}
                 title="Edit"
                 aria-label="Edit"
@@ -842,16 +706,16 @@ function SubjectsTable({
                 size="icon"
                 className={cn(
                   "size-8",
-                  s.is_active
+                  d.is_active
                     ? "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     : "text-muted-foreground hover:bg-success/10 hover:text-success",
                 )}
-                onClick={() => onToggleActive(s)}
+                onClick={() => onToggleActive(d)}
                 disabled={isBusy || formOpen}
                 title={toggleLabel}
                 aria-label={toggleLabel}
               >
-                {s.is_active ? <PowerOff /> : <Power />}
+                {d.is_active ? <PowerOff /> : <Power />}
               </Button>
             </div>
           )
@@ -862,7 +726,7 @@ function SubjectsTable({
   )
 
   const table = useReactTable({
-    data: subjects,
+    data: subjectTypes,
     columns,
     state: { sorting, pagination },
     onSortingChange,
@@ -896,7 +760,6 @@ function SubjectsTable({
                     className={cn(
                       align === "right" && "text-right",
                       align === "center" && "text-center",
-                      header.column.id === "actions" && STICKY_ACTIONS_HEAD,
                     )}
                   >
                     {header.isPlaceholder ? null : canSort ? (
@@ -931,18 +794,12 @@ function SubjectsTable({
               {table.getAllLeafColumns().map((column) => {
                 const id = column.id
                 const searchable: Record<string, keyof ColumnSearchValues> = {
-                  code: "code",
                   name: "name",
+                  code: "code",
                 }
                 const key = searchable[id]
                 return (
-                  <TableHead
-                    key={`search-${id}`}
-                    className={cn(
-                      "bg-card py-2",
-                      id === "actions" && STICKY_ACTIONS_HEAD,
-                    )}
-                  >
+                  <TableHead key={`search-${id}`} className="bg-card py-2">
                     {key ? (
                       <Input
                         value={columnSearch[key]}
@@ -953,7 +810,7 @@ function SubjectsTable({
                             if (!columnSearchApplyDisabled) onApplyColumnSearch()
                           }
                         }}
-                        placeholder={`Search ${id}…`}
+                        placeholder={`Search ${id.replace("_", " ")}…`}
                         className="h-8 text-xs"
                         aria-label={`Search by ${id}`}
                       />
@@ -1004,9 +861,8 @@ function SubjectsTable({
                 {table.getAllLeafColumns().map((column) => {
                   const id = column.id
                   const widths: Record<string, string> = {
-                    code: "w-24",
-                    name: "w-64",
-                    subject_type: "w-32",
+                    name: "w-48",
+                    code: "w-20",
                     status: "w-16",
                     created_at: "w-32",
                     updated_at: "w-32",
@@ -1020,7 +876,6 @@ function SubjectsTable({
                       className={cn(
                         align === "right" && "text-right",
                         align === "center" && "text-center",
-                        id === "actions" && STICKY_ACTIONS_SKELETON_CELL,
                       )}
                     >
                       <Skeleton
@@ -1041,7 +896,7 @@ function SubjectsTable({
                 {loadFailed ? (
                   <EmptyState
                     icon={AlertTriangle}
-                    title="Couldn't load subjects"
+                    title="Couldn't load subject types"
                     description="There was a problem reaching the server."
                     action={
                       <Button size="sm" onClick={onRetry}>
@@ -1054,7 +909,7 @@ function SubjectsTable({
                   <EmptyState
                     icon={SearchX}
                     title="No matches found"
-                    description="No subjects match the current filters."
+                    description="No subject types match the current filters."
                     action={
                       <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={onOpenFilters}>
@@ -1069,26 +924,16 @@ function SubjectsTable({
                   />
                 ) : (
                   <EmptyState
-                    icon={BookMarked}
-                    title={
-                      regulationLabel
-                        ? `No subjects under ${regulationLabel}`
-                        : "No subjects yet"
-                    }
-                    description="Create the first subject for this regulation to get started."
-                    action={
-                      <Button size="sm" onClick={onCreate} disabled={!canCreate}>
-                        <Plus />
-                        New subject
-                      </Button>
-                    }
+                    icon={Tags}
+                    title="No subject types yet"
+                    description="Create the first subject type to get started."
                   />
                 )}
               </TableCell>
             </TableRow>
           ) : (
             table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} className="group">
+              <TableRow key={row.id}>
                 {row.getVisibleCells().map((cell) => {
                   const align = cell.column.columnDef.meta?.align
                   return (
@@ -1097,7 +942,6 @@ function SubjectsTable({
                       className={cn(
                         align === "right" && "text-right",
                         align === "center" && "text-center",
-                        cell.column.id === "actions" && STICKY_ACTIONS_CELL,
                       )}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -1268,14 +1112,8 @@ function getPageRange(current: number, totalPages: number): (number | "ellipsis"
   return items
 }
 
-// On edit we don't ask for subject_type_id again (it's fixed at creation),
-// so the schema is shared but the field uses `valueAsNumber: true` and is
-// validated separately on create.
-const subjectSchema = z.object({
-  subject_type_id: z
-    .number({ message: "Select a subject type" })
-    .int()
-    .positive("Select a subject type"),
+const subjectTypeSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(128, "Too long"),
   code: z
     .string()
     .trim()
@@ -1287,48 +1125,37 @@ const subjectSchema = z.object({
         .string()
         .regex(/^[A-Z0-9._-]+$/, "Use letters, numbers, dot, underscore, or dash"),
     ),
-  name: z.string().trim().min(1, "Name is required").max(255, "Too long"),
 })
 
-type SubjectFormValues = z.infer<typeof subjectSchema>
+type SubjectTypeFormValues = z.infer<typeof subjectTypeSchema>
 
-function SubjectForm(
+function SubjectTypeForm(
   props:
-    | {
-        mode: "create"
-        regulation: Regulation
-        subjectTypeOptions: SubjectType[]
-        onCancel: () => void
-        onSaved: (s: Subject) => void
-      }
+    | { mode: "create"; onCancel: () => void; onSaved: (d: SubjectType) => void }
     | {
         mode: "edit"
-        subject: Subject
-        regulation: Regulation
-        subjectTypeOptions: SubjectType[]
+        subjectType: SubjectType
         onCancel: () => void
-        onSaved: (s: Subject) => void
+        onSaved: (d: SubjectType) => void
       },
 ) {
-  const defaults: SubjectFormValues =
+  const defaults: SubjectTypeFormValues =
     props.mode === "edit"
       ? {
-          subject_type_id: props.subject.subject_type_id,
-          code: props.subject.code,
-          name: props.subject.name,
+          name: props.subjectType.name,
+          code: props.subjectType.code,
         }
       : {
-          subject_type_id: 0,
-          code: "",
           name: "",
+          code: "",
         }
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting, isDirty },
-  } = useForm<SubjectFormValues>({
-    resolver: zodResolver(subjectSchema),
+  } = useForm<SubjectTypeFormValues>({
+    resolver: zodResolver(subjectTypeSchema),
     defaultValues: defaults,
     values: defaults,
   })
@@ -1336,26 +1163,23 @@ function SubjectForm(
   const onSubmit = handleSubmit(async (values) => {
     try {
       if (props.mode === "create") {
-        const created = await createSubject({
-          regulation_id: props.regulation.id,
-          subject_type_id: values.subject_type_id,
-          code: values.code,
+        const created = await createSubjectType({
           name: values.name,
+          code: values.code,
         })
         props.onSaved(created)
       } else {
-        const updated = await updateSubject(props.subject.id, {
-          subject_type_id: values.subject_type_id,
-          code: values.code,
+        const updated = await updateSubjectType(props.subjectType.id, {
           name: values.name,
+          code: values.code,
         })
         props.onSaved(updated)
       }
     } catch (err) {
       toast.error(
         props.mode === "create"
-          ? "Couldn't create subject"
-          : "Couldn't update subject",
+          ? "Couldn't create subject type"
+          : "Couldn't update subject type",
         {
           description:
             err instanceof ApiError ? err.message : "Please try again.",
@@ -1369,58 +1193,24 @@ function SubjectForm(
       <SheetHeader>
         <SheetTitle>
           {props.mode === "create"
-            ? "Create subject"
-            : `Edit ${props.subject.code}`}
+            ? "Create subject type"
+            : `Edit ${props.subjectType.name}`}
         </SheetTitle>
         <SheetDescription>
           {props.mode === "create"
-            ? `Add a new subject under ${props.regulation.code} — ${props.regulation.name}.`
-            : `Editing subject under ${props.regulation.code} — ${props.regulation.name}.`}
+            ? "Add a new subject type to the catalog."
+            : "Update the subject type details."}
         </SheetDescription>
       </SheetHeader>
 
       <SheetBody className="space-y-5">
-        <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          Regulation is fixed at creation. To move a subject to a different
-          regulation, create a new one under that regulation.
-        </div>
-
         <div className="grid gap-4 hd:grid-cols-2">
-          <Field
-            label="Subject type"
-            error={errors.subject_type_id?.message}
-            htmlFor="sub-type"
-            required
-          >
-            <select
-              id="sub-type"
-              {...register("subject_type_id", { valueAsNumber: true })}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              <option value={0}>Select a subject type…</option>
-              {props.subjectTypeOptions.map((st) => (
-                <option key={st.id} value={st.id}>
-                  {st.code} — {st.name}
-                </option>
-              ))}
-              {/* Keep the current type visible on edit even if it's no longer
-                  in the active list (e.g. deactivated after the subject was
-                  created). */}
-              {props.mode === "edit" &&
-                !props.subjectTypeOptions.some(
-                  (st) => st.id === props.subject.subject_type_id,
-                ) &&
-                props.subject.subject_type && (
-                  <option value={props.subject.subject_type.id}>
-                    {props.subject.subject_type.code} —{" "}
-                    {props.subject.subject_type.name} (inactive)
-                  </option>
-                )}
-            </select>
+          <Field label="Name" error={errors.name?.message} htmlFor="st-name" required>
+            <Input id="st-name" autoComplete="off" {...register("name")} />
           </Field>
-          <Field label="Subject code" error={errors.code?.message} htmlFor="sub-code" required>
+          <Field label="Code" error={errors.code?.message} htmlFor="st-code" required>
             <Input
-              id="sub-code"
+              id="st-code"
               autoComplete="off"
               className="uppercase"
               {...register("code", {
@@ -1430,9 +1220,6 @@ function SubjectForm(
                 },
               })}
             />
-          </Field>
-          <Field label="Subject name" error={errors.name?.message} htmlFor="sub-name" required>
-            <Input id="sub-name" autoComplete="off" {...register("name")} />
           </Field>
         </div>
 
@@ -1459,7 +1246,7 @@ function SubjectForm(
               ? "Creating…"
               : "Saving…"
             : props.mode === "create"
-              ? "Create subject"
+              ? "Create subject type"
               : "Save changes"}
         </Button>
       </SheetFooter>

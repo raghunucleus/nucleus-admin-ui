@@ -1,4 +1,5 @@
 import { api } from "@/lib/api"
+import type { Employee } from "@/lib/employees"
 import type { Student } from "@/lib/students"
 
 // A student's group memberships — one row per student, one column per group
@@ -23,6 +24,9 @@ export type AttendanceGroup = {
   name: string
   code: string
   description: string | null
+  group_incharge_employee_id: number | null
+  // Server returns a slimmed-down employee (id, emp_code, emp_display_name).
+  group_incharge: Pick<Employee, "id" | "emp_code" | "emp_display_name"> | null
   is_active: boolean
   members: StudentGroup[]
   created_at: string
@@ -58,6 +62,7 @@ export async function createAttendanceGroup(input: {
   admission_year_id: number
   name: string
   code: string
+  group_incharge_employee_id: number
   description?: string | null
 }): Promise<AttendanceGroup> {
   return api<AttendanceGroup>("/admin/attendance-groups", {
@@ -68,7 +73,12 @@ export async function createAttendanceGroup(input: {
 
 export async function updateAttendanceGroup(
   id: number,
-  input: { name: string; code: string; description?: string | null },
+  input: {
+    name: string
+    code: string
+    group_incharge_employee_id: number
+    description?: string | null
+  },
 ): Promise<AttendanceGroup> {
   return api<AttendanceGroup>(`/admin/attendance-groups/${id}`, {
     method: "PATCH",

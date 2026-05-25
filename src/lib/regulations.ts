@@ -70,6 +70,10 @@ export async function listRegulations(
   return api<ListRegulationsResult>(`/admin/regulations${suffix}`, { method: "GET" })
 }
 
+export async function getRegulation(id: number): Promise<Regulation> {
+  return api<Regulation>(`/admin/regulations/${id}`, { method: "GET" })
+}
+
 export async function createRegulation(
   input: CreateRegulationInput,
 ): Promise<Regulation> {

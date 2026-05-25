@@ -1,10 +1,18 @@
 import { api } from "@/lib/api"
 
+export type DepartmentHod = {
+  id: number
+  emp_code: string
+  emp_display_name: string
+}
+
 export type Department = {
   id: number
   name: string
   code: string
   short_name: string
+  hod_employee_id: number | null
+  hod?: DepartmentHod | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -14,12 +22,14 @@ export type CreateDepartmentInput = {
   name: string
   code: string
   short_name: string
+  hod_employee_id?: number | null
 }
 
 export type UpdateDepartmentInput = {
   name?: string
   code?: string
   short_name?: string
+  hod_employee_id?: number | null
 }
 
 export type DepartmentsSortField =

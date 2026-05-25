@@ -1,4 +1,5 @@
 import * as React from "react"
+import { Link } from "@tanstack/react-router"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -23,6 +24,7 @@ import {
   ChevronsRight,
   Filter,
   Gavel,
+  ListChecks,
   Pencil,
   Plus,
   Power,
@@ -703,6 +705,22 @@ function RegulationsTable({
           const toggleLabel = r.is_active ? "Deactivate" : "Activate"
           return (
             <div className="flex items-center justify-end gap-0.5">
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground hover:text-foreground"
+                disabled={formOpen || isBusy}
+                title="Mark structures"
+                aria-label="Mark structures"
+              >
+                <Link
+                  to="/masters/regulations/$regulationId/mark-structures"
+                  params={{ regulationId: String(r.id) }}
+                >
+                  <ListChecks />
+                </Link>
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"

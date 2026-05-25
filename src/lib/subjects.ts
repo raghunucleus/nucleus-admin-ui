@@ -1,10 +1,13 @@
 import { api } from "@/lib/api"
 import type { Regulation } from "@/lib/regulations"
+import type { SubjectType } from "@/lib/subject-types"
 
 export type Subject = {
   id: number
   regulation_id: number
   regulation: Regulation
+  subject_type_id: number
+  subject_type: SubjectType
   code: string
   name: string
   is_active: boolean
@@ -14,11 +17,13 @@ export type Subject = {
 
 export type CreateSubjectInput = {
   regulation_id: number
+  subject_type_id: number
   code: string
   name: string
 }
 
 export type UpdateSubjectInput = {
+  subject_type_id?: number
   code?: string
   name?: string
 }
@@ -43,6 +48,7 @@ export type ListSubjectsParams = {
   nameSearch?: string
   status?: SubjectStatusFilter
   regulationId?: number
+  subjectTypeId?: number
 }
 
 export type ListSubjectsResult = {
@@ -66,6 +72,8 @@ export async function listSubjects(
   if (params.status) qs.set("status", params.status)
   if (params.regulationId !== undefined)
     qs.set("regulationId", String(params.regulationId))
+  if (params.subjectTypeId !== undefined)
+    qs.set("subjectTypeId", String(params.subjectTypeId))
   const suffix = qs.toString() ? `?${qs.toString()}` : ""
   return api<ListSubjectsResult>(`/admin/subjects${suffix}`, { method: "GET" })
 }

@@ -33,6 +33,7 @@ import {
   listProgrammeSemesterSubjects,
   updateProgrammeSemesterSubject,
   type ProgrammeSemesterSubject,
+  type ProgrammeSemesterSubjectSlotType,
 } from "@/lib/programme-semester-subjects"
 import { listSubjects, type Subject } from "@/lib/subjects"
 
@@ -40,6 +41,60 @@ type SubjectEntryMode =
   | { kind: "closed" }
   | { kind: "create" }
   | { kind: "edit"; entry: ProgrammeSemesterSubject }
+
+type FormKind = "subject" | ProgrammeSemesterSubjectSlotType
+
+// Four tiles users pick between when adding/editing a row. The slot kinds
+// (open_elective / honors / minors) share the slot form — only slot_type
+// differs on the wire.
+const KIND_TILES: ReadonlyArray<{
+  kind: FormKind
+  title: string
+  description: string
+}> = [
+  {
+    kind: "subject",
+    title: "Real subject",
+    description: "Pick from the regulation's subject catalog.",
+  },
+  {
+    kind: "open_elective",
+    title: "Open elective",
+    description: "Student picks one from the subjects offered.",
+  },
+  {
+    kind: "honors",
+    title: "Honors",
+    description: "Honors track — student picks one from the subjects offered.",
+  },
+  {
+    kind: "minors",
+    title: "Minors",
+    description: "Minors track — student picks one from the subjects offered.",
+  },
+]
+
+const SLOT_LABELS: Record<ProgrammeSemesterSubjectSlotType, string> = {
+  open_elective: "Elective slot",
+  honors: "Honors slot",
+  minors: "Minors slot",
+}
+
+// Distinct pill colours so the three slot categories are scannable at a
+// glance. Falls back to the old elective styling when slot_type is missing.
+function slotPillClass(
+  slotType: ProgrammeSemesterSubjectSlotType | null,
+): string {
+  switch (slotType) {
+    case "honors":
+      return "bg-primary/15 text-primary"
+    case "minors":
+      return "bg-success/15 text-success"
+    case "open_elective":
+    default:
+      return "bg-warning/15 text-warning"
+  }
+}
 
 // Dedicated full-screen for the Subjects section of one semester's settings.
 // Reached from the semester settings bento.
@@ -303,7 +358,7 @@ export function SemesterSubjectsPage() {
               <EmptyState
                 icon={BookMarked}
                 title="No subjects configured"
-                description="Add real subjects from the regulation's catalog, or open-elective slots students fill in later."
+                description="Add real subjects from the regulation's catalog, or slots (open elective / honors / minors) students fill in later."
                 action={
                   <Button size="sm" onClick={() => setMode({ kind: "create" })}>
                     <Plus />
@@ -319,75 +374,107 @@ export function SemesterSubjectsPage() {
                     <li
                       key={e.id}
                       className={cn(
-                        "flex flex-wrap items-center gap-3 px-4 py-3 text-sm",
+                        "px-4 py-3.5 text-sm transition-colors hover:bg-accent/30",
                         !e.is_active && "opacity-60",
                       )}
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">{displayName(e)}</span>
-                          {isReal && e.subject && (
-                            <span className="font-mono text-xs text-muted-foreground">
-                              {e.subject.code}
-                            </span>
-                          )}
-                          {!isReal && (
-                            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warning">
-                              Elective slot
-                            </span>
-                          )}
-                          {!e.is_active && <StatusPill active={false} />}
-                        </div>
-                        {!isReal && e.options.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {e.options.map((o) => (
-                              <span
-                                key={o.id}
-                                className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
-                                title={o.subject?.name ?? ""}
-                              >
-                                <span className="font-mono">
-                                  {o.subject?.code}
-                                </span>
+                      <div className="flex flex-wrap items-start gap-3">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {isReal && e.subject && (
+                              <span className="rounded-md border border-input bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground">
+                                {e.subject.code}
                               </span>
-                            ))}
+                            )}
+                            <span className="font-medium text-foreground">
+                              {displayName(e)}
+                            </span>
+                            {isReal && e.subject?.subject_type && (
+                              <span className="rounded-full border border-input/60 bg-accent/30 px-2 py-0.5 text-[10px] font-medium text-foreground">
+                                {e.subject.subject_type.name}
+                              </span>
+                            )}
+                            {!isReal && (
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                                  slotPillClass(e.slot_type),
+                                )}
+                              >
+                                {e.slot_type
+                                  ? SLOT_LABELS[e.slot_type]
+                                  : "Slot"}
+                              </span>
+                            )}
+                            {!e.is_active && <StatusPill active={false} />}
                           </div>
-                        )}
-                      </div>
-                      <div className="shrink-0 text-sm font-medium tabular-nums">
-                        {Number(e.credits).toFixed(1)}{" "}
-                        <span className="text-xs font-normal text-muted-foreground">
-                          cr
-                        </span>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-0.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-muted-foreground hover:text-foreground"
-                          onClick={() => setMode({ kind: "edit", entry: e })}
-                          disabled={busy}
-                          title="Edit"
-                          aria-label="Edit"
-                        >
-                          <Pencil />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={cn(
-                            "size-8",
-                            e.is_active
-                              ? "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                              : "text-muted-foreground hover:bg-success/10 hover:text-success",
+                          {!isReal && e.options.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                Subjects offered ({e.options.length})
+                              </div>
+                              <ul className="grid gap-1 sm:grid-cols-2">
+                                {e.options.map((o) => (
+                                  <li
+                                    key={o.id}
+                                    className="flex min-w-0 items-baseline gap-2 rounded-md border border-input/60 bg-muted/30 px-2 py-1"
+                                  >
+                                    <span className="shrink-0 font-mono text-[11px] font-medium text-foreground">
+                                      {o.subject?.code ?? `#${o.subject_id}`}
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                                      {o.subject?.name ?? "—"}
+                                    </span>
+                                    {o.subject?.subject_type && (
+                                      <span className="shrink-0 rounded-full bg-accent/40 px-1.5 py-0.5 text-[10px] text-foreground">
+                                        {o.subject.subject_type.name}
+                                      </span>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
                           )}
-                          onClick={() => setConfirmToggle(e)}
-                          disabled={busy}
-                          title={e.is_active ? "Deactivate" : "Activate"}
-                          aria-label={e.is_active ? "Deactivate" : "Activate"}
-                        >
-                          {e.is_active ? <PowerOff /> : <Power />}
-                        </Button>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-sm font-semibold tabular-nums text-foreground">
+                            {Number(e.credits).toFixed(1)}
+                          </div>
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            credits
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 text-muted-foreground hover:text-foreground"
+                            onClick={() => setMode({ kind: "edit", entry: e })}
+                            disabled={busy}
+                            title="Edit"
+                            aria-label="Edit"
+                          >
+                            <Pencil />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              "size-8",
+                              e.is_active
+                                ? "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                : "text-muted-foreground hover:bg-success/10 hover:text-success",
+                            )}
+                            onClick={() => setConfirmToggle(e)}
+                            disabled={busy}
+                            title={e.is_active ? "Deactivate" : "Activate"}
+                            aria-label={
+                              e.is_active ? "Deactivate" : "Activate"
+                            }
+                          >
+                            {e.is_active ? <PowerOff /> : <Power />}
+                          </Button>
+                        </div>
                       </div>
                     </li>
                   )
@@ -476,10 +563,17 @@ function SubjectEntryForm({
   onCancel: () => void
   onSaved: () => void | Promise<void>
 }) {
-  const initialKind: "subject" | "elective" =
-    entry?.subject_id != null ? "subject" : entry ? "elective" : "subject"
+  // "subject" = real subject; the others are slot categories that share a
+  // form (placeholder + candidate pool) and differ only in slot_type.
+  const initialKind: FormKind =
+    entry?.subject_id != null
+      ? "subject"
+      : entry
+        ? (entry.slot_type ?? "open_elective")
+        : "subject"
 
-  const [kind, setKind] = React.useState<"subject" | "elective">(initialKind)
+  const [kind, setKind] = React.useState<FormKind>(initialKind)
+  const isSlot = kind !== "subject"
   const [subjectId, setSubjectId] = React.useState<number | null>(
     entry?.subject_id ?? null,
   )
@@ -529,7 +623,7 @@ function SubjectEntryForm({
   const creditsNumber = Number(credits)
   const creditsValid =
     Number.isFinite(creditsNumber) &&
-    creditsNumber >= 0.5 &&
+    creditsNumber >= 0 &&
     creditsNumber <= 30 &&
     (creditsNumber * 10) % 5 === 0
 
@@ -541,6 +635,23 @@ function SubjectEntryForm({
         placeholder.trim().length <= 64 &&
         optionIds.length > 0)
 
+  // When the user switches slot category for a fresh entry, pre-fill the
+  // placeholder with a sensible default. Don't clobber what the user typed.
+  React.useEffect(() => {
+    if (mode !== "create") return
+    if (!isSlot) return
+    const defaults: Record<ProgrammeSemesterSubjectSlotType, string> = {
+      open_elective: "Open Elective 1",
+      honors: "Honors 1",
+      minors: "Minors 1",
+    }
+    const known = new Set(Object.values(defaults))
+    if (placeholder === "" || known.has(placeholder)) {
+      setPlaceholder(defaults[kind as ProgrammeSemesterSubjectSlotType])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, mode, isSlot])
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isValid) return
@@ -549,20 +660,26 @@ function SubjectEntryForm({
       if (mode === "create") {
         await createProgrammeSemesterSubject({
           programme_semester_id: programmeSemesterId,
-          subject_id: kind === "subject" ? subjectId! : undefined,
-          placeholder_name: kind === "elective" ? placeholder.trim() : undefined,
-          option_subject_ids: kind === "elective" ? optionIds : undefined,
+          subject_id: !isSlot ? subjectId! : undefined,
+          placeholder_name: isSlot ? placeholder.trim() : undefined,
+          slot_type: isSlot
+            ? (kind as ProgrammeSemesterSubjectSlotType)
+            : undefined,
+          option_subject_ids: isSlot ? optionIds : undefined,
           credits: creditsNumber,
         })
         toast.success("Subject added.")
       } else if (entry) {
         await updateProgrammeSemesterSubject(entry.id, {
-          subject_id: kind === "subject" ? subjectId : null,
-          placeholder_name: kind === "elective" ? placeholder.trim() : null,
-          // For real subjects we don't send an option pool. For electives,
-          // always send the current set so server keeps it in sync with the
+          subject_id: !isSlot ? subjectId : null,
+          placeholder_name: isSlot ? placeholder.trim() : null,
+          slot_type: isSlot
+            ? (kind as ProgrammeSemesterSubjectSlotType)
+            : null,
+          // For real subjects we don't send an option pool. For slots, always
+          // send the current set so the server keeps it in sync with the
           // form's snapshot.
-          option_subject_ids: kind === "elective" ? optionIds : undefined,
+          option_subject_ids: isSlot ? optionIds : undefined,
           credits: creditsNumber,
         })
         toast.success("Subject updated.")
@@ -585,8 +702,8 @@ function SubjectEntryForm({
           {mode === "create" ? "Add subject" : "Edit subject"}
         </SheetTitle>
         <SheetDescription>
-          Either pick a real subject from this batch's regulation, or add an
-          open-elective slot the student will choose to fill later.
+          Either pick a real subject from this batch's regulation, or add a
+          slot (open elective / honors / minors) the student fills later.
         </SheetDescription>
       </SheetHeader>
 
@@ -594,40 +711,28 @@ function SubjectEntryForm({
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Type</Label>
           <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setKind("subject")}
-              className={cn(
-                "rounded-md border p-3 text-left text-sm transition-colors",
-                kind === "subject"
-                  ? "border-primary/60 bg-primary/5 text-foreground"
-                  : "border-input bg-background text-muted-foreground hover:bg-accent/40",
-              )}
-            >
-              <div className="font-medium">Real subject</div>
-              <div className="text-xs text-muted-foreground">
-                Pick from the regulation's subject catalog.
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setKind("elective")}
-              className={cn(
-                "rounded-md border p-3 text-left text-sm transition-colors",
-                kind === "elective"
-                  ? "border-primary/60 bg-primary/5 text-foreground"
-                  : "border-input bg-background text-muted-foreground hover:bg-accent/40",
-              )}
-            >
-              <div className="font-medium">Open-elective slot</div>
-              <div className="text-xs text-muted-foreground">
-                Student picks from a candidate pool.
-              </div>
-            </button>
+            {KIND_TILES.map((t) => (
+              <button
+                key={t.kind}
+                type="button"
+                onClick={() => setKind(t.kind)}
+                className={cn(
+                  "rounded-md border p-3 text-left text-sm transition-colors",
+                  kind === t.kind
+                    ? "border-primary/60 bg-primary/5 text-foreground"
+                    : "border-input bg-background text-muted-foreground hover:bg-accent/40",
+                )}
+              >
+                <div className="font-medium">{t.title}</div>
+                <div className="text-xs text-muted-foreground">
+                  {t.description}
+                </div>
+              </button>
+            ))}
           </div>
         </div>
 
-        {kind === "subject" ? (
+        {!isSlot ? (
           <div className="space-y-1.5">
             <Label htmlFor="entry-subject">Subject</Label>
             <Combobox
@@ -660,7 +765,13 @@ function SubjectEntryForm({
                 autoComplete="off"
                 value={placeholder}
                 onChange={(e) => setPlaceholder(e.target.value)}
-                placeholder="e.g. Open Elective 1"
+                placeholder={
+                  kind === "honors"
+                    ? "e.g. Honors 1"
+                    : kind === "minors"
+                      ? "e.g. Minors 1"
+                      : "e.g. Open Elective 1"
+                }
               />
               <p className="text-xs text-muted-foreground">
                 Label shown to students when they pick what fills this slot.
@@ -668,7 +779,7 @@ function SubjectEntryForm({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="entry-options">Candidate subjects</Label>
+              <Label htmlFor="entry-options">Subjects offered</Label>
               <ElectiveOptionsPicker
                 id="entry-options"
                 subjects={subjects}
@@ -686,7 +797,7 @@ function SubjectEntryForm({
               </p>
               {optionIds.length === 0 && (
                 <p className="text-xs text-destructive">
-                  Pick at least one candidate subject.
+                  Pick at least one subject to offer.
                 </p>
               )}
             </div>
@@ -699,7 +810,7 @@ function SubjectEntryForm({
             id="entry-credits"
             type="number"
             inputMode="decimal"
-            min={0.5}
+            min={0}
             max={30}
             step={0.5}
             autoComplete="off"
@@ -707,9 +818,13 @@ function SubjectEntryForm({
             onChange={(e) => setCredits(e.target.value)}
             className="w-32"
           />
+          <p className="text-xs text-muted-foreground">
+            Use 0 for audit / non-graded subjects. Otherwise up to 30, in
+            steps of 0.5.
+          </p>
           {!creditsValid && credits !== "" && (
             <p className="text-xs text-destructive">
-              Credits must be between 0.5 and 30, in steps of 0.5.
+              Credits must be between 0 and 30, in steps of 0.5.
             </p>
           )}
         </div>
@@ -797,7 +912,7 @@ function ElectiveOptionsPicker({
             ? "No subjects under this regulation"
             : pickerOptions.length === 0
               ? "All subjects added"
-              : "Add a candidate subject…"
+              : "Add a subject to offer…"
         }
         searchPlaceholder="Search subjects…"
         emptyMessage={

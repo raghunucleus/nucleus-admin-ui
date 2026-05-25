@@ -59,6 +59,7 @@ import {
   listAdmissionYears,
   type AdmissionYear,
 } from "@/lib/admission-years"
+import { listEmployees, type Employee } from "@/lib/employees"
 import {
   BLOOD_GROUPS,
   GENDERS,
@@ -103,6 +104,7 @@ export function ProgrammeAttendanceGroupsPage() {
 
   const [students, setStudents] = React.useState<Student[]>([])
   const [groups, setGroups] = React.useState<AttendanceGroup[]>([])
+  const [employees, setEmployees] = React.useState<Employee[]>([])
   const [listLoading, setListLoading] = React.useState(true)
 
   const [busyGroupIds, setBusyGroupIds] = React.useState<Set<number>>(new Set())
@@ -201,6 +203,28 @@ export function ProgrammeAttendanceGroupsPage() {
     void loadList()
   }, [loadList])
 
+  // Active employees for the group-incharge dropdown. Non-fatal if it fails —
+  // the form just shows an empty dropdown, and the user gets a toast on submit.
+  React.useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const result = await listEmployees({
+          status: "active",
+          pageSize: 100,
+          sortBy: "emp_display_name",
+          sortOrder: "asc",
+        })
+        if (!cancelled) setEmployees(result.rows)
+      } catch {
+        // Ignore — dropdown stays empty.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const refreshGroups = React.useCallback(async () => {
     if (programmeId === undefined || admissionYearId === undefined) return
     setGroups(await listAttendanceGroups(programmeId, admissionYearId))
@@ -270,6 +294,7 @@ export function ProgrammeAttendanceGroupsPage() {
   const handleSubmitForm = async (
     name: string,
     code: string,
+    groupInchargeEmployeeId: number,
     description: string,
   ) => {
     if (programmeId === undefined || admissionYearId === undefined) return
@@ -281,6 +306,7 @@ export function ProgrammeAttendanceGroupsPage() {
           admission_year_id: admissionYearId,
           name,
           code,
+          group_incharge_employee_id: groupInchargeEmployeeId,
           description,
         })
         setGroups((prev) => sortGroups([...prev, created]))
@@ -289,6 +315,7 @@ export function ProgrammeAttendanceGroupsPage() {
         const updated = await updateAttendanceGroup(formMode.group.id, {
           name,
           code,
+          group_incharge_employee_id: groupInchargeEmployeeId,
           description,
         })
         setGroups((prev) =>
@@ -661,11 +688,22 @@ export function ProgrammeAttendanceGroupsPage() {
               initialCode={
                 formMode.kind === "edit" ? formMode.group.code : ""
               }
+              initialInchargeEmployeeId={
+                formMode.kind === "edit"
+                  ? formMode.group.group_incharge_employee_id
+                  : null
+              }
+              initialInchargeEmployee={
+                formMode.kind === "edit"
+                  ? formMode.group.group_incharge
+                  : null
+              }
               initialDescription={
                 formMode.kind === "edit"
                   ? (formMode.group.description ?? "")
                   : ""
               }
+              employees={employees}
               submitting={formBusy}
               onSubmit={handleSubmitForm}
               onCancel={() => setFormMode({ kind: "closed" })}
@@ -1008,6 +1046,15 @@ function GroupCard({
             )}
           </button>
         </div>
+        {group.group_incharge && (
+          <p
+            className="mt-0.5 truncate text-[11px] text-muted-foreground"
+            title={`${group.group_incharge.emp_display_name} (${group.group_incharge.emp_code})`}
+          >
+            <span className="font-medium text-foreground/80">In-charge:</span>{" "}
+            {group.group_incharge.emp_display_name}
+          </p>
+        )}
         {group.description && (
           <p
             className="mt-0.5 truncate text-[11px] text-muted-foreground"
@@ -1179,7 +1226,10 @@ function GroupForm({
   mode,
   initialName,
   initialCode,
+  initialInchargeEmployeeId,
+  initialInchargeEmployee,
   initialDescription,
+  employees,
   submitting,
   onSubmit,
   onCancel,
@@ -1187,22 +1237,59 @@ function GroupForm({
   mode: "create" | "edit"
   initialName: string
   initialCode: string
+  initialInchargeEmployeeId: number | null
+  initialInchargeEmployee:
+    | Pick<Employee, "id" | "emp_code" | "emp_display_name">
+    | null
   initialDescription: string
+  employees: Employee[]
   submitting: boolean
-  onSubmit: (name: string, code: string, description: string) => void
+  onSubmit: (
+    name: string,
+    code: string,
+    groupInchargeEmployeeId: number,
+    description: string,
+  ) => void
   onCancel: () => void
 }) {
   const [name, setName] = React.useState(initialName)
   const [code, setCode] = React.useState(initialCode)
+  const [inchargeId, setInchargeId] = React.useState<number | null>(
+    initialInchargeEmployeeId,
+  )
   const [description, setDescription] = React.useState(initialDescription)
-  const valid = name.trim().length > 0 && code.trim().length > 0
+  const valid =
+    name.trim().length > 0 && code.trim().length > 0 && inchargeId !== null
+
+  // If editing and the current in-charge isn't in the active-employee list
+  // (e.g. they've been deactivated since), surface them as a synthetic option
+  // so the value stays visible until the user picks someone else.
+  const inchargeOptions = React.useMemo<ComboboxOption[]>(() => {
+    const base = employees.map((e) => ({
+      value: e.id,
+      label: e.emp_display_name,
+      sublabel: e.emp_code,
+    }))
+    if (
+      initialInchargeEmployee &&
+      !employees.some((e) => e.id === initialInchargeEmployee.id)
+    ) {
+      base.unshift({
+        value: initialInchargeEmployee.id,
+        label: initialInchargeEmployee.emp_display_name,
+        sublabel: `${initialInchargeEmployee.emp_code} · current`,
+      })
+    }
+    return base
+  }, [employees, initialInchargeEmployee])
 
   return (
     <form
       noValidate
       onSubmit={(e) => {
         e.preventDefault()
-        if (valid) onSubmit(name.trim(), code.trim(), description.trim())
+        if (valid && inchargeId !== null)
+          onSubmit(name.trim(), code.trim(), inchargeId, description.trim())
       }}
       className="flex h-full flex-col"
     >
@@ -1246,6 +1333,26 @@ function GroupForm({
         <p className="-mt-3 text-xs text-muted-foreground">
           Code must be unique within this programme & admission year.
         </p>
+        <div className="space-y-1.5">
+          <Label htmlFor="grp-incharge">Group in-charge</Label>
+          <Combobox
+            id="grp-incharge"
+            value={inchargeId}
+            options={inchargeOptions}
+            onChange={(v) => setInchargeId(v)}
+            placeholder={
+              inchargeOptions.length === 0
+                ? "Loading employees…"
+                : "Select an employee…"
+            }
+            searchPlaceholder="Search by name or emp code…"
+            emptyMessage="No employees match"
+            disabled={inchargeOptions.length === 0}
+          />
+          <p className="text-xs text-muted-foreground">
+            The employee responsible for this group.
+          </p>
+        </div>
         <div className="space-y-1.5">
           <Label htmlFor="grp-desc">
             Description{" "}

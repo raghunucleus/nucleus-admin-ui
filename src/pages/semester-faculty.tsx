@@ -436,13 +436,13 @@ function ElectiveGroup({
           Elective slot
         </span>
         <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-          {entry.options.length} candidate
-          {entry.options.length === 1 ? "" : "s"}
+          {entry.options.length} subject
+          {entry.options.length === 1 ? "" : "s"} offered
         </span>
       </div>
       {optionTargets.length === 0 ? (
         <div className="px-4 py-3 pl-11 text-xs italic text-muted-foreground">
-          No candidate subjects yet — add them on the Subjects screen.
+          No subjects offered yet — add them on the Subjects screen.
         </div>
       ) : (
         <div className="divide-y">
