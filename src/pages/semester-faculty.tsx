@@ -1,10 +1,10 @@
 import * as React from "react"
+import { createPortal } from "react-dom"
 import { Link, useParams, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
-import { AlertTriangle, ArrowLeft, BookMarked, UserPlus } from "lucide-react"
+import { AlertTriangle, ArrowLeft, BookMarked, Plus, Search, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -91,7 +91,7 @@ function initials(name: string): string {
 
 // Dedicated full-screen for the Faculty allocation section of a semester's
 // settings. Real subjects and each elective candidate subject get their own
-// inline-editable faculty roster, plus a bulk-assign bar.
+// inline-editable faculty roster.
 export function SemesterFacultyPage() {
   const params = useParams({ strict: false }) as {
     programmeSemesterId?: string
@@ -111,9 +111,6 @@ export function SemesterFacultyPage() {
   const [entries, setEntries] = React.useState<ProgrammeSemesterSubject[]>([])
   const [entriesLoading, setEntriesLoading] = React.useState(true)
 
-  const [selectedKeys, setSelectedKeys] = React.useState<Set<string>>(new Set())
-  const [bulkFacultyIds, setBulkFacultyIds] = React.useState<number[]>([])
-  const [bulkBusy, setBulkBusy] = React.useState(false)
   const [savingKeys, setSavingKeys] = React.useState<Set<string>>(new Set())
 
   const loadShell = React.useCallback(async () => {
@@ -206,8 +203,8 @@ export function SemesterFacultyPage() {
   }, [loadEntries])
 
   // Real subjects render as one row; electives expand into a group of
-  // candidate-subject rows. `allTargets` is the flat list behind selection,
-  // the bulk action, and the assigned-count.
+  // candidate-subject rows. `allTargets` is the flat list behind the
+  // assigned-count.
   const renderItems = React.useMemo<RenderItem[]>(
     () =>
       entries.map((e) =>
@@ -275,68 +272,6 @@ export function SemesterFacultyPage() {
         .map((f) => f.employee_id)
         .filter((eid) => eid !== employeeId),
     )
-  }
-
-  const toggleKey = (key: string) => {
-    setSelectedKeys((s) => {
-      const n = new Set(s)
-      if (n.has(key)) n.delete(key)
-      else n.add(key)
-      return n
-    })
-  }
-
-  const toggleKeys = (keys: string[], select: boolean) => {
-    setSelectedKeys((s) => {
-      const n = new Set(s)
-      for (const k of keys) {
-        if (select) n.add(k)
-        else n.delete(k)
-      }
-      return n
-    })
-  }
-
-  const allSelected =
-    allTargets.length > 0 && allTargets.every((t) => selectedKeys.has(t.key))
-  const someSelected = selectedKeys.size > 0 && !allSelected
-
-  const toggleSelectAll = () => {
-    setSelectedKeys(
-      allSelected ? new Set() : new Set(allTargets.map((t) => t.key)),
-    )
-  }
-
-  const bulkApply = async () => {
-    if (bulkFacultyIds.length === 0 || selectedKeys.size === 0) return
-    setBulkBusy(true)
-    const targets = allTargets.filter((t) => selectedKeys.has(t.key))
-    let done = 0
-    try {
-      for (const t of targets) {
-        const merged = Array.from(
-          new Set([
-            ...t.faculty.map((f) => f.employee_id),
-            ...bulkFacultyIds,
-          ]),
-        )
-        await persist(t, merged)
-        done++
-      }
-      toast.success(
-        `Added faculty to ${done} subject${done === 1 ? "" : "s"}.`,
-      )
-      setSelectedKeys(new Set())
-      setBulkFacultyIds([])
-    } catch (err) {
-      toast.error("Couldn't finish bulk assign", {
-        description:
-          (err instanceof ApiError ? err.message : "Please try again.") +
-          (done > 0 ? ` ${done} subject(s) updated before the error.` : ""),
-      })
-    } finally {
-      setBulkBusy(false)
-    }
   }
 
   const allocatedCount = allTargets.filter((t) => t.faculty.length > 0).length
@@ -437,117 +372,38 @@ export function SemesterFacultyPage() {
               />
             </div>
           ) : (
-            <>
-              {/* Bulk assign --------------------------------------------- */}
-              <section className="rounded-lg border bg-card p-4 text-card-foreground shadow-xs">
-                <div className="flex items-start gap-2.5">
-                  <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-                    <UserPlus className="size-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="text-sm font-semibold tracking-tight">
-                      Bulk assign
-                    </h2>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Pick faculty, tick the subjects below, then add them all
-                      in one go. Existing faculty on a subject are kept.
-                    </p>
-                    <div className="mt-3 space-y-2.5">
-                      <FacultyMultiPicker
-                        employees={employees}
-                        selectedIds={bulkFacultyIds}
-                        onChange={setBulkFacultyIds}
-                        disabled={bulkBusy}
-                      />
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => void bulkApply()}
-                          disabled={
-                            bulkBusy ||
-                            bulkFacultyIds.length === 0 ||
-                            selectedKeys.size === 0
-                          }
-                        >
-                          <UserPlus />
-                          {bulkBusy
-                            ? "Applying…"
-                            : selectedKeys.size === 0
-                              ? "Add to selected subjects"
-                              : `Add to ${selectedKeys.size} selected subject${
-                                  selectedKeys.size === 1 ? "" : "s"
-                                }`}
-                        </Button>
-                        {selectedKeys.size > 0 && !bulkBusy && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedKeys(new Set())}
-                            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-                          >
-                            Clear selection
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Subjects list ------------------------------------------- */}
-              <div className="overflow-hidden rounded-lg border bg-card text-card-foreground shadow-xs">
-                <div className="flex items-center gap-3 border-b bg-muted/30 px-4 py-2.5">
-                  <input
-                    type="checkbox"
-                    aria-label="Select all subjects"
-                    className="size-4 rounded border-input accent-primary"
-                    checked={allSelected}
-                    ref={(el) => {
-                      if (el) el.indeterminate = someSelected
-                    }}
-                    onChange={toggleSelectAll}
-                    disabled={bulkBusy || allTargets.length === 0}
-                  />
-                  <span className="text-sm font-medium">Subjects</span>
-                  <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-                    {selectedKeys.size} selected
-                  </span>
-                </div>
-                <div className="divide-y">
-                  {renderItems.map((it) =>
-                    it.kind === "subject" ? (
-                      <FacultyRow
-                        key={it.entry.id}
-                        target={it.target}
-                        employees={employees}
-                        selected={selectedKeys.has(it.target.key)}
-                        saving={savingKeys.has(it.target.key)}
-                        disabled={bulkBusy}
-                        inactive={!it.entry.is_active}
-                        onToggleSelect={() => toggleKey(it.target.key)}
-                        onAdd={(empId) => addToTarget(it.target, empId)}
-                        onRemove={(empId) =>
-                          removeFromTarget(it.target, empId)
-                        }
-                      />
-                    ) : (
-                      <ElectiveGroup
-                        key={it.entry.id}
-                        entry={it.entry}
-                        optionTargets={it.optionTargets}
-                        employees={employees}
-                        selectedKeys={selectedKeys}
-                        savingKeys={savingKeys}
-                        disabled={bulkBusy}
-                        onToggleSelect={toggleKey}
-                        onToggleGroup={toggleKeys}
-                        onAdd={addToTarget}
-                        onRemove={removeFromTarget}
-                      />
-                    ),
-                  )}
-                </div>
+            <div className="overflow-hidden rounded-lg border bg-card text-card-foreground shadow-xs">
+              <div className="border-b bg-muted/30 px-4 py-2.5 text-sm font-medium">
+                Subjects
               </div>
-            </>
+              <div className="divide-y">
+                {renderItems.map((it) =>
+                  it.kind === "subject" ? (
+                    <FacultyRow
+                      key={it.entry.id}
+                      target={it.target}
+                      employees={employees}
+                      saving={savingKeys.has(it.target.key)}
+                      inactive={!it.entry.is_active}
+                      onAdd={(empId) => addToTarget(it.target, empId)}
+                      onRemove={(empId) =>
+                        removeFromTarget(it.target, empId)
+                      }
+                    />
+                  ) : (
+                    <ElectiveGroup
+                      key={it.entry.id}
+                      entry={it.entry}
+                      optionTargets={it.optionTargets}
+                      employees={employees}
+                      savingKeys={savingKeys}
+                      onAdd={addToTarget}
+                      onRemove={removeFromTarget}
+                    />
+                  ),
+                )}
+              </div>
+            </div>
           )}
         </>
       )}
@@ -561,43 +417,20 @@ function ElectiveGroup({
   entry,
   optionTargets,
   employees,
-  selectedKeys,
   savingKeys,
-  disabled,
-  onToggleSelect,
-  onToggleGroup,
   onAdd,
   onRemove,
 }: {
   entry: ProgrammeSemesterSubject
   optionTargets: Target[]
   employees: Employee[]
-  selectedKeys: Set<string>
   savingKeys: Set<string>
-  disabled: boolean
-  onToggleSelect: (key: string) => void
-  onToggleGroup: (keys: string[], select: boolean) => void
   onAdd: (target: Target, employeeId: number) => void
   onRemove: (target: Target, employeeId: number) => void
 }) {
-  const keys = optionTargets.map((t) => t.key)
-  const allSel = keys.length > 0 && keys.every((k) => selectedKeys.has(k))
-  const someSel = keys.some((k) => selectedKeys.has(k)) && !allSel
-
   return (
     <div className={cn(!entry.is_active && "opacity-60")}>
       <div className="flex items-center gap-3 bg-muted/40 px-4 py-2">
-        <input
-          type="checkbox"
-          aria-label={`Select all candidates of ${electiveLabel(entry)}`}
-          className="size-4 rounded border-input accent-primary"
-          checked={allSel}
-          ref={(el) => {
-            if (el) el.indeterminate = someSel
-          }}
-          onChange={() => onToggleGroup(keys, !allSel)}
-          disabled={disabled || keys.length === 0}
-        />
         <span className="text-sm font-medium">{electiveLabel(entry)}</span>
         <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warning">
           Elective slot
@@ -618,11 +451,8 @@ function ElectiveGroup({
               key={t.key}
               target={t}
               employees={employees}
-              selected={selectedKeys.has(t.key)}
               saving={savingKeys.has(t.key)}
-              disabled={disabled}
               indented
-              onToggleSelect={() => onToggleSelect(t.key)}
               onAdd={(empId) => onAdd(t, empId)}
               onRemove={(empId) => onRemove(t, empId)}
             />
@@ -638,48 +468,32 @@ function ElectiveGroup({
 function FacultyRow({
   target,
   employees,
-  selected,
   saving,
-  disabled,
   indented,
   inactive,
-  onToggleSelect,
   onAdd,
   onRemove,
 }: {
   target: Target
   employees: Employee[]
-  selected: boolean
   saving: boolean
-  disabled: boolean
   indented?: boolean
   inactive?: boolean
-  onToggleSelect: () => void
   onAdd: (employeeId: number) => void
   onRemove: (employeeId: number) => void
 }) {
   const assignedIds = target.faculty.map((f) => f.employee_id)
-  const locked = saving || disabled
 
   return (
     <div
       className={cn(
-        "flex items-start gap-3 px-4 py-3 transition-colors",
+        "px-4 py-3 transition-colors",
         indented && "pl-11",
-        selected && "bg-primary/[0.03]",
         inactive && "opacity-60",
       )}
     >
-      <input
-        type="checkbox"
-        aria-label={`Select ${target.name}`}
-        className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
-        checked={selected}
-        onChange={onToggleSelect}
-        disabled={disabled}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-sm font-medium">{target.name}</span>
           {target.code && (
             <span className="font-mono text-xs text-muted-foreground">
@@ -690,29 +504,27 @@ function FacultyRow({
             <span className="text-[11px] text-muted-foreground">Saving…</span>
           )}
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {target.faculty.map((f) => (
-            <FacultyChip
-              key={f.id}
-              employee={f.employee}
-              onRemove={() => onRemove(f.employee_id)}
-              disabled={locked}
-            />
-          ))}
-          {target.faculty.length === 0 && (
-            <span className="text-xs italic text-muted-foreground">
-              No faculty yet —
-            </span>
-          )}
-          <div className="w-52">
-            <FacultyAddCombobox
-              employees={employees}
-              excludeIds={assignedIds}
-              onAdd={onAdd}
-              disabled={locked}
-            />
-          </div>
-        </div>
+        <FacultyPicker
+          employees={employees}
+          assignedIds={assignedIds}
+          onAdd={onAdd}
+          disabled={saving}
+        />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {target.faculty.map((f) => (
+          <FacultyChip
+            key={f.id}
+            employee={f.employee}
+            onRemove={() => onRemove(f.employee_id)}
+            disabled={saving}
+          />
+        ))}
+        {target.faculty.length === 0 && (
+          <span className="text-xs italic text-muted-foreground">
+            No faculty assigned
+          </span>
+        )}
       </div>
     </div>
   )
@@ -760,97 +572,291 @@ function FacultyChip({
   )
 }
 
-// Single-pick combobox that emits the chosen faculty and resets — used both
-// inline on a row and inside the bulk multi-picker.
-function FacultyAddCombobox({
+type PickerPos = {
+  left: number
+  top: number
+  width: number
+  maxHeight: number
+  placement: "below" | "above"
+}
+
+// "Add faculty" pill that opens a searchable faculty list. The panel is
+// portalled to <body> and anchored with fixed positioning, so it is never
+// clipped by the subjects card's `overflow-hidden`. The panel stays open
+// after each pick so several faculty can be added in one pass.
+function FacultyPicker({
   employees,
-  excludeIds,
+  assignedIds,
   onAdd,
   disabled,
 }: {
   employees: Employee[]
-  excludeIds: number[]
+  assignedIds: number[]
   onAdd: (employeeId: number) => void
   disabled?: boolean
 }) {
-  const options = React.useMemo<ComboboxOption[]>(
-    () =>
-      employees
-        .filter((e) => !excludeIds.includes(e.id))
-        .map((e) => ({
-          value: e.id,
-          label: e.emp_display_name,
-          sublabel: e.emp_code,
-        })),
-    [employees, excludeIds],
+  const [open, setOpen] = React.useState(false)
+  const [query, setQuery] = React.useState("")
+  const [activeIndex, setActiveIndex] = React.useState(0)
+  const [pos, setPos] = React.useState<PickerPos | null>(null)
+
+  const triggerRef = React.useRef<HTMLButtonElement>(null)
+  const panelRef = React.useRef<HTMLDivElement>(null)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const listRef = React.useRef<HTMLDivElement>(null)
+
+  const available = React.useMemo(
+    () => employees.filter((e) => !assignedIds.includes(e.id)),
+    [employees, assignedIds],
   )
+  const filtered = React.useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return available
+    return available.filter(
+      (e) =>
+        e.emp_display_name.toLowerCase().includes(q) ||
+        e.emp_code.toLowerCase().includes(q),
+    )
+  }, [available, query])
+
+  const noFaculty = employees.length === 0
+  const allAdded = !noFaculty && available.length === 0
+  const triggerDisabled = disabled || noFaculty || allAdded
+
+  // Anchor the panel to the trigger in viewport coordinates. Prefers below;
+  // flips above when there is more room there.
+  const reposition = React.useCallback(() => {
+    const t = triggerRef.current
+    if (!t) return
+    const r = t.getBoundingClientRect()
+    const margin = 12
+    const gap = 6
+    const width = Math.max(r.width, 264)
+    const spaceBelow = window.innerHeight - r.bottom - margin
+    const spaceAbove = r.top - margin
+    const placement =
+      spaceBelow >= 260 || spaceBelow >= spaceAbove ? "below" : "above"
+    const maxHeight = Math.min(
+      340,
+      Math.max(160, placement === "below" ? spaceBelow - gap : spaceAbove - gap),
+    )
+    let left = r.left
+    if (left + width > window.innerWidth - margin) {
+      left = window.innerWidth - margin - width
+    }
+    setPos({
+      left: Math.max(margin, left),
+      top: placement === "below" ? r.bottom + gap : r.top - gap,
+      width,
+      maxHeight,
+      placement,
+    })
+  }, [])
+
+  React.useLayoutEffect(() => {
+    if (!open) return
+    reposition()
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }, [open, reposition])
+
+  // Keep the panel anchored while the page scrolls or resizes.
+  React.useEffect(() => {
+    if (!open) return
+    const onChange = () => reposition()
+    window.addEventListener("scroll", onChange, true)
+    window.addEventListener("resize", onChange)
+    return () => {
+      window.removeEventListener("scroll", onChange, true)
+      window.removeEventListener("resize", onChange)
+    }
+  }, [open, reposition])
+
+  // Close on outside mousedown.
+  React.useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      const tgt = e.target as Node
+      if (triggerRef.current?.contains(tgt)) return
+      if (panelRef.current?.contains(tgt)) return
+      setOpen(false)
+    }
+    document.addEventListener("mousedown", onDown)
+    return () => document.removeEventListener("mousedown", onDown)
+  }, [open])
+
+  // The highlighted row, clamped to the current filtered list so it stays
+  // valid as results change — no syncing effect needed.
+  const activeRow =
+    filtered.length === 0 ? 0 : Math.min(activeIndex, filtered.length - 1)
+
+  // Scroll the highlighted row into view during keyboard navigation.
+  React.useEffect(() => {
+    if (!open) return
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-row="${activeRow}"]`)
+      ?.scrollIntoView({ block: "nearest" })
+  }, [activeRow, open])
+
+  const toggle = () => {
+    if (open) {
+      setOpen(false)
+      return
+    }
+    setQuery("")
+    setActiveIndex(0)
+    setOpen(true)
+  }
+
+  const commit = (employee: Employee) => {
+    onAdd(employee.id)
+    // `available` still includes this employee until the parent re-renders;
+    // a length of 1 means this was the last one — close once it is gone.
+    if (available.length <= 1) {
+      setOpen(false)
+      triggerRef.current?.focus()
+    } else {
+      setQuery("")
+      setActiveIndex(0)
+      inputRef.current?.focus()
+    }
+  }
+
+  const onKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      setActiveIndex(Math.min(filtered.length - 1, activeRow + 1))
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      setActiveIndex(Math.max(0, activeRow - 1))
+    } else if (e.key === "Enter") {
+      e.preventDefault()
+      const emp = filtered[activeRow]
+      if (emp) commit(emp)
+    } else if (e.key === "Escape") {
+      e.preventDefault()
+      setOpen(false)
+      triggerRef.current?.focus()
+    }
+  }
 
   return (
-    <Combobox
-      value={null}
-      options={options}
-      onChange={(v) => v != null && onAdd(v)}
-      placeholder={
-        employees.length === 0
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={triggerDisabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={toggle}
+        className={cn(
+          "inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-input px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors",
+          "hover:border-primary/50 hover:bg-primary/5 hover:text-primary",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+          open && "border-solid border-primary/50 bg-primary/5 text-primary",
+          "disabled:pointer-events-none disabled:opacity-50",
+        )}
+      >
+        <Plus className="size-3.5" />
+        {noFaculty
           ? "No active faculty"
-          : options.length === 0
+          : allAdded
             ? "All faculty added"
-            : "Add faculty…"
-      }
-      searchPlaceholder="Search faculty…"
-      emptyMessage={
-        employees.length === 0 ? "No active faculty" : "No matches"
-      }
-      disabled={disabled || employees.length === 0 || options.length === 0}
-    />
-  )
-}
+            : "Add faculty"}
+      </button>
 
-// Chip multi-select for the bulk bar — staged faculty, not yet persisted.
-function FacultyMultiPicker({
-  employees,
-  selectedIds,
-  onChange,
-  disabled,
-}: {
-  employees: Employee[]
-  selectedIds: number[]
-  onChange: (next: number[]) => void
-  disabled?: boolean
-}) {
-  const byId = React.useMemo(() => {
-    const map = new Map<number, Employee>()
-    for (const e of employees) map.set(e.id, e)
-    return map
-  }, [employees])
-
-  return (
-    <div className="space-y-2">
-      <FacultyAddCombobox
-        employees={employees}
-        excludeIds={selectedIds}
-        onAdd={(eid) => onChange([...selectedIds, eid])}
-        disabled={disabled}
-      />
-      {selectedIds.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {selectedIds.map((eid) => {
-            const e = byId.get(eid)
-            if (!e) return null
-            return (
-              <FacultyChip
-                key={eid}
-                employee={e}
-                onRemove={() =>
-                  onChange(selectedIds.filter((x) => x !== eid))
-                }
-                disabled={disabled}
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-label="Add faculty"
+            style={{
+              position: "fixed",
+              left: pos.left,
+              width: pos.width,
+              maxHeight: pos.maxHeight,
+              ...(pos.placement === "below"
+                ? { top: pos.top }
+                : { bottom: window.innerHeight - pos.top }),
+            }}
+            className={cn(
+              "z-50 flex flex-col overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg",
+              "animate-in fade-in-0 zoom-in-95 duration-150",
+            )}
+          >
+            <div className="flex items-center gap-2 border-b px-3 py-2">
+              <Search className="size-3.5 shrink-0 text-muted-foreground" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="Search faculty…"
+                className="h-6 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
-            )
-          })}
-        </div>
-      )}
-    </div>
+              {query && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setQuery("")
+                    inputRef.current?.focus()
+                  }}
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div
+              ref={listRef}
+              role="listbox"
+              className="min-h-0 flex-1 overflow-y-auto py-1 thin-scrollbar"
+            >
+              {filtered.length === 0 ? (
+                <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                  No matches
+                </div>
+              ) : (
+                filtered.map((e, idx) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    role="option"
+                    aria-selected={idx === activeRow}
+                    data-row={idx}
+                    onMouseEnter={() => setActiveIndex(idx)}
+                    onMouseDown={(ev) => ev.preventDefault()}
+                    onClick={() => commit(e)}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 px-2.5 py-1.5 text-left transition-colors",
+                      idx === activeRow && "bg-accent text-accent-foreground",
+                    )}
+                  >
+                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                      {initials(e.emp_display_name)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">
+                        {e.emp_display_name}
+                      </span>
+                      <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                        {e.emp_code}
+                      </span>
+                    </span>
+                    <Plus className="size-3.5 shrink-0 text-muted-foreground" />
+                  </button>
+                ))
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   )
 }
 
@@ -871,12 +877,9 @@ function FacultyListSkeleton() {
     <div className="rounded-lg border bg-card p-4 shadow-xs">
       <div className="space-y-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="flex items-start gap-3">
-            <Skeleton className="mt-0.5 size-4 rounded" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-44" />
-              <Skeleton className="h-7 w-72 rounded-full" />
-            </div>
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-4 w-44" />
+            <Skeleton className="h-7 w-72 rounded-full" />
           </div>
         ))}
       </div>

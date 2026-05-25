@@ -21,6 +21,7 @@ import {
   type ProgrammeSemesterStatus,
 } from "@/lib/programme-semesters"
 import { listProgrammeSemesterSubjects } from "@/lib/programme-semester-subjects"
+import { listTimetables } from "@/lib/timetables"
 
 const STATUS_LABELS: Record<ProgrammeSemesterStatus, string> = {
   upcoming: "Upcoming",
@@ -51,6 +52,9 @@ export function SemesterSettingsPage() {
 
   const [semester, setSemester] = React.useState<ProgrammeSemester | null>(null)
   const [subjectCount, setSubjectCount] = React.useState<number | null>(null)
+  const [timetableCount, setTimetableCount] = React.useState<number | null>(
+    null,
+  )
   const [loading, setLoading] = React.useState(true)
   const [failed, setFailed] = React.useState(false)
 
@@ -92,6 +96,13 @@ export function SemesterSettingsPage() {
         setSubjectCount(subs.total)
       } catch {
         setSubjectCount(null)
+      }
+      // Likewise the timetable count for the Timetable card.
+      try {
+        const tts = await listTimetables(id)
+        setTimetableCount(tts.length)
+      } catch {
+        setTimetableCount(null)
       }
     } catch {
       setFailed(true)
@@ -215,8 +226,23 @@ export function SemesterSettingsPage() {
               <BentoCard
                 icon={CalendarClock}
                 title="Timetable"
-                description="Weekly class schedule and period allocation."
-                comingSoon
+                description="Weekly class schedules per attendance group — periods, faculty and effective dates."
+                meta={
+                  timetableCount === null
+                    ? undefined
+                    : timetableCount === 0
+                      ? "Not configured yet"
+                      : `${timetableCount} timetable${
+                          timetableCount === 1 ? "" : "s"
+                        }`
+                }
+                onClick={() =>
+                  void navigate({
+                    to: "/masters/programme-configuration/semester/$programmeSemesterId/timetables",
+                    params: { programmeSemesterId: String(id) },
+                    search: { programmeId, admissionYearId },
+                  })
+                }
               />
               <BentoCard
                 icon={ClipboardList}

@@ -11,8 +11,9 @@ import {
   Maximize2,
   Pencil,
   Plus,
+  Power,
+  PowerOff,
   Search,
-  Trash2,
   X,
 } from "lucide-react"
 
@@ -43,9 +44,10 @@ import {
 import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
 import {
+  activateAttendanceGroup,
   addAttendanceGroupStudents,
   createAttendanceGroup,
-  deleteAttendanceGroup,
+  deactivateAttendanceGroup,
   listAttendanceGroups,
   listEligibleStudents,
   removeAttendanceGroupStudent,
@@ -106,9 +108,9 @@ export function ProgrammeAttendanceGroupsPage() {
   const [busyGroupIds, setBusyGroupIds] = React.useState<Set<number>>(new Set())
   const [formMode, setFormMode] = React.useState<FormMode>({ kind: "closed" })
   const [formBusy, setFormBusy] = React.useState(false)
-  const [deleteTarget, setDeleteTarget] =
+  const [toggleTarget, setToggleTarget] =
     React.useState<AttendanceGroup | null>(null)
-  const [deleting, setDeleting] = React.useState(false)
+  const [toggling, setToggling] = React.useState(false)
   const [expandGroupId, setExpandGroupId] = React.useState<number | null>(null)
   const [detailMoving, setDetailMoving] = React.useState(false)
 
@@ -265,7 +267,11 @@ export function ProgrammeAttendanceGroupsPage() {
   const sortGroups = (rows: AttendanceGroup[]) =>
     [...rows].sort((a, b) => a.name.localeCompare(b.name))
 
-  const handleSubmitForm = async (name: string, description: string) => {
+  const handleSubmitForm = async (
+    name: string,
+    code: string,
+    description: string,
+  ) => {
     if (programmeId === undefined || admissionYearId === undefined) return
     setFormBusy(true)
     try {
@@ -274,6 +280,7 @@ export function ProgrammeAttendanceGroupsPage() {
           programme_id: programmeId,
           admission_year_id: admissionYearId,
           name,
+          code,
           description,
         })
         setGroups((prev) => sortGroups([...prev, created]))
@@ -281,6 +288,7 @@ export function ProgrammeAttendanceGroupsPage() {
       } else if (formMode.kind === "edit") {
         const updated = await updateAttendanceGroup(formMode.group.id, {
           name,
+          code,
           description,
         })
         setGroups((prev) =>
@@ -329,36 +337,43 @@ export function ProgrammeAttendanceGroupsPage() {
     }
   }
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return
-    setDeleting(true)
-    try {
-      await deleteAttendanceGroup(deleteTarget.id)
-      setGroups((prev) => prev.filter((g) => g.id !== deleteTarget.id))
-      toast.success(`Group "${deleteTarget.name}" deleted.`)
-      setDeleteTarget(null)
-    } catch (err) {
-      toast.error("Couldn't delete group", {
-        description:
-          err instanceof ApiError ? err.message : "Please try again.",
-      })
-    } finally {
-      setDeleting(false)
-    }
-  }
-
-  // A group with members can't be deleted — surface that up-front instead of
-  // opening the confirm dialog (the server enforces the rule too).
-  const requestDelete = (group: AttendanceGroup) => {
-    if (group.members.length > 0) {
-      toast.info("Can't delete this group yet", {
+  // Deactivating a group with members would lose their assignment. Surface
+  // that up-front instead of opening the confirm dialog (the server enforces
+  // the rule too). Reactivation is always allowed.
+  const requestToggleActive = (group: AttendanceGroup) => {
+    if (group.is_active && group.members.length > 0) {
+      toast.info("Can't deactivate this group yet", {
         description: `Move or remove its ${group.members.length} student${
           group.members.length === 1 ? "" : "s"
         } first.`,
       })
       return
     }
-    setDeleteTarget(group)
+    setToggleTarget(group)
+  }
+
+  const handleConfirmToggle = async () => {
+    if (!toggleTarget) return
+    setToggling(true)
+    try {
+      const updated = toggleTarget.is_active
+        ? await deactivateAttendanceGroup(toggleTarget.id)
+        : await activateAttendanceGroup(toggleTarget.id)
+      setGroups((prev) =>
+        sortGroups(prev.map((g) => (g.id === updated.id ? updated : g))),
+      )
+      toast.success(
+        `Group "${updated.name}" ${updated.is_active ? "activated" : "deactivated"}.`,
+      )
+      setToggleTarget(null)
+    } catch (err) {
+      toast.error("Couldn't update group status", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setToggling(false)
+    }
   }
 
   // Move students out of the expanded group into another group. Both groups
@@ -617,7 +632,7 @@ export function ProgrammeAttendanceGroupsPage() {
                         dragPropsFor={dragPropsFor}
                         onExpand={() => setExpandGroupId(g.id)}
                         onEdit={() => setFormMode({ kind: "edit", group: g })}
-                        onDelete={() => requestDelete(g)}
+                        onToggleActive={() => requestToggleActive(g)}
                         onAdd={handleAddOne}
                         onRemoveStudent={handleRemoveStudent}
                       />
@@ -642,6 +657,9 @@ export function ProgrammeAttendanceGroupsPage() {
               mode={formMode.kind}
               initialName={
                 formMode.kind === "edit" ? formMode.group.name : ""
+              }
+              initialCode={
+                formMode.kind === "edit" ? formMode.group.code : ""
               }
               initialDescription={
                 formMode.kind === "edit"
@@ -676,23 +694,29 @@ export function ProgrammeAttendanceGroupsPage() {
       </Sheet>
 
       <ConfirmDialog
-        open={deleteTarget !== null}
-        onOpenChange={(o) => !o && !deleting && setDeleteTarget(null)}
-        title="Delete attendance group?"
+        open={toggleTarget !== null}
+        onOpenChange={(o) => !o && !toggling && setToggleTarget(null)}
+        title={
+          toggleTarget?.is_active
+            ? "Deactivate attendance group?"
+            : "Activate attendance group?"
+        }
         description={
-          deleteTarget ? (
+          toggleTarget ? (
             <div>
-              This empty attendance group will be permanently deleted.
+              {toggleTarget.is_active
+                ? "Existing members stay assigned, but new students can't be added until the group is reactivated."
+                : "The group will accept new students again."}
               <div className="mt-2 font-medium text-foreground">
-                {deleteTarget.name}
+                {toggleTarget.name}
               </div>
             </div>
           ) : undefined
         }
-        confirmLabel="Delete group"
-        tone="destructive"
-        loading={deleting}
-        onConfirm={handleDelete}
+        confirmLabel={toggleTarget?.is_active ? "Deactivate" : "Activate"}
+        tone={toggleTarget?.is_active ? "destructive" : "success"}
+        loading={toggling}
+        onConfirm={handleConfirmToggle}
       />
     </div>
   )
@@ -884,7 +908,7 @@ function GroupCard({
   dragPropsFor,
   onExpand,
   onEdit,
-  onDelete,
+  onToggleActive,
   onAdd,
   onRemoveStudent,
 }: {
@@ -898,11 +922,13 @@ function GroupCard({
   dragPropsFor: (studentId: number, fromGroupId: number | null) => DragProps
   onExpand: () => void
   onEdit: () => void
-  onDelete: () => void
+  onToggleActive: () => void
   onAdd: (groupId: number, studentId: number) => void
   onRemoveStudent: (groupId: number, studentId: number) => void
 }) {
-  const droppable = drag !== null && drag.fromGroupId !== group.id
+  const droppable =
+    group.is_active && drag !== null && drag.fromGroupId !== group.id
+  const toggleLabel = group.is_active ? "Deactivate" : "Activate"
 
   return (
     <section
@@ -922,16 +948,25 @@ function GroupCard({
         "flex h-60 flex-col rounded-lg border bg-card text-card-foreground shadow-xs transition-colors",
         droppable && !isDropTarget && "border-primary/30",
         isDropTarget && "border-primary ring-2 ring-primary/40",
+        !group.is_active && "border-dashed bg-muted/40",
       )}
     >
       <header className="shrink-0 border-b px-3 py-2">
         <div className="flex items-center gap-1">
+          <span className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-primary">
+            {group.code}
+          </span>
           <h3
             className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight"
             title={group.name}
           >
             {group.name}
           </h3>
+          {!group.is_active && (
+            <span className="shrink-0 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+              Inactive
+            </span>
+          )}
           <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground tabular-nums">
             {group.members.length}
           </span>
@@ -955,12 +990,22 @@ function GroupCard({
           </button>
           <button
             type="button"
-            onClick={onDelete}
+            onClick={onToggleActive}
             disabled={busy}
-            aria-label={`Delete ${group.name}`}
-            className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+            aria-label={`${toggleLabel} ${group.name}`}
+            title={toggleLabel}
+            className={cn(
+              "grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors disabled:opacity-40",
+              group.is_active
+                ? "hover:bg-destructive/10 hover:text-destructive"
+                : "hover:bg-success/10 hover:text-success",
+            )}
           >
-            <Trash2 className="size-3.5" />
+            {group.is_active ? (
+              <PowerOff className="size-3.5" />
+            ) : (
+              <Power className="size-3.5" />
+            )}
           </button>
         </div>
         {group.description && (
@@ -1004,7 +1049,10 @@ function GroupCard({
       <div className="shrink-0 border-t p-2">
         <AddStudentCombobox
           students={unassigned}
-          disabled={busy}
+          disabled={busy || !group.is_active}
+          placeholderOverride={
+            !group.is_active ? "Group inactive" : undefined
+          }
           onAdd={(sid) => onAdd(group.id, sid)}
         />
       </div>
@@ -1090,10 +1138,12 @@ function StudentChip({
 function AddStudentCombobox({
   students,
   disabled,
+  placeholderOverride,
   onAdd,
 }: {
   students: Student[]
   disabled?: boolean
+  placeholderOverride?: string
   onAdd: (studentId: number) => void
 }) {
   const options = React.useMemo<ComboboxOption[]>(
@@ -1112,7 +1162,8 @@ function AddStudentCombobox({
       options={options}
       onChange={(v) => v != null && onAdd(v)}
       placeholder={
-        students.length === 0 ? "No unassigned students" : "Add a student…"
+        placeholderOverride ??
+        (students.length === 0 ? "No unassigned students" : "Add a student…")
       }
       searchPlaceholder="Search name or ID…"
       emptyMessage={
@@ -1127,6 +1178,7 @@ function AddStudentCombobox({
 function GroupForm({
   mode,
   initialName,
+  initialCode,
   initialDescription,
   submitting,
   onSubmit,
@@ -1134,21 +1186,23 @@ function GroupForm({
 }: {
   mode: "create" | "edit"
   initialName: string
+  initialCode: string
   initialDescription: string
   submitting: boolean
-  onSubmit: (name: string, description: string) => void
+  onSubmit: (name: string, code: string, description: string) => void
   onCancel: () => void
 }) {
   const [name, setName] = React.useState(initialName)
+  const [code, setCode] = React.useState(initialCode)
   const [description, setDescription] = React.useState(initialDescription)
-  const valid = name.trim().length > 0
+  const valid = name.trim().length > 0 && code.trim().length > 0
 
   return (
     <form
       noValidate
       onSubmit={(e) => {
         e.preventDefault()
-        if (valid) onSubmit(name.trim(), description.trim())
+        if (valid) onSubmit(name.trim(), code.trim(), description.trim())
       }}
       className="flex h-full flex-col"
     >
@@ -1163,18 +1217,35 @@ function GroupForm({
       </SheetHeader>
 
       <SheetBody className="space-y-5">
-        <div className="space-y-1.5">
-          <Label htmlFor="grp-name">Name</Label>
-          <Input
-            id="grp-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={64}
-            autoComplete="off"
-            autoFocus
-            placeholder="e.g. Group A"
-          />
+        <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+          <div className="space-y-1.5">
+            <Label htmlFor="grp-name">Name</Label>
+            <Input
+              id="grp-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={64}
+              autoComplete="off"
+              autoFocus
+              placeholder="e.g. Group A"
+            />
+          </div>
+          <div className="space-y-1.5 sm:w-32">
+            <Label htmlFor="grp-code">Code</Label>
+            <Input
+              id="grp-code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              maxLength={32}
+              autoComplete="off"
+              placeholder="e.g. A"
+              className="font-mono uppercase"
+            />
+          </div>
         </div>
+        <p className="-mt-3 text-xs text-muted-foreground">
+          Code must be unique within this programme & admission year.
+        </p>
         <div className="space-y-1.5">
           <Label htmlFor="grp-desc">
             Description{" "}

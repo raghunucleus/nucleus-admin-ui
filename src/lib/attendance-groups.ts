@@ -21,7 +21,9 @@ export type AttendanceGroup = {
   programme_id: number
   admission_year_id: number
   name: string
+  code: string
   description: string | null
+  is_active: boolean
   members: StudentGroup[]
   created_at: string
   updated_at: string
@@ -55,6 +57,7 @@ export async function createAttendanceGroup(input: {
   programme_id: number
   admission_year_id: number
   name: string
+  code: string
   description?: string | null
 }): Promise<AttendanceGroup> {
   return api<AttendanceGroup>("/admin/attendance-groups", {
@@ -65,7 +68,7 @@ export async function createAttendanceGroup(input: {
 
 export async function updateAttendanceGroup(
   id: number,
-  input: { name: string; description?: string | null },
+  input: { name: string; code: string; description?: string | null },
 ): Promise<AttendanceGroup> {
   return api<AttendanceGroup>(`/admin/attendance-groups/${id}`, {
     method: "PATCH",
@@ -73,8 +76,20 @@ export async function updateAttendanceGroup(
   })
 }
 
-export async function deleteAttendanceGroup(id: number): Promise<void> {
-  return api<void>(`/admin/attendance-groups/${id}`, { method: "DELETE" })
+export async function activateAttendanceGroup(
+  id: number,
+): Promise<AttendanceGroup> {
+  return api<AttendanceGroup>(`/admin/attendance-groups/${id}/activate`, {
+    method: "POST",
+  })
+}
+
+export async function deactivateAttendanceGroup(
+  id: number,
+): Promise<AttendanceGroup> {
+  return api<AttendanceGroup>(`/admin/attendance-groups/${id}/deactivate`, {
+    method: "POST",
+  })
 }
 
 /**

@@ -136,7 +136,7 @@ export function SubjectsPage() {
         const r = await listRegulations({
           status: "active",
           pageSize: 100,
-          sortBy: "created_at",
+          sortBy: "year_of_regulation",
           sortOrder: "desc",
         })
         if (cancelled) return
@@ -163,7 +163,7 @@ export function SubjectsPage() {
     undefined,
   )
 
-  // Auto-pick the most recently-created regulation once options arrive.
+  // Auto-pick the latest regulation year once options arrive.
   React.useEffect(() => {
     if (regulationId === undefined && regulationOptions.length > 0) {
       setRegulationId(regulationOptions[0].id)
@@ -180,8 +180,8 @@ export function SubjectsPage() {
     pageSize: 10,
   })
 
-  // Open by default — the page is most useful when scoped narrowly.
-  const [filterPanelOpen, setFilterPanelOpen] = React.useState(true)
+  // Closed by default — open it from the Filters toolbar toggle.
+  const [filterPanelOpen, setFilterPanelOpen] = React.useState(false)
   const [searchRowOpen, setSearchRowOpen] = React.useState(false)
 
   const [pendingStatus, setPendingStatus] = React.useState<

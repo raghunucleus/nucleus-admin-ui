@@ -24,11 +24,13 @@ import { ProgrammeAttendanceGroupsPage } from "@/pages/programme-attendance-grou
 import { SemesterFacultyPage } from "@/pages/semester-faculty"
 import { SemesterSettingsPage } from "@/pages/semester-settings"
 import { SemesterSubjectsPage } from "@/pages/semester-subjects"
+import { SemesterTimetablesPage } from "@/pages/semester-timetables"
 import { SemestersPage } from "@/pages/semesters"
 import { StudentsPage } from "@/pages/students"
 import { StudentsBulkUploadPage } from "@/pages/students-bulk-upload"
 import { StudentDetailsPage } from "@/pages/student-details"
 import { SubjectsPage } from "@/pages/subjects"
+import { TimetableEditorPage } from "@/pages/timetable-editor"
 import { MigrationsPage } from "@/pages/migrations"
 import { NotFoundPage } from "@/pages/not-found"
 import { ProfilePage } from "@/pages/profile"
@@ -215,6 +217,21 @@ const mastersSemesterFacultyRoute = createRoute({
   validateSearch: validateProgrammeBatchSearch,
 })
 
+// Timetables for a semester — the list screen, and the per-timetable editor.
+const mastersSemesterTimetablesRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programme-configuration/semester/$programmeSemesterId/timetables",
+  component: SemesterTimetablesPage,
+  validateSearch: validateProgrammeBatchSearch,
+})
+
+const mastersTimetableEditorRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programme-configuration/semester/$programmeSemesterId/timetables/$timetableId",
+  component: TimetableEditorPage,
+  validateSearch: validateProgrammeBatchSearch,
+})
+
 // Attendance groups are configured once per programme × admission-year batch
 // (shared across every semester), so this screen is scoped to the batch — not
 // nested under a semester.
@@ -302,6 +319,8 @@ const routeTree = rootRoute.addChildren([
     mastersSemesterSettingsRoute,
     mastersSemesterSubjectsRoute,
     mastersSemesterFacultyRoute,
+    mastersSemesterTimetablesRoute,
+    mastersTimetableEditorRoute,
     mastersProgrammeAttendanceGroupsRoute,
     employeesDesignationsRoute,
     employeesAllRoute,
