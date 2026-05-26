@@ -39,6 +39,10 @@ import { TimetableEditorPage } from "@/pages/timetable-editor"
 import { MigrationsPage } from "@/pages/migrations"
 import { NotFoundPage } from "@/pages/not-found"
 import { ProfilePage } from "@/pages/profile"
+import { AssignmentEditorPage } from "@/pages/role-management/assignment-editor"
+import { AssignmentsListPage } from "@/pages/role-management/assignments-list"
+import { RoleBuilderPage } from "@/pages/role-management/role-builder"
+import { RolesListPage } from "@/pages/role-management/roles-list"
 import { SetupTwoFactorPage } from "@/pages/setup-2fa"
 import { WelcomePage } from "@/pages/welcome"
 import { useAuthStore } from "@/store/auth-store"
@@ -320,6 +324,50 @@ const studentDetailsRoute = createRoute({
   component: StudentDetailsPage,
 })
 
+// --- Role management ----------------------------------------------------
+const roleManagementRolesRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/role-management/roles",
+  component: RolesListPage,
+})
+
+const roleManagementRoleEditorRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/role-management/roles/$roleId",
+  component: RoleBuilderPage,
+})
+
+function validateAssignmentsListSearch(
+  search: Record<string, unknown>,
+): { employee_id?: number; role_id?: number } {
+  const out: { employee_id?: number; role_id?: number } = {}
+  for (const key of ["employee_id", "role_id"] as const) {
+    const raw = search[key]
+    const n =
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string"
+          ? Number(raw)
+          : Number.NaN
+    if (Number.isInteger(n) && n > 0) out[key] = n
+  }
+  return out
+}
+
+const roleManagementAssignmentsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/role-management/assignments",
+  component: AssignmentsListPage,
+  validateSearch: validateAssignmentsListSearch,
+})
+
+const roleManagementAssignmentEditorRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/role-management/assignments/$assignmentId",
+  component: AssignmentEditorPage,
+  validateSearch: validateAssignmentsListSearch,
+})
+
 const profileSections = ["profile", "password", "security"] as const
 export type ProfileSection = (typeof profileSections)[number]
 
@@ -373,6 +421,10 @@ const routeTree = rootRoute.addChildren([
     studentsAllRoute,
     studentsBulkUploadRoute,
     studentDetailsRoute,
+    roleManagementRolesRoute,
+    roleManagementRoleEditorRoute,
+    roleManagementAssignmentsRoute,
+    roleManagementAssignmentEditorRoute,
     profileRoute,
   ]),
 ])

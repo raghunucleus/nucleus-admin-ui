@@ -1,4 +1,5 @@
 import * as React from "react"
+import { Link } from "@tanstack/react-router"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -23,6 +24,7 @@ import {
   ChevronsRight,
   Filter,
   Pencil,
+  ShieldCheck,
   Plus,
   Power,
   PowerOff,
@@ -954,6 +956,21 @@ function EmployeesTable({
           const toggleLabel = e.is_active ? "Deactivate" : "Activate"
           return (
             <div className="flex items-center justify-end gap-0.5">
+              <Link
+                to="/role-management/assignments"
+                search={{ employee_id: e.id, role_id: undefined }}
+              >
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 text-muted-foreground hover:text-foreground"
+                  disabled={formOpen || isBusy}
+                  title="Roles"
+                  aria-label="Manage roles"
+                >
+                  <ShieldCheck />
+                </Button>
+              </Link>
               <Button
                 variant="ghost"
                 size="icon"

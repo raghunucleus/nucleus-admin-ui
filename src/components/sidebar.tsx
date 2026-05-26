@@ -9,6 +9,7 @@ import {
   Layers,
   PanelLeftClose,
   PanelLeftOpen,
+  ShieldCheck,
   Sparkles,
   Users,
   type LucideIcon,
@@ -67,6 +68,16 @@ const nav: NavItem[] = [
     children: [
       { to: "/students/all", label: "All Students" },
       { to: "/students/bulk-upload", label: "Students Bulk Upload" },
+    ],
+  },
+  {
+    type: "group",
+    key: "role-management",
+    label: "Role management",
+    icon: ShieldCheck,
+    children: [
+      { to: "/role-management/roles", label: "Roles" },
+      { to: "/role-management/assignments", label: "Role assignments" },
     ],
   },
 
