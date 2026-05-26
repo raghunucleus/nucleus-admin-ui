@@ -163,7 +163,7 @@ function buildPalette(
       isElective: s.subject_id === null,
       inactive: !s.is_active,
       courseId: null,
-      faculty: s.faculty.map((f) => ({
+      faculty: (s.faculty ?? []).map((f) => ({
         employee_id: f.employee_id,
         employee: f.employee,
       })),
@@ -243,6 +243,9 @@ export function TimetableEditorPage() {
       setTimetable(tt)
       const subs = await listProgrammeSemesterSubjects({
         programmeSemesterId: tt.programme_semester_id,
+        // Faculty is allocated per (subject, attendance group). The timetable
+        // is bound to one group, so scope the palette's faculty to that group.
+        attendanceGroupId: tt.attendance_group_id,
         pageSize: 100,
         sortBy: "created_at",
         sortOrder: "asc",

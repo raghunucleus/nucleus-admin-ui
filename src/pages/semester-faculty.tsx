@@ -2,74 +2,32 @@ import * as React from "react"
 import { createPortal } from "react-dom"
 import { Link, useParams, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
-import { AlertTriangle, ArrowLeft, BookMarked, Plus, Search, X } from "lucide-react"
+import { AlertTriangle, ArrowLeft, BookMarked, Pencil, Plus, Search, Users, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
+import type { AttendanceGroup } from "@/lib/attendance-groups"
 import { listEmployees, type Employee } from "@/lib/employees"
 import {
   listProgrammeSemesters,
   type ProgrammeSemester,
 } from "@/lib/programme-semesters"
 import {
+  getFacultyMatrix,
   listProgrammeSemesterSubjects,
-  setProgrammeSemesterSubjectFaculty,
+  setProgrammeSemesterSubjectGroupFaculty,
   setProgrammeSemesterSubjectOptionFaculty,
+  type FacultyMatrixResult,
   type ProgrammeSemesterSubject,
+  type ProgrammeSemesterSubjectGroupFacultyCell,
   type ProgrammeSemesterSubjectOption,
 } from "@/lib/programme-semester-subjects"
 
-// A single faculty-editable unit. A real subject is one target; an elective
-// slot contributes one target per candidate subject (the slot itself is not
-// a target — faculty are allocated per candidate subject).
-type Target = {
-  key: string
-  kind: "entry" | "option"
-  /** Id passed to the API — the entry id, or the elective option id. */
-  refId: number
-  /** Parent subject-entry id — used to splice the API response back in. */
-  entryId: number
-  name: string
-  code: string
-  faculty: { id: number; employee_id: number; employee: Employee }[]
-}
-
-type RenderItem =
-  | { kind: "subject"; entry: ProgrammeSemesterSubject; target: Target }
-  | {
-      kind: "elective"
-      entry: ProgrammeSemesterSubject
-      optionTargets: Target[]
-    }
-
-function entryTarget(e: ProgrammeSemesterSubject): Target {
-  return {
-    key: `e${e.id}`,
-    kind: "entry",
-    refId: e.id,
-    entryId: e.id,
-    name: e.subject?.name ?? "(unnamed)",
-    code: e.subject?.code ?? "",
-    faculty: e.faculty,
-  }
-}
-
-function optionTarget(
-  e: ProgrammeSemesterSubject,
-  o: ProgrammeSemesterSubjectOption,
-): Target {
-  return {
-    key: `o${o.id}`,
-    kind: "option",
-    refId: o.id,
-    entryId: e.id,
-    name: o.subject.name,
-    code: o.subject.code,
-    faculty: o.faculty,
-  }
+function cellKey(subjectId: number, groupId: number): string {
+  return `${subjectId}-${groupId}`
 }
 
 function electiveLabel(e: ProgrammeSemesterSubject): string {
@@ -89,9 +47,11 @@ function initials(name: string): string {
   )
 }
 
-// Dedicated full-screen for the Faculty allocation section of a semester's
-// settings. Real subjects and each elective candidate subject get their own
-// inline-editable faculty roster.
+// Faculty configuration: a matrix of attendance groups (rows) × real subjects
+// (columns), one teacher per cell. Each (subject, group) pair gets a single
+// primary teacher; associates / co-teachers are a future addition that will
+// live in a separate table. Elective slot candidate faculty is kept here as
+// a legacy section — that flow will migrate into student-allocation later.
 export function SemesterFacultyPage() {
   const params = useParams({ strict: false }) as {
     programmeSemesterId?: string
@@ -108,8 +68,11 @@ export function SemesterFacultyPage() {
   const [failed, setFailed] = React.useState(false)
 
   const [employees, setEmployees] = React.useState<Employee[]>([])
-  const [entries, setEntries] = React.useState<ProgrammeSemesterSubject[]>([])
-  const [entriesLoading, setEntriesLoading] = React.useState(true)
+  const [matrix, setMatrix] = React.useState<FacultyMatrixResult | null>(null)
+  const [electiveEntries, setElectiveEntries] = React.useState<
+    ProgrammeSemesterSubject[]
+  >([])
+  const [dataLoading, setDataLoading] = React.useState(true)
 
   const [savingKeys, setSavingKeys] = React.useState<Set<string>>(new Set())
 
@@ -174,110 +137,129 @@ export function SemesterFacultyPage() {
     }
   }, [])
 
-  const loadEntries = React.useCallback(async () => {
-    if (!Number.isInteger(id) || id <= 0) {
-      setEntriesLoading(false)
+  const loadData = React.useCallback(async () => {
+    if (
+      !Number.isInteger(id) ||
+      id <= 0 ||
+      programmeId === undefined ||
+      admissionYearId === undefined
+    ) {
+      setDataLoading(false)
       return
     }
-    setEntriesLoading(true)
+    setDataLoading(true)
     try {
-      const r = await listProgrammeSemesterSubjects({
-        programmeSemesterId: id,
-        pageSize: 100,
-        sortBy: "created_at",
-        sortOrder: "asc",
-      })
-      setEntries(r.rows)
+      const [m, all] = await Promise.all([
+        getFacultyMatrix({
+          programmeSemesterId: id,
+          programmeId,
+          admissionYearId,
+        }),
+        listProgrammeSemesterSubjects({
+          programmeSemesterId: id,
+          pageSize: 100,
+          sortBy: "created_at",
+          sortOrder: "asc",
+        }),
+      ])
+      setMatrix(m)
+      setElectiveEntries(all.rows.filter((r) => r.subject_id === null))
     } catch (err) {
-      toast.error("Couldn't load subjects", {
+      toast.error("Couldn't load faculty configuration", {
         description:
           err instanceof ApiError ? err.message : "Please try again.",
       })
     } finally {
-      setEntriesLoading(false)
+      setDataLoading(false)
     }
-  }, [id])
+  }, [id, programmeId, admissionYearId])
 
   React.useEffect(() => {
-    void loadEntries()
-  }, [loadEntries])
+    void loadData()
+  }, [loadData])
 
-  // Real subjects render as one row; electives expand into a group of
-  // candidate-subject rows. `allTargets` is the flat list behind the
-  // assigned-count.
-  const renderItems = React.useMemo<RenderItem[]>(
-    () =>
-      entries.map((e) =>
-        e.subject_id !== null
-          ? { kind: "subject", entry: e, target: entryTarget(e) }
-          : {
-              kind: "elective",
-              entry: e,
-              optionTargets: e.options.map((o) => optionTarget(e, o)),
-            },
-      ),
-    [entries],
-  )
-  const allTargets = React.useMemo<Target[]>(
-    () =>
-      renderItems.flatMap((it) =>
-        it.kind === "subject" ? [it.target] : it.optionTargets,
-      ),
-    [renderItems],
-  )
+  const cellByKey = React.useMemo(() => {
+    const map = new Map<string, ProgrammeSemesterSubjectGroupFacultyCell>()
+    matrix?.cells.forEach((c) => {
+      map.set(cellKey(c.programme_semester_subject_id, c.attendance_group_id), c)
+    })
+    return map
+  }, [matrix])
 
-  // Persist a target's roster via the matching endpoint, then splice the
-  // returned entry back in — both endpoints return the parent subject entry.
-  const persist = async (target: Target, employeeIds: number[]) => {
-    const updated =
-      target.kind === "entry"
-        ? await setProgrammeSemesterSubjectFaculty(target.refId, employeeIds)
-        : await setProgrammeSemesterSubjectOptionFaculty(
-            target.refId,
-            employeeIds,
-          )
-    setEntries((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
+  const setCellSaving = (key: string, busy: boolean) => {
+    setSavingKeys((s) => {
+      const n = new Set(s)
+      if (busy) n.add(key)
+      else n.delete(key)
+      return n
+    })
   }
 
-  const applyFaculty = async (target: Target, employeeIds: number[]) => {
-    setSavingKeys((s) => new Set(s).add(target.key))
+  const applyCell = async (
+    subjectId: number,
+    groupId: number,
+    employeeId: number | null,
+  ) => {
+    const key = cellKey(subjectId, groupId)
+    setCellSaving(key, true)
     try {
-      await persist(target, employeeIds)
+      const updated = await setProgrammeSemesterSubjectGroupFaculty(
+        subjectId,
+        groupId,
+        employeeId,
+      )
+      setMatrix(updated)
     } catch (err) {
       toast.error("Couldn't update faculty", {
         description:
           err instanceof ApiError ? err.message : "Please try again.",
       })
     } finally {
-      setSavingKeys((s) => {
-        const n = new Set(s)
-        n.delete(target.key)
-        return n
-      })
+      setCellSaving(key, false)
     }
   }
 
-  const addToTarget = (target: Target, employeeId: number) => {
-    if (target.faculty.some((f) => f.employee_id === employeeId)) return
-    void applyFaculty(target, [
-      ...target.faculty.map((f) => f.employee_id),
-      employeeId,
-    ])
+  const applyOptionFaculty = async (
+    optionId: number,
+    parentEntryId: number,
+    employeeIds: number[],
+  ) => {
+    const key = `o${optionId}`
+    setCellSaving(key, true)
+    try {
+      const updated = await setProgrammeSemesterSubjectOptionFaculty(
+        optionId,
+        employeeIds,
+      )
+      setElectiveEntries((prev) =>
+        prev.map((e) => (e.id === parentEntryId ? updated : e)),
+      )
+    } catch (err) {
+      toast.error("Couldn't update faculty", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setCellSaving(key, false)
+    }
   }
 
-  const removeFromTarget = (target: Target, employeeId: number) => {
-    void applyFaculty(
-      target,
-      target.faculty
-        .map((f) => f.employee_id)
-        .filter((eid) => eid !== employeeId),
-    )
-  }
-
-  const allocatedCount = allTargets.filter((t) => t.faculty.length > 0).length
+  const cellCount = matrix
+    ? matrix.subjects.filter((s) => s.is_active).length *
+      matrix.groups.filter((g) => g.is_active).length
+    : 0
+  const assignedCount = matrix
+    ? matrix.cells.filter((c) => {
+        const subj = matrix.subjects.find(
+          (s) => s.id === c.programme_semester_subject_id,
+        )
+        const grp = matrix.groups.find((g) => g.id === c.attendance_group_id)
+        return subj?.is_active && grp?.is_active
+      }).length
+    : 0
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 py-2">
+    <div className="mx-auto max-w-7xl space-y-4 py-2">
       <div className="flex items-center gap-1">
         <Link
           to="/masters/programme-configuration/semester/$programmeSemesterId"
@@ -336,25 +318,43 @@ export function SemesterFacultyPage() {
                   </span>
                 </div>
               </div>
-              {!entriesLoading && allTargets.length > 0 && (
+              {!dataLoading && cellCount > 0 && (
                 <div className="rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground">
                   Assigned{" "}
                   <span className="font-semibold text-foreground tabular-nums">
-                    {allocatedCount}/{allTargets.length}
+                    {assignedCount}/{cellCount}
                   </span>
                 </div>
               )}
             </div>
           </header>
 
-          {entriesLoading ? (
+          {dataLoading ? (
             <FacultyListSkeleton />
-          ) : entries.length === 0 ? (
+          ) : !matrix ? null : matrix.groups.length === 0 ? (
+            <div className="rounded-lg border bg-card text-card-foreground shadow-xs">
+              <EmptyState
+                icon={Users}
+                title="No attendance groups configured"
+                description="Faculty are allocated per group per subject. Create groups for this batch first, then come back here to assign teachers."
+                action={
+                  <Button asChild size="sm" variant="outline">
+                    <Link
+                      to="/masters/programme-configuration/attendance-groups"
+                      search={{ programmeId, admissionYearId }}
+                    >
+                      Configure attendance groups
+                    </Link>
+                  </Button>
+                }
+              />
+            </div>
+          ) : matrix.subjects.length === 0 ? (
             <div className="rounded-lg border bg-card text-card-foreground shadow-xs">
               <EmptyState
                 icon={BookMarked}
                 title="No subjects configured"
-                description="Configure subjects for this semester first — faculty are allocated per subject."
+                description="Configure subjects for this semester first — faculty are then assigned per group per subject."
                 action={
                   <Button asChild size="sm" variant="outline">
                     <Link
@@ -372,38 +372,24 @@ export function SemesterFacultyPage() {
               />
             </div>
           ) : (
-            <div className="overflow-hidden rounded-lg border bg-card text-card-foreground shadow-xs">
-              <div className="border-b bg-muted/30 px-4 py-2.5 text-sm font-medium">
-                Subjects
-              </div>
-              <div className="divide-y">
-                {renderItems.map((it) =>
-                  it.kind === "subject" ? (
-                    <FacultyRow
-                      key={it.entry.id}
-                      target={it.target}
-                      employees={employees}
-                      saving={savingKeys.has(it.target.key)}
-                      inactive={!it.entry.is_active}
-                      onAdd={(empId) => addToTarget(it.target, empId)}
-                      onRemove={(empId) =>
-                        removeFromTarget(it.target, empId)
-                      }
-                    />
-                  ) : (
-                    <ElectiveGroup
-                      key={it.entry.id}
-                      entry={it.entry}
-                      optionTargets={it.optionTargets}
-                      employees={employees}
-                      savingKeys={savingKeys}
-                      onAdd={addToTarget}
-                      onRemove={removeFromTarget}
-                    />
-                  ),
-                )}
-              </div>
-            </div>
+            <FacultyMatrixCard
+              subjects={matrix.subjects}
+              groups={matrix.groups}
+              cellByKey={cellByKey}
+              employees={employees}
+              savingKeys={savingKeys}
+              onSelect={applyCell}
+              onClear={(sid, gid) => applyCell(sid, gid, null)}
+            />
+          )}
+
+          {!dataLoading && electiveEntries.length > 0 && (
+            <ElectiveLegacySection
+              entries={electiveEntries}
+              employees={employees}
+              savingKeys={savingKeys}
+              onApply={applyOptionFaculty}
+            />
           )}
         </>
       )}
@@ -411,22 +397,246 @@ export function SemesterFacultyPage() {
   )
 }
 
-// An open-elective slot — a group header plus one faculty-editable row per
-// candidate subject.
-function ElectiveGroup({
-  entry,
-  optionTargets,
+// --- matrix ----------------------------------------------------------------
+
+function FacultyMatrixCard({
+  subjects,
+  groups,
+  cellByKey,
   employees,
   savingKeys,
-  onAdd,
-  onRemove,
+  onSelect,
+  onClear,
 }: {
-  entry: ProgrammeSemesterSubject
-  optionTargets: Target[]
+  subjects: ProgrammeSemesterSubject[]
+  groups: AttendanceGroup[]
+  cellByKey: Map<string, ProgrammeSemesterSubjectGroupFacultyCell>
   employees: Employee[]
   savingKeys: Set<string>
-  onAdd: (target: Target, employeeId: number) => void
-  onRemove: (target: Target, employeeId: number) => void
+  onSelect: (subjectId: number, groupId: number, employeeId: number) => void
+  onClear: (subjectId: number, groupId: number) => void
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg border bg-card text-card-foreground shadow-xs">
+      <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-4 py-2.5">
+        <span className="text-sm font-medium">Subjects × Groups</span>
+        <span className="text-xs text-muted-foreground">
+          One teacher per group per subject
+        </span>
+      </div>
+      <div className="overflow-x-auto thin-scrollbar">
+        <table className="w-full border-separate border-spacing-0 text-sm">
+          <thead>
+            <tr>
+              <th
+                scope="col"
+                className="sticky left-0 z-20 min-w-[180px] border-b border-r bg-muted px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                Group
+              </th>
+              {subjects.map((s) => (
+                <th
+                  key={s.id}
+                  scope="col"
+                  className={cn(
+                    "min-w-[200px] border-b border-r bg-muted px-3 py-2 text-left align-top",
+                    !s.is_active && "opacity-60",
+                  )}
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium leading-tight">
+                      {s.subject?.name ?? "(unnamed)"}
+                    </span>
+                    {s.subject?.code && (
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        {s.subject.code}
+                      </span>
+                    )}
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => (
+              <tr key={g.id} className={cn(!g.is_active && "opacity-60")}>
+                <th
+                  scope="row"
+                  className="sticky left-0 z-10 border-b border-r bg-card px-3 py-2 text-left align-top"
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium leading-tight">
+                      {g.name}
+                    </span>
+                    <span className="font-mono text-[11px] text-muted-foreground">
+                      {g.code}
+                    </span>
+                  </div>
+                </th>
+                {subjects.map((s) => {
+                  const key = cellKey(s.id, g.id)
+                  const cell = cellByKey.get(key)
+                  const disabled = !s.is_active || !g.is_active
+                  return (
+                    <td
+                      key={s.id}
+                      className="border-b border-r px-2 py-1.5 align-middle"
+                    >
+                      <MatrixCell
+                        subjectName={s.subject?.name ?? "(unnamed)"}
+                        groupName={g.name}
+                        cell={cell}
+                        employees={employees}
+                        saving={savingKeys.has(key)}
+                        disabled={disabled}
+                        onSelect={(empId) => onSelect(s.id, g.id, empId)}
+                        onClear={() => onClear(s.id, g.id)}
+                      />
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// One cell of the matrix — shows the assigned teacher as a removable chip, or
+// a "+ Assign" pill if empty. Clicking either opens the searchable picker.
+function MatrixCell({
+  subjectName,
+  groupName,
+  cell,
+  employees,
+  saving,
+  disabled,
+  onSelect,
+  onClear,
+}: {
+  subjectName: string
+  groupName: string
+  cell: ProgrammeSemesterSubjectGroupFacultyCell | undefined
+  employees: Employee[]
+  saving: boolean
+  disabled?: boolean
+  onSelect: (employeeId: number) => void
+  onClear: () => void
+}) {
+  if (cell) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <FacultyChip
+          employee={cell.employee}
+          onRemove={onClear}
+          disabled={saving || disabled}
+        />
+        <SingleFacultyPicker
+          employees={employees}
+          excludeId={cell.employee_id}
+          label={
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              <Pencil className="size-3" />
+            </span>
+          }
+          ariaLabel={`Change teacher for ${subjectName} · ${groupName}`}
+          disabled={saving || disabled}
+          onSelect={onSelect}
+        />
+        {saving && (
+          <span className="text-[11px] text-muted-foreground">Saving…</span>
+        )}
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center gap-1.5">
+      <SingleFacultyPicker
+        employees={employees}
+        excludeId={null}
+        label={
+          <span className="inline-flex items-center gap-1">
+            <Plus className="size-3.5" />
+            Assign
+          </span>
+        }
+        ariaLabel={`Assign teacher for ${subjectName} · ${groupName}`}
+        disabled={saving || disabled}
+        onSelect={onSelect}
+      />
+      {saving && (
+        <span className="text-[11px] text-muted-foreground">Saving…</span>
+      )}
+    </div>
+  )
+}
+
+// --- elective legacy section -----------------------------------------------
+
+// Elective slot candidate-faculty allocation lives here as a holdover from
+// the per-subject roster model. Each elective slot expands into its candidate
+// subjects; faculty are still allocated as a multi-faculty roster (associates
+// flatten in here today). This whole section will move into the student-
+// allocation flow in a future change — the note above makes that explicit.
+function ElectiveLegacySection({
+  entries,
+  employees,
+  savingKeys,
+  onApply,
+}: {
+  entries: ProgrammeSemesterSubject[]
+  employees: Employee[]
+  savingKeys: Set<string>
+  onApply: (
+    optionId: number,
+    parentEntryId: number,
+    employeeIds: number[],
+  ) => void
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg border bg-card text-card-foreground shadow-xs">
+      <div className="border-b bg-muted/30 px-4 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm font-medium">Elective candidate faculty</span>
+          <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warning">
+            Legacy
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Per-candidate faculty rosters from the older model. This section will
+          move into the student-allocation flow so students see the teacher
+          alongside the elective when picking.
+        </p>
+      </div>
+      <div className="divide-y">
+        {entries.map((entry) => (
+          <ElectiveGroup
+            key={entry.id}
+            entry={entry}
+            employees={employees}
+            savingKeys={savingKeys}
+            onApply={(optionId, employeeIds) =>
+              onApply(optionId, entry.id, employeeIds)
+            }
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ElectiveGroup({
+  entry,
+  employees,
+  savingKeys,
+  onApply,
+}: {
+  entry: ProgrammeSemesterSubject
+  employees: Employee[]
+  savingKeys: Set<string>
+  onApply: (optionId: number, employeeIds: number[]) => void
 }) {
   return (
     <div className={cn(!entry.is_active && "opacity-60")}>
@@ -440,21 +650,32 @@ function ElectiveGroup({
           {entry.options.length === 1 ? "" : "s"} offered
         </span>
       </div>
-      {optionTargets.length === 0 ? (
+      {entry.options.length === 0 ? (
         <div className="px-4 py-3 pl-11 text-xs italic text-muted-foreground">
           No subjects offered yet — add them on the Subjects screen.
         </div>
       ) : (
         <div className="divide-y">
-          {optionTargets.map((t) => (
-            <FacultyRow
-              key={t.key}
-              target={t}
+          {entry.options.map((o) => (
+            <OptionFacultyRow
+              key={o.id}
+              option={o}
               employees={employees}
-              saving={savingKeys.has(t.key)}
-              indented
-              onAdd={(empId) => onAdd(t, empId)}
-              onRemove={(empId) => onRemove(t, empId)}
+              saving={savingKeys.has(`o${o.id}`)}
+              onAdd={(empId) =>
+                onApply(o.id, [
+                  ...o.faculty.map((f) => f.employee_id),
+                  empId,
+                ])
+              }
+              onRemove={(empId) =>
+                onApply(
+                  o.id,
+                  o.faculty
+                    .map((f) => f.employee_id)
+                    .filter((id) => id !== empId),
+                )
+              }
             />
           ))}
         </div>
@@ -463,48 +684,35 @@ function ElectiveGroup({
   )
 }
 
-// One faculty-editable subject row — a real subject, or an elective
-// candidate subject when `indented`.
-function FacultyRow({
-  target,
+function OptionFacultyRow({
+  option,
   employees,
   saving,
-  indented,
-  inactive,
   onAdd,
   onRemove,
 }: {
-  target: Target
+  option: ProgrammeSemesterSubjectOption
   employees: Employee[]
   saving: boolean
-  indented?: boolean
-  inactive?: boolean
   onAdd: (employeeId: number) => void
   onRemove: (employeeId: number) => void
 }) {
-  const assignedIds = target.faculty.map((f) => f.employee_id)
-
+  const assignedIds = option.faculty.map((f) => f.employee_id)
   return (
-    <div
-      className={cn(
-        "px-4 py-3 transition-colors",
-        indented && "pl-11",
-        inactive && "opacity-60",
-      )}
-    >
+    <div className="px-4 py-3 pl-11 transition-colors">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">{target.name}</span>
-          {target.code && (
+          <span className="text-sm font-medium">{option.subject.name}</span>
+          {option.subject.code && (
             <span className="font-mono text-xs text-muted-foreground">
-              {target.code}
+              {option.subject.code}
             </span>
           )}
           {saving && (
             <span className="text-[11px] text-muted-foreground">Saving…</span>
           )}
         </div>
-        <FacultyPicker
+        <MultiFacultyPicker
           employees={employees}
           assignedIds={assignedIds}
           onAdd={onAdd}
@@ -512,7 +720,7 @@ function FacultyRow({
         />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {target.faculty.map((f) => (
+        {option.faculty.map((f) => (
           <FacultyChip
             key={f.id}
             employee={f.employee}
@@ -520,7 +728,7 @@ function FacultyRow({
             disabled={saving}
           />
         ))}
-        {target.faculty.length === 0 && (
+        {option.faculty.length === 0 && (
           <span className="text-xs italic text-muted-foreground">
             No faculty assigned
           </span>
@@ -530,7 +738,8 @@ function FacultyRow({
   )
 }
 
-// Removable pill for one faculty — initials avatar + name.
+// --- shared bits -----------------------------------------------------------
+
 function FacultyChip({
   employee,
   onRemove,
@@ -580,11 +789,274 @@ type PickerPos = {
   placement: "below" | "above"
 }
 
-// "Add faculty" pill that opens a searchable faculty list. The panel is
-// portalled to <body> and anchored with fixed positioning, so it is never
-// clipped by the subjects card's `overflow-hidden`. The panel stays open
-// after each pick so several faculty can be added in one pass.
-function FacultyPicker({
+// Used by the matrix cell — commits a single employee and closes immediately
+// (one teacher per cell). The trigger label flexes so the same picker can be
+// either the "+ Assign" pill (empty cell) or a small change-pencil (when the
+// cell already has someone).
+function SingleFacultyPicker({
+  employees,
+  excludeId,
+  label,
+  ariaLabel,
+  disabled,
+  onSelect,
+}: {
+  employees: Employee[]
+  excludeId: number | null
+  label: React.ReactNode
+  ariaLabel: string
+  disabled?: boolean
+  onSelect: (employeeId: number) => void
+}) {
+  const [open, setOpen] = React.useState(false)
+  const [query, setQuery] = React.useState("")
+  const [activeIndex, setActiveIndex] = React.useState(0)
+  const [pos, setPos] = React.useState<PickerPos | null>(null)
+
+  const triggerRef = React.useRef<HTMLButtonElement>(null)
+  const panelRef = React.useRef<HTMLDivElement>(null)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const listRef = React.useRef<HTMLDivElement>(null)
+
+  const available = React.useMemo(
+    () => employees.filter((e) => e.id !== excludeId),
+    [employees, excludeId],
+  )
+  const filtered = React.useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return available
+    return available.filter(
+      (e) =>
+        e.emp_display_name.toLowerCase().includes(q) ||
+        e.emp_code.toLowerCase().includes(q),
+    )
+  }, [available, query])
+
+  const noFaculty = employees.length === 0
+  const triggerDisabled = disabled || noFaculty
+
+  const reposition = React.useCallback(() => {
+    const t = triggerRef.current
+    if (!t) return
+    const r = t.getBoundingClientRect()
+    const margin = 12
+    const gap = 6
+    const width = Math.max(r.width, 264)
+    const spaceBelow = window.innerHeight - r.bottom - margin
+    const spaceAbove = r.top - margin
+    const placement =
+      spaceBelow >= 260 || spaceBelow >= spaceAbove ? "below" : "above"
+    const maxHeight = Math.min(
+      340,
+      Math.max(160, placement === "below" ? spaceBelow - gap : spaceAbove - gap),
+    )
+    let left = r.left
+    if (left + width > window.innerWidth - margin) {
+      left = window.innerWidth - margin - width
+    }
+    setPos({
+      left: Math.max(margin, left),
+      top: placement === "below" ? r.bottom + gap : r.top - gap,
+      width,
+      maxHeight,
+      placement,
+    })
+  }, [])
+
+  React.useLayoutEffect(() => {
+    if (!open) return
+    reposition()
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }, [open, reposition])
+
+  React.useEffect(() => {
+    if (!open) return
+    const onChange = () => reposition()
+    window.addEventListener("scroll", onChange, true)
+    window.addEventListener("resize", onChange)
+    return () => {
+      window.removeEventListener("scroll", onChange, true)
+      window.removeEventListener("resize", onChange)
+    }
+  }, [open, reposition])
+
+  React.useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      const tgt = e.target as Node
+      if (triggerRef.current?.contains(tgt)) return
+      if (panelRef.current?.contains(tgt)) return
+      setOpen(false)
+    }
+    document.addEventListener("mousedown", onDown)
+    return () => document.removeEventListener("mousedown", onDown)
+  }, [open])
+
+  const activeRow =
+    filtered.length === 0 ? 0 : Math.min(activeIndex, filtered.length - 1)
+
+  React.useEffect(() => {
+    if (!open) return
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-row="${activeRow}"]`)
+      ?.scrollIntoView({ block: "nearest" })
+  }, [activeRow, open])
+
+  const toggle = () => {
+    if (open) {
+      setOpen(false)
+      return
+    }
+    setQuery("")
+    setActiveIndex(0)
+    setOpen(true)
+  }
+
+  const commit = (employee: Employee) => {
+    onSelect(employee.id)
+    setOpen(false)
+    triggerRef.current?.focus()
+  }
+
+  const onKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      setActiveIndex(Math.min(filtered.length - 1, activeRow + 1))
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      setActiveIndex(Math.max(0, activeRow - 1))
+    } else if (e.key === "Enter") {
+      e.preventDefault()
+      const emp = filtered[activeRow]
+      if (emp) commit(emp)
+    } else if (e.key === "Escape") {
+      e.preventDefault()
+      setOpen(false)
+      triggerRef.current?.focus()
+    }
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={triggerDisabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        onClick={toggle}
+        className={cn(
+          "inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-input px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors",
+          "hover:border-primary/50 hover:bg-primary/5 hover:text-primary",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+          open && "border-solid border-primary/50 bg-primary/5 text-primary",
+          "disabled:pointer-events-none disabled:opacity-50",
+        )}
+      >
+        {label}
+      </button>
+
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-label="Pick faculty"
+            style={{
+              position: "fixed",
+              left: pos.left,
+              width: pos.width,
+              maxHeight: pos.maxHeight,
+              ...(pos.placement === "below"
+                ? { top: pos.top }
+                : { bottom: window.innerHeight - pos.top }),
+            }}
+            className={cn(
+              "z-50 flex flex-col overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg",
+              "animate-in fade-in-0 zoom-in-95 duration-150",
+            )}
+          >
+            <div className="flex items-center gap-2 border-b px-3 py-2">
+              <Search className="size-3.5 shrink-0 text-muted-foreground" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="Search faculty…"
+                className="h-6 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setQuery("")
+                    inputRef.current?.focus()
+                  }}
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div
+              ref={listRef}
+              role="listbox"
+              className="min-h-0 flex-1 overflow-y-auto py-1 thin-scrollbar"
+            >
+              {filtered.length === 0 ? (
+                <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                  No matches
+                </div>
+              ) : (
+                filtered.map((e, idx) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    role="option"
+                    aria-selected={idx === activeRow}
+                    data-row={idx}
+                    onMouseEnter={() => setActiveIndex(idx)}
+                    onMouseDown={(ev) => ev.preventDefault()}
+                    onClick={() => commit(e)}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 px-2.5 py-1.5 text-left transition-colors",
+                      idx === activeRow && "bg-accent text-accent-foreground",
+                    )}
+                  >
+                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                      {initials(e.emp_display_name)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">
+                        {e.emp_display_name}
+                      </span>
+                      <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                        {e.emp_code}
+                      </span>
+                    </span>
+                    <Plus className="size-3.5 shrink-0 text-muted-foreground" />
+                  </button>
+                ))
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
+  )
+}
+
+// Used by the elective legacy section — stays open after each pick so several
+// faculty can be added in a row. Otherwise the same picker shape as
+// SingleFacultyPicker.
+function MultiFacultyPicker({
   employees,
   assignedIds,
   onAdd,
@@ -623,8 +1095,6 @@ function FacultyPicker({
   const allAdded = !noFaculty && available.length === 0
   const triggerDisabled = disabled || noFaculty || allAdded
 
-  // Anchor the panel to the trigger in viewport coordinates. Prefers below;
-  // flips above when there is more room there.
   const reposition = React.useCallback(() => {
     const t = triggerRef.current
     if (!t) return
@@ -659,7 +1129,6 @@ function FacultyPicker({
     requestAnimationFrame(() => inputRef.current?.focus())
   }, [open, reposition])
 
-  // Keep the panel anchored while the page scrolls or resizes.
   React.useEffect(() => {
     if (!open) return
     const onChange = () => reposition()
@@ -671,7 +1140,6 @@ function FacultyPicker({
     }
   }, [open, reposition])
 
-  // Close on outside mousedown.
   React.useEffect(() => {
     if (!open) return
     function onDown(e: MouseEvent) {
@@ -684,12 +1152,9 @@ function FacultyPicker({
     return () => document.removeEventListener("mousedown", onDown)
   }, [open])
 
-  // The highlighted row, clamped to the current filtered list so it stays
-  // valid as results change — no syncing effect needed.
   const activeRow =
     filtered.length === 0 ? 0 : Math.min(activeIndex, filtered.length - 1)
 
-  // Scroll the highlighted row into view during keyboard navigation.
   React.useEffect(() => {
     if (!open) return
     listRef.current
@@ -709,8 +1174,6 @@ function FacultyPicker({
 
   const commit = (employee: Employee) => {
     onAdd(employee.id)
-    // `available` still includes this employee until the parent re-renders;
-    // a length of 1 means this was the last one — close once it is gone.
     if (available.length <= 1) {
       setOpen(false)
       triggerRef.current?.focus()
