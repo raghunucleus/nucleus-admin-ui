@@ -1467,8 +1467,7 @@ const employeeSchema = z.object({
     .string()
     .trim()
     .max(32, "Too long")
-    .optional()
-    .transform((v) => (v === undefined || v === "" ? "" : v.toUpperCase()))
+    .transform((v) => v.toUpperCase())
     .refine(
       (v) => v === "" || /^[A-Z0-9._-]+$/.test(v),
       "Use letters, numbers, dot, underscore, or dash",
