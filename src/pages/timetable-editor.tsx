@@ -228,6 +228,10 @@ export function TimetableEditorPage() {
     null,
   )
   const [confirmDelete, setConfirmDelete] = React.useState(false)
+  const [confirmPublish, setConfirmPublish] = React.useState<{
+    unassigned: number
+    total: number
+  } | null>(null)
   const [actionBusy, setActionBusy] = React.useState(false)
 
   const load = React.useCallback(async () => {
@@ -473,6 +477,22 @@ export function TimetableEditorPage() {
   const days = WEEKDAYS.filter((d) => timetable.working_days.includes(d.value))
   const periods = [...timetable.periods].sort((a, b) => a.position - b.position)
 
+  // Empty-cell check used to gate publish: count class (non-break) cells in
+  // the weekly grid vs the periods covered by entries (taking span into
+  // account). If any are unassigned, we confirm before publishing.
+  const totalClassCells = days.length * periods.filter((p) => !p.is_break).length
+  const assignedCells = timetable.entries.reduce((sum, e) => sum + e.span, 0)
+  const unassignedCells = Math.max(0, totalClassCells - assignedCells)
+  const doPublish = () =>
+    void runAction(() => publishTimetable(timetable.id), "Timetable published")
+  const handlePublishClick = () => {
+    if (unassignedCells > 0) {
+      setConfirmPublish({ unassigned: unassignedCells, total: totalClassCells })
+      return
+    }
+    doPublish()
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-4 py-2">
       <div className="flex items-center gap-1">{backLink}</div>
@@ -515,12 +535,7 @@ export function TimetableEditorPage() {
             {timetable.status === "draft" && (
               <Button
                 size="sm"
-                onClick={() =>
-                  void runAction(
-                    () => publishTimetable(timetable.id),
-                    "Timetable published",
-                  )
-                }
+                onClick={handlePublishClick}
                 disabled={actionBusy}
               >
                 <Check />
@@ -708,6 +723,33 @@ export function TimetableEditorPage() {
         icon={Trash2}
         loading={actionBusy}
         onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={confirmPublish !== null}
+        onOpenChange={(o) => !o && setConfirmPublish(null)}
+        title="Publish with unassigned periods?"
+        description={
+          confirmPublish ? (
+            <>
+              <span className="font-medium text-foreground">
+                {confirmPublish.unassigned}
+              </span>{" "}
+              of {confirmPublish.total} class period
+              {confirmPublish.total === 1 ? "" : "s"}{" "}
+              {confirmPublish.unassigned === 1 ? "is" : "are"} still empty.
+              Students and faculty will see those slots as unassigned once this
+              timetable goes live.
+            </>
+          ) : null
+        }
+        confirmLabel="Publish anyway"
+        icon={AlertTriangle}
+        loading={actionBusy}
+        onConfirm={() => {
+          setConfirmPublish(null)
+          doPublish()
+        }}
       />
     </div>
   )
