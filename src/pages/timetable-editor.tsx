@@ -47,14 +47,11 @@ import {
   type ProgrammeSemesterSubject,
 } from "@/lib/programme-semester-subjects"
 import {
-  archiveTimetable,
   clearTimetableEntry,
   createTimetableCourse,
   deleteTimetable,
   deleteTimetableCourse,
-  duplicateTimetable,
   getTimetable,
-  publishTimetable,
   saveTimetablePeriods,
   setTimetableCourseFaculty,
   updateTimetable,
@@ -65,22 +62,9 @@ import {
   type TimetableCourse,
   type TimetableEntry,
   type TimetablePeriod,
-  type TimetableStatus,
 } from "@/lib/timetables"
 
 // --- shared helpers ---------------------------------------------------------
-
-const STATUS_LABELS: Record<TimetableStatus, string> = {
-  draft: "Draft",
-  published: "Published",
-  archived: "Archived",
-}
-
-const STATUS_STYLES: Record<TimetableStatus, string> = {
-  draft: "bg-muted text-muted-foreground border border-input",
-  published: "bg-success/10 text-success border border-success/30",
-  archived: "bg-muted text-muted-foreground border border-input",
-}
 
 // Color-coding for the grid — subjects get a stable color by palette order.
 // Opacity-tinted 500-level colors read correctly on both light and dark
@@ -109,7 +93,20 @@ type PaletteItem = {
   isElective: boolean
   inactive: boolean
   courseId: number | null
+  // The group's own teacher(s) for this subject. Real subjects scoped to
+  // a group have at most one; timetable-exclusive courses can have a small
+  // roster.
   faculty: { employee_id: number; employee: Employee }[]
+  // Teachers allocated to this subject in OTHER groups of the same
+  // semester — used by the cell editor as "borrow from another group" so
+  // the admin can cover for an absent primary teacher. Empty for extras
+  // and electives.
+  alternateFaculty: {
+    employee_id: number
+    employee: Employee
+    attendance_group_id: number
+    attendance_group_name: string | null
+  }[]
   colorIndex: number
 }
 
@@ -167,6 +164,12 @@ function buildPalette(
         employee_id: f.employee_id,
         employee: f.employee,
       })),
+      alternateFaculty: (s.alternate_faculty ?? []).map((f) => ({
+        employee_id: f.employee_id,
+        employee: f.employee,
+        attendance_group_id: f.attendance_group_id,
+        attendance_group_name: f.attendance_group?.name ?? null,
+      })),
       colorIndex: 0,
     })
   })
@@ -187,6 +190,9 @@ function buildPalette(
         employee_id: f.employee_id,
         employee: f.employee,
       })),
+      // Timetable-exclusive courses are not group-scoped, so there's
+      // nothing to borrow from elsewhere.
+      alternateFaculty: [],
       colorIndex: 0,
     })
   })
@@ -228,10 +234,6 @@ export function TimetableEditorPage() {
     null,
   )
   const [confirmDelete, setConfirmDelete] = React.useState(false)
-  const [confirmPublish, setConfirmPublish] = React.useState<{
-    unassigned: number
-    total: number
-  } | null>(null)
   const [actionBusy, setActionBusy] = React.useState(false)
 
   const load = React.useCallback(async () => {
@@ -312,7 +314,7 @@ export function TimetableEditorPage() {
     return map
   }, [timetable?.entries])
 
-  const readOnly = timetable?.status === "archived"
+  const readOnly = false
 
   // Splice a single upserted entry into the live grid, dropping any entry on
   // the same day whose period run overlaps it (a wider span absorbs them) —
@@ -353,53 +355,6 @@ export function TimetableEditorPage() {
           }
         : prev,
     )
-  }
-
-  const runAction = async (
-    fn: () => Promise<Timetable>,
-    successMsg: string,
-  ) => {
-    setActionBusy(true)
-    try {
-      const updated = await fn()
-      setTimetable(updated)
-      toast.success(successMsg)
-    } catch (err) {
-      toast.error("Action failed", {
-        description:
-          err instanceof ApiError ? err.message : "Please try again.",
-      })
-    } finally {
-      setActionBusy(false)
-    }
-  }
-
-  const handleDuplicate = async () => {
-    if (!timetable) return
-    setActionBusy(true)
-    try {
-      const copy = await duplicateTimetable(timetable.id, {
-        name: `${timetable.name} (copy)`,
-        effective_from: timetable.effective_from,
-        effective_to: timetable.effective_to,
-      })
-      toast.success("Timetable duplicated", { description: "Opened the copy." })
-      void navigate({
-        to: "/masters/programme-configuration/semester/$programmeSemesterId/timetables/$timetableId",
-        params: {
-          programmeSemesterId: String(programmeSemesterId),
-          timetableId: String(copy.id),
-        },
-        search: { programmeId, admissionYearId },
-      })
-    } catch (err) {
-      toast.error("Couldn't duplicate", {
-        description:
-          err instanceof ApiError ? err.message : "Please try again.",
-      })
-    } finally {
-      setActionBusy(false)
-    }
   }
 
   const handleDelete = async () => {
@@ -477,22 +432,6 @@ export function TimetableEditorPage() {
   const days = WEEKDAYS.filter((d) => timetable.working_days.includes(d.value))
   const periods = [...timetable.periods].sort((a, b) => a.position - b.position)
 
-  // Empty-cell check used to gate publish: count class (non-break) cells in
-  // the weekly grid vs the periods covered by entries (taking span into
-  // account). If any are unassigned, we confirm before publishing.
-  const totalClassCells = days.length * periods.filter((p) => !p.is_break).length
-  const assignedCells = timetable.entries.reduce((sum, e) => sum + e.span, 0)
-  const unassignedCells = Math.max(0, totalClassCells - assignedCells)
-  const doPublish = () =>
-    void runAction(() => publishTimetable(timetable.id), "Timetable published")
-  const handlePublishClick = () => {
-    if (unassignedCells > 0) {
-      setConfirmPublish({ unassigned: unassignedCells, total: totalClassCells })
-      return
-    }
-    doPublish()
-  }
-
   return (
     <div className="mx-auto max-w-6xl space-y-4 py-2">
       <div className="flex items-center gap-1">{backLink}</div>
@@ -505,14 +444,6 @@ export function TimetableEditorPage() {
               <h1 className="text-lg font-semibold tracking-tight">
                 {timetable.name}
               </h1>
-              <span
-                className={cn(
-                  "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-                  STATUS_STYLES[timetable.status],
-                )}
-              >
-                {STATUS_LABELS[timetable.status]}
-              </span>
             </div>
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
               <Users className="size-3.5" />
@@ -520,63 +451,19 @@ export function TimetableEditorPage() {
                 {timetable.attendance_group?.name ?? "Group"}
               </span>
               <span className="opacity-40">·</span>
-              <CalendarRange className="size-3.5" />
-              <span>
-                {fmtDate(timetable.effective_from)}
-                {timetable.effective_to
-                  ? ` → ${fmtDate(timetable.effective_to)}`
-                  : " onwards"}
-              </span>
-              <span className="opacity-40">·</span>
               <span>{days.map((d) => d.short).join(", ")}</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {timetable.status === "draft" && (
-              <Button
-                size="sm"
-                onClick={handlePublishClick}
-                disabled={actionBusy}
-              >
-                <Check />
-                Publish
-              </Button>
-            )}
-            {!readOnly && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setDetailsOpen(true)}
-                disabled={actionBusy}
-              >
-                <Pencil />
-                Edit details
-              </Button>
-            )}
             <Button
               size="sm"
               variant="outline"
-              onClick={() => void handleDuplicate()}
+              onClick={() => setDetailsOpen(true)}
               disabled={actionBusy}
             >
-              <Copy />
-              Duplicate
+              <Pencil />
+              Edit details
             </Button>
-            {timetable.status !== "archived" && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  void runAction(
-                    () => archiveTimetable(timetable.id),
-                    "Timetable archived",
-                  )
-                }
-                disabled={actionBusy}
-              >
-                Archive
-              </Button>
-            )}
             <Button
               size="sm"
               variant="outline"
@@ -588,13 +475,6 @@ export function TimetableEditorPage() {
             </Button>
           </div>
         </div>
-        {readOnly && (
-          <p className="mt-3 flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
-            <AlertTriangle className="size-3.5" />
-            This timetable is archived and read-only. Duplicate it to make
-            changes.
-          </p>
-        )}
       </header>
 
       {/* Period structure ---------------------------------------------- */}
@@ -725,32 +605,6 @@ export function TimetableEditorPage() {
         onConfirm={handleDelete}
       />
 
-      <ConfirmDialog
-        open={confirmPublish !== null}
-        onOpenChange={(o) => !o && setConfirmPublish(null)}
-        title="Publish with unassigned periods?"
-        description={
-          confirmPublish ? (
-            <>
-              <span className="font-medium text-foreground">
-                {confirmPublish.unassigned}
-              </span>{" "}
-              of {confirmPublish.total} class period
-              {confirmPublish.total === 1 ? "" : "s"}{" "}
-              {confirmPublish.unassigned === 1 ? "is" : "are"} still empty.
-              Students and faculty will see those slots as unassigned once this
-              timetable goes live.
-            </>
-          ) : null
-        }
-        confirmLabel="Publish anyway"
-        icon={AlertTriangle}
-        loading={actionBusy}
-        onConfirm={() => {
-          setConfirmPublish(null)
-          doPublish()
-        }}
-      />
     </div>
   )
 }
@@ -1731,8 +1585,9 @@ function CellEditorModal({
     )
   })
 
-  // Picking a subject: keep a still-valid teacher, auto-pick when the subject
-  // has exactly one faculty, otherwise clear it.
+  // Picking a subject: keep a still-valid teacher (primary or borrowed
+  // alternate), auto-pick the primary if exactly one exists, otherwise
+  // clear so the user picks explicitly.
   const pickCourse = (key: string) => {
     setCourseKey(key)
     const item = palette.find((p) => p.key === key)
@@ -1741,8 +1596,12 @@ function CellEditorModal({
       setTeacherId(null)
       return
     }
+    const validIds = new Set<number>([
+      ...item.faculty.map((f) => f.employee_id),
+      ...item.alternateFaculty.map((f) => f.employee_id),
+    ])
     setTeacherId((prev) =>
-      prev !== null && item.faculty.some((f) => f.employee_id === prev)
+      prev !== null && validIds.has(prev)
         ? prev
         : item.faculty.length === 1
           ? item.faculty[0].employee_id
@@ -1917,7 +1776,7 @@ function CellEditorModal({
                 so no single teacher is assigned.
               </span>
             </div>
-          ) : selected.faculty.length === 0 ? (
+          ) : selected.faculty.length === 0 && selected.alternateFaculty.length === 0 ? (
             <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-xs">
               <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
               <span>
@@ -1930,43 +1789,111 @@ function CellEditorModal({
               </span>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-              {selected.faculty.map((f) => {
-                const active = teacherId === f.employee_id
-                return (
-                  <button
-                    key={f.employee_id}
-                    type="button"
-                    onClick={() => setTeacherId(f.employee_id)}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-lg border p-2 text-left transition-colors",
-                      active
-                        ? "border-primary/50 bg-primary/5 ring-1 ring-primary/30"
-                        : "border-input hover:bg-accent",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold text-foreground",
-                        avatarColor(f.employee_id),
-                      )}
-                    >
-                      {initials(f.employee.emp_display_name)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">
-                        {f.employee.emp_display_name}
-                      </span>
-                      <span className="block truncate font-mono text-[11px] text-muted-foreground">
-                        {f.employee.emp_code}
-                      </span>
-                    </span>
-                    {active && (
-                      <Check className="size-4 shrink-0 text-primary" />
-                    )}
-                  </button>
-                )
-              })}
+            <div className="space-y-3">
+              {selected.faculty.length > 0 && (
+                <div>
+                  <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    This group's teacher
+                  </div>
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                    {selected.faculty.map((f) => {
+                      const active = teacherId === f.employee_id
+                      return (
+                        <button
+                          key={f.employee_id}
+                          type="button"
+                          onClick={() => setTeacherId(f.employee_id)}
+                          className={cn(
+                            "flex items-center gap-2.5 rounded-lg border p-2 text-left transition-colors",
+                            active
+                              ? "border-primary/50 bg-primary/5 ring-1 ring-primary/30"
+                              : "border-input hover:bg-accent",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold text-foreground",
+                              avatarColor(f.employee_id),
+                            )}
+                          >
+                            {initials(f.employee.emp_display_name)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">
+                              {f.employee.emp_display_name}
+                            </span>
+                            <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                              {f.employee.emp_code}
+                            </span>
+                          </span>
+                          {active && (
+                            <Check className="size-4 shrink-0 text-primary" />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              {selected.alternateFaculty.length > 0 && (
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Borrow from another group
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Teaches the same subject for another group — use only if
+                      the primary is unavailable.
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                    {selected.alternateFaculty.map((f) => {
+                      const active = teacherId === f.employee_id
+                      return (
+                        <button
+                          key={f.employee_id}
+                          type="button"
+                          onClick={() => setTeacherId(f.employee_id)}
+                          className={cn(
+                            "flex items-center gap-2.5 rounded-lg border p-2 text-left transition-colors",
+                            active
+                              ? "border-amber-500/50 bg-amber-500/5 ring-1 ring-amber-500/30"
+                              : "border-dashed border-input hover:bg-accent",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold text-foreground",
+                              avatarColor(f.employee_id),
+                            )}
+                          >
+                            {initials(f.employee.emp_display_name)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">
+                              {f.employee.emp_display_name}
+                            </span>
+                            <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                              {f.employee.emp_code}
+                              {f.attendance_group_name && (
+                                <>
+                                  {" · "}
+                                  <span className="italic">
+                                    from {f.attendance_group_name}
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          </span>
+                          {active && (
+                            <Check className="size-4 shrink-0 text-amber-600" />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -2018,16 +1945,12 @@ function EditDetailsSheet({
   onSaved: (tt: Timetable) => void
 }) {
   const [name, setName] = React.useState(timetable.name)
-  const [from, setFrom] = React.useState(timetable.effective_from)
-  const [to, setTo] = React.useState(timetable.effective_to ?? "")
   const [days, setDays] = React.useState<number[]>(timetable.working_days)
   const [busy, setBusy] = React.useState(false)
 
   React.useEffect(() => {
     if (open) {
       setName(timetable.name)
-      setFrom(timetable.effective_from)
-      setTo(timetable.effective_to ?? "")
       setDays(timetable.working_days)
       setBusy(false)
     }
@@ -2048,8 +1971,7 @@ function EditDetailsSheet({
       timetable.entries.some((e) => e.day_of_week === d.value),
   )
 
-  const canSave =
-    name.trim().length > 0 && from.length > 0 && days.length > 0 && !busy
+  const canSave = name.trim().length > 0 && days.length > 0 && !busy
 
   const save = async () => {
     if (!canSave) return
@@ -2057,8 +1979,6 @@ function EditDetailsSheet({
     try {
       const updated = await updateTimetable(timetable.id, {
         name: name.trim(),
-        effective_from: from,
-        effective_to: to ? to : null,
         working_days: days,
       })
       onSaved(updated)
@@ -2078,7 +1998,8 @@ function EditDetailsSheet({
         <SheetHeader>
           <SheetTitle>Edit timetable details</SheetTitle>
           <SheetDescription>
-            Name, effective dates and working days.
+            Name and working days. The semester's planned dates control the
+            calendar window.
           </SheetDescription>
         </SheetHeader>
         <SheetBody className="space-y-5">
@@ -2090,21 +2011,6 @@ function EditDetailsSheet({
               onChange={(e) => setName(e.target.value)}
               maxLength={96}
             />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Effective from</Label>
-              <DatePicker value={from} onChange={setFrom} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Effective to</Label>
-              <DatePicker
-                value={to}
-                onChange={setTo}
-                allowClear
-                placeholder="Open-ended"
-              />
-            </div>
           </div>
           <div className="space-y-1.5">
             <Label>Working days</Label>

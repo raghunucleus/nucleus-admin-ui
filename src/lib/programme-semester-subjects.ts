@@ -29,6 +29,15 @@ export type ProgrammeSemesterSubjectSlotType =
   | "honors"
   | "minors"
 
+/**
+ * Cohort scope for a slot row. 'group' keeps each attendance group's cohort
+ * separate even when (option, teacher) matches elsewhere — student-friendly
+ * for small cohorts. 'programme_semester' merges identical cohorts across
+ * groups into one — the common shape for cross-group electives. Real-subject
+ * rows always serialise as 'group' (the server forces this).
+ */
+export type ProgrammeSemesterSubjectCohortScope = "group" | "programme_semester"
+
 export type ProgrammeSemesterSubject = {
   id: number
   programme_semester_id: number
@@ -38,6 +47,7 @@ export type ProgrammeSemesterSubject = {
   placeholder_name: string | null
   /** Set on slot rows (subject_id null); null on real-subject rows. */
   slot_type: ProgrammeSemesterSubjectSlotType | null
+  cohort_scope: ProgrammeSemesterSubjectCohortScope
   /** PG returns numeric as a string to avoid precision loss; parse with Number() for display. */
   credits: string
   /** Candidate subjects for slot rows. Empty for real-subject rows. */
@@ -49,6 +59,12 @@ export type ProgrammeSemesterSubject = {
    * rows and unassigned cells.
    */
   faculty?: ProgrammeSemesterSubjectGroupFacultyCell[]
+  /**
+   * Teachers allocated to this subject for OTHER groups in the same
+   * programme semester — surfaced as borrow-from-another-group options in
+   * the cell editor.
+   */
+  alternate_faculty?: ProgrammeSemesterSubjectGroupFacultyCell[]
   is_active: boolean
   created_at: string
   updated_at: string
@@ -62,6 +78,8 @@ export type ProgrammeSemesterSubjectGroupFacultyCell = {
   id: number
   programme_semester_subject_id: number
   attendance_group_id: number
+  /** Hydrated by the list endpoint so the UI can label borrowed teachers. */
+  attendance_group?: AttendanceGroup
   employee_id: number
   employee: Employee
 }
@@ -82,6 +100,8 @@ export type CreateProgrammeSemesterSubjectInput = {
   placeholder_name?: string
   /** Required when this row is a slot. */
   slot_type?: ProgrammeSemesterSubjectSlotType
+  /** Slot-only; defaults to 'group' server-side. */
+  cohort_scope?: ProgrammeSemesterSubjectCohortScope
   /** Required when this row is a slot. */
   option_subject_ids?: number[]
   credits: number
@@ -91,6 +111,7 @@ export type UpdateProgrammeSemesterSubjectInput = {
   subject_id?: number | null
   placeholder_name?: string | null
   slot_type?: ProgrammeSemesterSubjectSlotType | null
+  cohort_scope?: ProgrammeSemesterSubjectCohortScope
   credits?: number
   /** Replaces the candidate pool wholesale when provided. */
   option_subject_ids?: number[]

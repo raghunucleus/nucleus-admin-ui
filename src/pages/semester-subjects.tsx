@@ -588,6 +588,12 @@ function SubjectEntryForm({
   const [credits, setCredits] = React.useState<string>(
     entry ? Number(entry.credits).toFixed(1) : "3.0",
   )
+  // Slot-only — server forces 'group' for real subjects. Default new slots to
+  // 'programme_semester' because cross-group cohorts are the common case for
+  // Indian engineering electives.
+  const [cohortScope, setCohortScope] = React.useState<
+    "group" | "programme_semester"
+  >(entry?.cohort_scope ?? "programme_semester")
   const [submitting, setSubmitting] = React.useState(false)
 
   // Subjects already configured under THIS semester (excluding the entry
@@ -665,6 +671,7 @@ function SubjectEntryForm({
           slot_type: isSlot
             ? (kind as ProgrammeSemesterSubjectSlotType)
             : undefined,
+          cohort_scope: isSlot ? cohortScope : undefined,
           option_subject_ids: isSlot ? optionIds : undefined,
           credits: creditsNumber,
         })
@@ -680,6 +687,7 @@ function SubjectEntryForm({
           // send the current set so the server keeps it in sync with the
           // form's snapshot.
           option_subject_ids: isSlot ? optionIds : undefined,
+          cohort_scope: isSlot ? cohortScope : undefined,
           credits: creditsNumber,
         })
         toast.success("Subject updated.")
@@ -800,6 +808,31 @@ function SubjectEntryForm({
                   Pick at least one subject to offer.
                 </p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">
+                Cohort scope
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <CohortScopeCard
+                  active={cohortScope === "programme_semester"}
+                  title="Cross-group"
+                  description="Students from every attendance group taking the same (subject, teacher) merge into one cohort. Common for open electives."
+                  onClick={() => setCohortScope("programme_semester")}
+                />
+                <CohortScopeCard
+                  active={cohortScope === "group"}
+                  title="Per-group"
+                  description="Each attendance group runs its own cohort even when (subject, teacher) match elsewhere. Use for honors/minors that stay sectioned."
+                  onClick={() => setCohortScope("group")}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Drives how sessions are seeded for this slot. Can be changed
+                later, but already-seeded sessions for an ongoing semester
+                won't reshape automatically.
+              </p>
             </div>
           </>
         )}
@@ -1002,5 +1035,34 @@ function SubjectsSkeleton() {
         </div>
       </div>
     </>
+  )
+}
+
+function CohortScopeCard({
+  active,
+  title,
+  description,
+  onClick,
+}: {
+  active: boolean
+  title: string
+  description: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "rounded-md border p-3 text-left text-sm transition-colors",
+        active
+          ? "border-primary/60 bg-primary/5 text-foreground"
+          : "border-input bg-background text-muted-foreground hover:bg-accent/40",
+      )}
+    >
+      <div className="font-medium">{title}</div>
+      <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>
+    </button>
   )
 }

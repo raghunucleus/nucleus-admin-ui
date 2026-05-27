@@ -15,6 +15,13 @@ export type ProgrammeSemester = {
   semester: Semester
   is_active: boolean
   status: ProgrammeSemesterStatus
+  /**
+   * Academic-calendar dates. Used by the session seeder as the hard
+   * upper bound — sessions never seed past planned_end_date. Both
+   * nullable; admins set them via the "Set dates" action.
+   */
+  planned_start_date: string | null
+  planned_end_date: string | null
   created_at: string
   updated_at: string
 }
@@ -88,6 +95,14 @@ export async function listProgrammeSemesters(
   )
 }
 
+export async function getProgrammeSemester(
+  id: number,
+): Promise<ProgrammeSemester> {
+  return api<ProgrammeSemester>(`/admin/programme-semesters/${id}`, {
+    method: "GET",
+  })
+}
+
 export async function bulkCreateProgrammeSemesters(
   input: BulkCreateProgrammeSemestersInput,
 ): Promise<BulkCreateProgrammeSemestersResult> {
@@ -129,6 +144,28 @@ export async function completeProgrammeSemester(
 ): Promise<ProgrammeSemester> {
   return api<ProgrammeSemester>(
     `/admin/programme-semesters/${id}/complete`,
+    { method: "POST" },
+  )
+}
+
+export async function setProgrammeSemesterDates(
+  id: number,
+  input: {
+    planned_start_date: string | null
+    planned_end_date: string | null
+  },
+): Promise<ProgrammeSemester> {
+  return api<ProgrammeSemester>(
+    `/admin/programme-semesters/${id}/dates`,
+    { method: "POST", body: input },
+  )
+}
+
+export async function trimProgrammeSemesterSessions(
+  id: number,
+): Promise<{ deleted: number; cancelled: number }> {
+  return api<{ deleted: number; cancelled: number }>(
+    `/admin/programme-semesters/${id}/trim-sessions`,
     { method: "POST" },
   )
 }

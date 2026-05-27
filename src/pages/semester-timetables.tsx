@@ -4,19 +4,20 @@ import { toast } from "sonner"
 import {
   AlertTriangle,
   ArrowLeft,
+  CalendarCheck,
   CalendarClock,
   CalendarPlus,
-  CalendarRange,
   ChevronRight,
   Copy,
+  FileSpreadsheet,
   Layers,
+  Star,
   Trash2,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -37,238 +38,128 @@ import {
   type AttendanceGroup,
 } from "@/lib/attendance-groups"
 import {
-  listProgrammeSemesters,
+  getProgrammeSemester,
   type ProgrammeSemester,
 } from "@/lib/programme-semesters"
 import {
+  cloneTimetable,
   createTimetable,
   deleteTimetable,
-  duplicateTimetable,
   listTimetables,
+  setDefaultTimetable,
   WEEKDAYS,
   type TimetableListItem,
 } from "@/lib/timetables"
 
-// A timetable's badge — draft/archived keep their status word; a published
-// timetable shows where it sits in time (derived from its effective dates):
-// Active now, Next up, Upcoming or Ended.
-type RowBadge = {
-  label: string
-  className: string
-  title: string
-  dot?: boolean
-}
-
-function rowBadge(t: TimetableListItem, isNext: boolean): RowBadge {
-  if (t.status === "draft") {
-    return {
-      label: "Draft",
-      className: "bg-muted text-muted-foreground border border-input",
-      title: "Not published yet — not in effect for the group.",
-    }
-  }
-  if (t.status === "archived") {
-    return {
-      label: "Archived",
-      className:
-        "bg-muted text-muted-foreground border border-input opacity-80",
-      title: "Archived and read-only.",
-    }
-  }
-  const today = todayIso()
-  if (t.effective_from > today) {
-    return {
-      label: isNext ? "Next up" : "Upcoming",
-      className: "bg-primary/10 text-primary border border-primary/30",
-      title: isNext
-        ? "The next timetable to take effect for this group."
-        : "A future-dated timetable, planned ahead.",
-    }
-  }
-  if (t.effective_to !== null && t.effective_to < today) {
-    return {
-      label: "Ended",
-      className: "bg-warning/15 text-warning border border-warning/40",
-      title: "Its effective dates have passed — you can archive it.",
-    }
-  }
-  return {
-    label: "Active now",
-    className: "bg-success/10 text-success border border-success/30",
-    title: "In effect today — the group's current schedule.",
-    dot: true,
-  }
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`)
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString(undefined, {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
-}
-
-function effectiveRange(from: string, to: string | null): string {
-  return to ? `${formatDate(from)} → ${formatDate(to)}` : `${formatDate(from)} onwards`
-}
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-// Dedicated full-screen for the Timetable section of a semester's settings.
-// Lists every timetable of the semester, grouped by attendance group, and
-// flags groups that still lack a published schedule.
+// Per attendance group, the admin can save multiple timetable templates
+// ("Regular week", "Exam week", ...). The page shows each group with its
+// templates underneath plus an "Add template" button. The Schedule view
+// then lets the group incharge pick which template to publish per week.
 export function SemesterTimetablesPage() {
-  const navigate = useNavigate()
-  const params = useParams({ strict: false }) as {
-    programmeSemesterId?: string
-  }
+  const params = useParams({ strict: false }) as { programmeSemesterId?: string }
   const search = useSearch({ strict: false }) as {
     programmeId?: number
     admissionYearId?: number
   }
+  const navigate = useNavigate()
   const id = Number(params.programmeSemesterId)
-  const { programmeId, admissionYearId } = search
+  const programmeId = search.programmeId
+  const admissionYearId = search.admissionYearId
 
   const [semester, setSemester] = React.useState<ProgrammeSemester | null>(null)
   const [groups, setGroups] = React.useState<AttendanceGroup[]>([])
   const [timetables, setTimetables] = React.useState<TimetableListItem[]>([])
   const [shellLoading, setShellLoading] = React.useState(true)
   const [listLoading, setListLoading] = React.useState(true)
-  const [failed, setFailed] = React.useState(false)
-
-  const [createOpen, setCreateOpen] = React.useState(false)
+  const [shellFailed, setShellFailed] = React.useState(false)
+  const [createFor, setCreateFor] = React.useState<AttendanceGroup | null>(null)
   const [deleting, setDeleting] = React.useState<TimetableListItem | null>(null)
   const [deleteBusy, setDeleteBusy] = React.useState(false)
-  const [duplicatingId, setDuplicatingId] = React.useState<number | null>(null)
+  const [cloning, setCloning] = React.useState<TimetableListItem | null>(null)
+  const [settingDefaultId, setSettingDefaultId] = React.useState<number | null>(
+    null,
+  )
 
-  const loadShell = React.useCallback(async () => {
-    if (
-      !Number.isInteger(id) ||
-      id <= 0 ||
-      programmeId === undefined ||
-      admissionYearId === undefined
-    ) {
-      setShellLoading(false)
-      setFailed(true)
-      return
-    }
-    setShellLoading(true)
-    setFailed(false)
+  const handleSetDefault = async (t: TimetableListItem) => {
+    setSettingDefaultId(t.id)
     try {
-      const [semRes, groupRes] = await Promise.all([
-        listProgrammeSemesters({
-          programmeId,
-          admissionYearId,
-          pageSize: 100,
-          sortBy: "semester",
-          sortOrder: "asc",
-        }),
-        listAttendanceGroups(programmeId, admissionYearId),
-      ])
-      const row = semRes.rows.find((r) => r.id === id) ?? null
-      if (!row) {
-        setFailed(true)
-        return
-      }
-      setSemester(row)
-      setGroups(groupRes)
-    } catch {
-      setFailed(true)
-    } finally {
-      setShellLoading(false)
-    }
-  }, [id, programmeId, admissionYearId])
-
-  React.useEffect(() => {
-    void loadShell()
-  }, [loadShell])
-
-  const loadList = React.useCallback(async () => {
-    if (!Number.isInteger(id) || id <= 0) {
-      setListLoading(false)
-      return
-    }
-    setListLoading(true)
-    try {
-      setTimetables(await listTimetables(id))
+      await setDefaultTimetable(t.id)
+      toast.success(`"${t.name}" is now the default for this group.`)
+      await loadTimetables()
     } catch (err) {
-      toast.error("Couldn't load timetables", {
+      toast.error("Couldn't set default", {
         description:
           err instanceof ApiError ? err.message : "Please try again.",
       })
+    } finally {
+      setSettingDefaultId(null)
+    }
+  }
+
+  React.useEffect(() => {
+    let cancelled = false
+    setShellLoading(true)
+    setShellFailed(false)
+    void (async () => {
+      try {
+        const semRow = await getProgrammeSemester(id)
+        if (cancelled) return
+        setSemester(semRow)
+        if (programmeId !== undefined && admissionYearId !== undefined) {
+          const g = await listAttendanceGroups(programmeId, admissionYearId)
+          if (!cancelled) setGroups(g)
+        }
+      } catch {
+        if (!cancelled) setShellFailed(true)
+      } finally {
+        if (!cancelled) setShellLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [id, programmeId, admissionYearId])
+
+  const loadTimetables = React.useCallback(async () => {
+    setListLoading(true)
+    try {
+      const list = await listTimetables(id)
+      setTimetables(list)
+    } catch {
+      // Empty list is recoverable from refresh.
     } finally {
       setListLoading(false)
     }
   }, [id])
 
   React.useEffect(() => {
-    void loadList()
-  }, [loadList])
+    if (!shellLoading && semester) void loadTimetables()
+  }, [shellLoading, semester, loadTimetables])
 
-  // Timetables bucketed by attendance group, each bucket date-ordered.
   const byGroup = React.useMemo(() => {
     const map = new Map<number, TimetableListItem[]>()
     for (const t of timetables) {
-      const arr = map.get(t.attendance_group_id) ?? []
-      arr.push(t)
-      map.set(t.attendance_group_id, arr)
+      const bucket = map.get(t.attendance_group_id) ?? []
+      bucket.push(t)
+      map.set(t.attendance_group_id, bucket)
+    }
+    // Stable order within each group.
+    for (const list of map.values()) {
+      list.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id)
     }
     return map
   }, [timetables])
-
-  const uncovered = React.useMemo(
-    () =>
-      groups.filter(
-        (g) =>
-          !(byGroup.get(g.id) ?? []).some((t) => t.status === "published"),
-      ),
-    [groups, byGroup],
-  )
-
-  const handleDuplicate = async (t: TimetableListItem) => {
-    setDuplicatingId(t.id)
-    try {
-      const copy = await duplicateTimetable(t.id, {
-        name: `${t.name} (copy)`,
-        effective_from: t.effective_from,
-        effective_to: t.effective_to,
-      })
-      toast.success("Timetable duplicated", {
-        description: "Opened the new draft copy.",
-      })
-      void navigate({
-        to: "/masters/programme-configuration/semester/$programmeSemesterId/timetables/$timetableId",
-        params: {
-          programmeSemesterId: String(id),
-          timetableId: String(copy.id),
-        },
-        search: { programmeId, admissionYearId },
-      })
-    } catch (err) {
-      toast.error("Couldn't duplicate timetable", {
-        description:
-          err instanceof ApiError ? err.message : "Please try again.",
-      })
-    } finally {
-      setDuplicatingId(null)
-    }
-  }
 
   const handleDelete = async () => {
     if (!deleting) return
     setDeleteBusy(true)
     try {
       await deleteTimetable(deleting.id)
-      toast.success("Timetable deleted")
+      toast.success(`Removed ${deleting.name}.`)
       setDeleting(null)
-      void loadList()
+      await loadTimetables()
     } catch (err) {
-      toast.error("Couldn't delete timetable", {
+      toast.error("Couldn't delete template", {
         description:
           err instanceof ApiError ? err.message : "Please try again.",
       })
@@ -280,6 +171,17 @@ export function SemesterTimetablesPage() {
   const openEditor = (timetableId: number) => {
     void navigate({
       to: "/masters/programme-configuration/semester/$programmeSemesterId/timetables/$timetableId",
+      params: { programmeSemesterId: String(id), timetableId: String(timetableId) },
+      search: { programmeId, admissionYearId },
+    })
+  }
+
+  const openSchedule = (timetableId: number) => {
+    // The Schedule page is group-level — it just needs any of the group's
+    // templates as the URL anchor to derive the group + load all peer
+    // templates for the picker.
+    void navigate({
+      to: "/masters/programme-configuration/semester/$programmeSemesterId/timetables/$timetableId/schedule",
       params: { programmeSemesterId: String(id), timetableId: String(timetableId) },
       search: { programmeId, admissionYearId },
     })
@@ -301,7 +203,7 @@ export function SemesterTimetablesPage() {
 
       {shellLoading ? (
         <ListSkeleton />
-      ) : failed || !semester ? (
+      ) : shellFailed || !semester ? (
         <div className="rounded-lg border bg-card text-card-foreground">
           <EmptyState
             icon={AlertTriangle}
@@ -321,128 +223,116 @@ export function SemesterTimetablesPage() {
         </div>
       ) : (
         <>
-          <header className="rounded-lg border bg-card px-5 py-4 text-card-foreground shadow-xs">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 space-y-1.5">
-                <h1 className="text-lg font-semibold tracking-tight">
-                  Timetables
-                </h1>
-                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    Sem {semester.semester.sem_number}
-                  </span>
-                  <span className="opacity-40">·</span>
-                  <span className="font-medium text-foreground">
-                    {semester.programme.code}
-                  </span>
-                  <span className="opacity-40">·</span>
-                  <span className="tabular-nums">
-                    {semester.admission_year.display_year}
-                  </span>
-                  <span className="opacity-40">·</span>
-                  <span className="font-mono text-foreground">
-                    {semester.semester.code}
-                  </span>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => setCreateOpen(true)}
-                disabled={groups.length === 0}
-              >
-                <CalendarPlus />
-                New timetable
-              </Button>
+          <header className="rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
+            <div className="flex items-center gap-2">
+              <CalendarClock className="size-4 text-muted-foreground" />
+              <h1 className="text-base font-semibold tracking-tight">
+                Timetables — {semester.programme.code} ·{" "}
+                {semester.semester.code} ·{" "}
+                {semester.admission_year.display_year}
+              </h1>
             </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Each attendance group can save several templates (regular,
+              exam-week, special-event…). The group incharge picks which
+              template applies when publishing a given week.
+            </p>
           </header>
 
-          {groups.length === 0 ? (
-            <div className="rounded-lg border bg-card text-card-foreground shadow-xs">
+          {listLoading ? (
+            <ListSkeleton />
+          ) : groups.length === 0 ? (
+            <div className="rounded-lg border bg-card text-card-foreground">
               <EmptyState
                 icon={Layers}
-                title="No attendance groups yet"
-                description="A timetable belongs to an attendance group. Create the batch's attendance groups first."
+                title="No attendance groups in this batch yet"
+                description="Create attendance groups first — every timetable belongs to one group."
                 action={
                   <Button asChild size="sm" variant="outline">
                     <Link
                       to="/masters/programme-configuration/attendance-groups"
                       search={{ programmeId, admissionYearId }}
                     >
-                      Configure attendance groups
+                      Manage attendance groups
                     </Link>
                   </Button>
                 }
               />
             </div>
           ) : (
-            <>
-              {uncovered.length > 0 && !listLoading && (
-                <div className="flex items-start gap-2.5 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
-                  <p className="text-foreground">
-                    No published timetable yet for{" "}
-                    <span className="font-medium">
-                      {uncovered.map((g) => g.name).join(", ")}
-                    </span>
-                    . Create one and publish it so the group has an active
-                    schedule.
-                  </p>
-                </div>
-              )}
-
-              {listLoading ? (
-                <ListSkeleton />
-              ) : (
-                <div className="space-y-4">
-                  {groups.map((g) => (
-                    <GroupSection
-                      key={g.id}
-                      group={g}
-                      timetables={byGroup.get(g.id) ?? []}
-                      duplicatingId={duplicatingId}
-                      onOpen={openEditor}
-                      onDuplicate={handleDuplicate}
-                      onDelete={setDeleting}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
+            <div className="space-y-3">
+              {groups.map((g) => (
+                <GroupSection
+                  key={g.id}
+                  group={g}
+                  templates={byGroup.get(g.id) ?? []}
+                  settingDefaultId={settingDefaultId}
+                  onAdd={() => setCreateFor(g)}
+                  onOpen={openEditor}
+                  onSchedule={openSchedule}
+                  onClone={(t) => setCloning(t)}
+                  onSetDefault={(t) => void handleSetDefault(t)}
+                  onDelete={(t) => setDeleting(t)}
+                />
+              ))}
+            </div>
           )}
         </>
       )}
 
       {semester && (
         <CreateTimetableSheet
-          open={createOpen}
-          onOpenChange={setCreateOpen}
+          open={createFor !== null}
+          onOpenChange={(o) => {
+            if (!o) setCreateFor(null)
+          }}
           programmeSemesterId={id}
-          groups={groups}
+          group={createFor}
+          existingNames={
+            createFor ? (byGroup.get(createFor.id) ?? []).map((t) => t.name) : []
+          }
           onCreated={(t) => {
-            setCreateOpen(false)
+            setCreateFor(null)
             openEditor(t.id)
           }}
         />
       )}
 
+      <CloneTimetableSheet
+        open={cloning !== null}
+        onOpenChange={(o) => {
+          if (!o) setCloning(null)
+        }}
+        source={cloning}
+        existingNames={
+          cloning
+            ? (byGroup.get(cloning.attendance_group_id) ?? []).map((t) => t.name)
+            : []
+        }
+        onCloned={async (created) => {
+          setCloning(null)
+          await loadTimetables()
+          openEditor(created.id)
+        }}
+      />
+
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(o) => !o && setDeleting(null)}
-        title="Delete this timetable?"
+        title="Delete this template?"
         description={
           deleting ? (
             <>
               <span className="font-medium text-foreground">
                 {deleting.name}
               </span>{" "}
-              and all its periods, courses and scheduled classes will be
-              permanently removed. This can't be undone.
+              and its periods, courses and cells will be removed. Existing
+              class_sessions stay so attendance history is preserved.
             </>
-          ) : undefined
+          ) : null
         }
-        confirmLabel="Delete timetable"
+        confirmLabel="Delete"
         tone="destructive"
-        icon={Trash2}
         loading={deleteBusy}
         onConfirm={handleDelete}
       />
@@ -450,143 +340,170 @@ export function SemesterTimetablesPage() {
   )
 }
 
-// One attendance group and its timetables, laid out as a date-ordered
-// timeline so current and future revisions read top-to-bottom.
 function GroupSection({
   group,
-  timetables,
-  duplicatingId,
+  templates,
+  settingDefaultId,
+  onAdd,
   onOpen,
-  onDuplicate,
+  onSchedule,
+  onClone,
+  onSetDefault,
   onDelete,
 }: {
   group: AttendanceGroup
-  timetables: TimetableListItem[]
-  duplicatingId: number | null
+  templates: TimetableListItem[]
+  settingDefaultId: number | null
+  onAdd: () => void
   onOpen: (id: number) => void
-  onDuplicate: (t: TimetableListItem) => void
+  onSchedule: (id: number) => void
+  onClone: (t: TimetableListItem) => void
+  onSetDefault: (t: TimetableListItem) => void
   onDelete: (t: TimetableListItem) => void
 }) {
-  // The soonest published, future-dated timetable — it gets the "Next up"
-  // badge; later future-dated ones are just "Upcoming".
-  const nextId = React.useMemo(() => {
-    const today = todayIso()
-    const upcoming = timetables
-      .filter((t) => t.status === "published" && t.effective_from > today)
-      .sort((a, b) => a.effective_from.localeCompare(b.effective_from))
-    return upcoming[0]?.id ?? null
-  }, [timetables])
-
   return (
     <section className="rounded-lg border bg-card text-card-foreground shadow-xs">
       <div className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2.5">
         <Layers className="size-4 text-muted-foreground" />
-        <span className="text-sm font-semibold">{group.name}</span>
-        <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-          {timetables.length} timetable{timetables.length === 1 ? "" : "s"}
-        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-semibold">{group.name}</span>
+            <span className="text-xs text-muted-foreground">{group.code}</span>
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {templates.length} template{templates.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          {templates.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onSchedule(templates[0].id)}
+              title="Open the week strip for this group"
+            >
+              <CalendarCheck className="size-4" />
+              Schedule
+            </Button>
+          )}
+          <Button size="sm" onClick={onAdd}>
+            <CalendarPlus className="size-4" />
+            Add template
+          </Button>
+        </div>
       </div>
-      {timetables.length === 0 ? (
+      {templates.length === 0 ? (
         <p className="px-4 py-5 text-center text-xs italic text-muted-foreground">
-          No timetable for this group yet.
+          No templates yet — add one to start placing classes.
         </p>
       ) : (
-        <ol className="divide-y">
-          {timetables.map((t) => (
-            <li key={t.id}>
-              <TimetableRow
-                timetable={t}
-                isNext={t.id === nextId}
-                duplicating={duplicatingId === t.id}
-                onOpen={() => onOpen(t.id)}
-                onDuplicate={() => onDuplicate(t)}
-                onDelete={() => onDelete(t)}
-              />
-            </li>
+        <ul className="divide-y">
+          {templates.map((t) => (
+            <TemplateRow
+              key={t.id}
+              timetable={t}
+              busySettingDefault={settingDefaultId === t.id}
+              onOpen={() => onOpen(t.id)}
+              onClone={() => onClone(t)}
+              onSetDefault={() => onSetDefault(t)}
+              onDelete={() => onDelete(t)}
+            />
           ))}
-        </ol>
+        </ul>
       )}
     </section>
   )
 }
 
-function TimetableRow({
-  timetable: t,
-  isNext,
-  duplicating,
+function TemplateRow({
+  timetable,
+  busySettingDefault,
   onOpen,
-  onDuplicate,
+  onClone,
+  onSetDefault,
   onDelete,
 }: {
   timetable: TimetableListItem
-  isNext: boolean
-  duplicating: boolean
+  busySettingDefault: boolean
   onOpen: () => void
-  onDuplicate: () => void
+  onClone: () => void
+  onSetDefault: () => void
   onDelete: () => void
 }) {
-  const days = WEEKDAYS.filter((d) => t.working_days.includes(d.value))
-  const badge = rowBadge(t, isNext)
+  const days = WEEKDAYS.filter((d) => timetable.working_days.includes(d.value))
   return (
-    <div className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/30">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"
-        aria-label={`Open ${t.name}`}
+    <li
+      className={cn(
+        "group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/20",
+        timetable.is_default && "bg-primary/[0.02]",
+      )}
+    >
+      <div
+        className={cn(
+          "grid size-9 shrink-0 place-items-center rounded-lg",
+          timetable.is_default
+            ? "bg-primary/15 text-primary"
+            : "bg-primary/10 text-primary",
+        )}
       >
-        <CalendarClock className="size-4" />
-      </button>
+        <FileSpreadsheet className="size-4" />
+      </div>
       <button
         type="button"
         onClick={onOpen}
         className="min-w-0 flex-1 text-left"
       >
         <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-sm font-medium">{t.name}</span>
-          <span
-            title={badge.title}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-              badge.className,
-            )}
-          >
-            {badge.dot && (
-              <span className="size-1.5 rounded-full bg-success" />
-            )}
-            {badge.label}
-          </span>
+          <span className="truncate text-sm font-medium">{timetable.name}</span>
+          {timetable.is_default && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+              <Star className="size-3 fill-primary" />
+              Default
+            </span>
+          )}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-          <CalendarRange className="size-3.5" />
-          <span>{effectiveRange(t.effective_from, t.effective_to)}</span>
-          <span className="opacity-40">·</span>
           <span className="tabular-nums">
-            {t.teaching_period_count} period
-            {t.teaching_period_count === 1 ? "" : "s"}/day
+            {timetable.teaching_period_count} period
+            {timetable.teaching_period_count === 1 ? "" : "s"}/day
           </span>
           <span className="opacity-40">·</span>
           <span>{days.map((d) => d.short).join(", ") || "No days"}</span>
           <span className="opacity-40">·</span>
-          <span className="tabular-nums">{t.entry_count} classes placed</span>
+          <span className="tabular-nums">
+            {timetable.entry_count} cell{timetable.entry_count === 1 ? "" : "s"} placed
+          </span>
         </div>
       </button>
       <div className="flex shrink-0 items-center gap-1">
+        {!timetable.is_default && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onSetDefault}
+            disabled={busySettingDefault}
+            title="Make this the group's default template"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Star className="size-4" />
+            <span className="sr-only">Set as default</span>
+          </Button>
+        )}
         <Button
           size="sm"
           variant="ghost"
-          onClick={onDuplicate}
-          disabled={duplicating}
-          title="Duplicate"
+          onClick={onClone}
+          title="Clone this template"
+          className="text-muted-foreground hover:text-foreground"
         >
           <Copy className="size-4" />
-          <span className="sr-only">Duplicate</span>
+          <span className="sr-only">Clone</span>
         </Button>
         <Button
           size="sm"
           variant="ghost"
           onClick={onDelete}
-          title="Delete"
+          title="Delete template"
           className="text-muted-foreground hover:text-destructive"
         >
           <Trash2 className="size-4" />
@@ -597,27 +514,291 @@ function TimetableRow({
           <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" />
         </Button>
       </div>
+    </li>
+  )
+}
+
+function ListSkeleton() {
+  return (
+    <div className="space-y-2">
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} className="h-32 w-full" />
+      ))}
     </div>
   )
 }
 
-// --- New timetable sheet ----------------------------------------------------
+// --- create sheet ----------------------------------------------------------
+
+function CreateTimetableSheet({
+  open,
+  onOpenChange,
+  programmeSemesterId,
+  group,
+  existingNames,
+  onCreated,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  programmeSemesterId: number
+  group: AttendanceGroup | null
+  existingNames: string[]
+  onCreated: (t: { id: number }) => void
+}) {
+  const [name, setName] = React.useState("")
+  const [days, setDays] = React.useState<number[]>([1, 2, 3, 4, 5])
+  const [count, setCount] = React.useState(6)
+  const [start, setStart] = React.useState("09:00")
+  const [length, setLength] = React.useState(50)
+  const [breakAfter, setBreakAfter] = React.useState(3)
+  const [breakMin, setBreakMin] = React.useState(40)
+  const [busy, setBusy] = React.useState(false)
+
+  React.useEffect(() => {
+    if (open) {
+      const suggested =
+        existingNames.length === 0
+          ? "Regular week"
+          : `Template ${existingNames.length + 1}`
+      setName(suggested)
+      setDays([1, 2, 3, 4, 5])
+      setCount(6)
+      setStart("09:00")
+      setLength(50)
+      setBreakAfter(3)
+      setBreakMin(40)
+      setBusy(false)
+    }
+  }, [open, existingNames])
+
+  const periods = React.useMemo(
+    () =>
+      generatePeriods({
+        count,
+        start,
+        lengthMin: length,
+        breakAfter: breakAfter > 0 && breakAfter < count ? breakAfter : null,
+        breakMin,
+      }),
+    [count, start, length, breakAfter, breakMin],
+  )
+  const lastEnd = periods.length > 0 ? periods[periods.length - 1].end_time : start
+  const overflows = timeToMin(lastEnd) > 24 * MINUTE
+  const duplicate = existingNames.includes(name.trim())
+
+  const canSubmit =
+    group !== null &&
+    name.trim().length > 0 &&
+    !duplicate &&
+    days.length > 0 &&
+    count >= 1 &&
+    !overflows &&
+    !busy
+
+  const toggleDay = (value: number) => {
+    setDays((prev) =>
+      prev.includes(value)
+        ? prev.filter((d) => d !== value)
+        : [...prev, value].sort((a, b) => a - b),
+    )
+  }
+
+  const submit = async () => {
+    if (!canSubmit || group === null) return
+    setBusy(true)
+    try {
+      const created = await createTimetable({
+        programme_semester_id: programmeSemesterId,
+        attendance_group_id: group.id,
+        name: name.trim(),
+        working_days: days,
+        periods,
+      })
+      toast.success("Template created", {
+        description: "Opened the editor — add classes to the grid.",
+      })
+      onCreated(created)
+    } catch (err) {
+      toast.error("Couldn't create template", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>
+            New template{group ? ` — ${group.name}` : ""}
+          </SheetTitle>
+          <SheetDescription>
+            Give it a meaningful name (e.g. "Regular week", "Exam week").
+            The Schedule view lets you pick which template to publish for
+            each week.
+          </SheetDescription>
+        </SheetHeader>
+        <SheetBody className="space-y-5">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Regular week"
+              maxLength={96}
+              aria-invalid={duplicate}
+            />
+            {duplicate && (
+              <p className="text-xs text-destructive">
+                A template with this name already exists for this group.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs">Working days</Label>
+            <div className="flex flex-wrap gap-2">
+              {WEEKDAYS.map((d) => (
+                <button
+                  key={d.value}
+                  type="button"
+                  onClick={() => toggleDay(d.value)}
+                  aria-pressed={days.includes(d.value)}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                    days.includes(d.value)
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-input bg-background text-muted-foreground hover:bg-accent/40",
+                  )}
+                >
+                  {d.short}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Periods/day</Label>
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={count}
+                onChange={(e) =>
+                  setCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Day starts at</Label>
+              <Input
+                type="time"
+                value={start}
+                onChange={(e) => setStart(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Period length (min)</Label>
+              <Input
+                type="number"
+                min={10}
+                max={240}
+                value={length}
+                onChange={(e) =>
+                  setLength(Math.max(10, Math.min(240, Number(e.target.value) || 50)))
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Break after (period)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={20}
+                value={breakAfter}
+                onChange={(e) =>
+                  setBreakAfter(Math.max(0, Math.min(20, Number(e.target.value) || 0)))
+                }
+              />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label className="text-xs">Break length (min)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={240}
+                value={breakMin}
+                onChange={(e) =>
+                  setBreakMin(Math.max(0, Math.min(240, Number(e.target.value) || 0)))
+                }
+              />
+            </div>
+          </div>
+
+          <div className="rounded-md border bg-muted/30 p-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              Preview · ends {periods.length > 0 ? lastEnd : start}
+              {overflows && (
+                <span className="ml-2 text-destructive">
+                  (overflows midnight)
+                </span>
+              )}
+            </p>
+            <ul className="mt-2 space-y-0.5 text-xs">
+              {periods.map((p, i) => (
+                <li
+                  key={i}
+                  className={cn(
+                    "flex items-center gap-2",
+                    p.is_break && "text-muted-foreground italic",
+                  )}
+                >
+                  <span className="w-16 shrink-0 tabular-nums">
+                    {p.start_time}–{p.end_time}
+                  </span>
+                  <span>{p.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </SheetBody>
+        <SheetFooter>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={busy}
+          >
+            Cancel
+          </Button>
+          <Button type="button" onClick={submit} disabled={!canSubmit}>
+            {busy ? "Creating…" : "Create template"}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+// --- helpers (period generator) -------------------------------------------
 
 const MINUTE = 60
 
 function timeToMin(t: string): number {
-  const [h, m] = t.split(":").map(Number)
-  return h * MINUTE + m
+  const [h, m] = t.split(":").map((p) => Number(p))
+  return h * 60 + (m || 0)
 }
 
-function minToTime(m: number): string {
-  const h = Math.floor(m / MINUTE)
-  const min = m % MINUTE
-  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`
+function minToTime(min: number): string {
+  const h = Math.floor(min / 60) % 24
+  const m = min % 60
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
 }
 
-// Build the period rows from the generator inputs — N teaching periods with
-// an optional break inserted after one of them.
 function generatePeriods(opts: {
   count: number
   start: string
@@ -657,103 +838,49 @@ function generatePeriods(opts: {
   return out
 }
 
-function CreateTimetableSheet({
+// --- clone sheet ----------------------------------------------------------
+
+function CloneTimetableSheet({
   open,
   onOpenChange,
-  programmeSemesterId,
-  groups,
-  onCreated,
+  source,
+  existingNames,
+  onCloned,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  programmeSemesterId: number
-  groups: AttendanceGroup[]
-  onCreated: (t: { id: number }) => void
+  source: TimetableListItem | null
+  existingNames: string[]
+  onCloned: (created: { id: number }) => void
 }) {
-  const [groupId, setGroupId] = React.useState<number | null>(null)
   const [name, setName] = React.useState("")
-  const [from, setFrom] = React.useState(todayIso())
-  const [to, setTo] = React.useState("")
-  const [days, setDays] = React.useState<number[]>([1, 2, 3, 4, 5])
-  const [count, setCount] = React.useState(6)
-  const [start, setStart] = React.useState("09:00")
-  const [length, setLength] = React.useState(50)
-  const [breakAfter, setBreakAfter] = React.useState(3)
-  const [breakMin, setBreakMin] = React.useState(40)
   const [busy, setBusy] = React.useState(false)
 
-  // Reset the form each time the sheet opens.
   React.useEffect(() => {
-    if (open) {
-      setGroupId(groups.length === 1 ? groups[0].id : null)
-      setName("")
-      setFrom(todayIso())
-      setTo("")
-      setDays([1, 2, 3, 4, 5])
-      setCount(6)
-      setStart("09:00")
-      setLength(50)
-      setBreakAfter(3)
-      setBreakMin(40)
+    if (open && source) {
+      setName(suggestCloneName(source.name, existingNames))
       setBusy(false)
     }
-  }, [open, groups])
+  }, [open, source, existingNames])
 
-  const groupOptions: ComboboxOption[] = groups.map((g) => ({
-    value: g.id,
-    label: g.name,
-  }))
-
-  const periods = React.useMemo(
-    () =>
-      generatePeriods({
-        count,
-        start,
-        lengthMin: length,
-        breakAfter: breakAfter > 0 && breakAfter < count ? breakAfter : null,
-        breakMin,
-      }),
-    [count, start, length, breakAfter, breakMin],
-  )
-  const lastEnd = periods.length > 0 ? periods[periods.length - 1].end_time : start
-  const overflows = timeToMin(lastEnd) > 24 * MINUTE
-
-  const canSubmit =
-    groupId !== null &&
-    name.trim().length > 0 &&
-    from.length > 0 &&
-    days.length > 0 &&
-    count >= 1 &&
-    !overflows &&
-    !busy
-
-  const toggleDay = (value: number) => {
-    setDays((prev) =>
-      prev.includes(value)
-        ? prev.filter((d) => d !== value)
-        : [...prev, value].sort((a, b) => a - b),
-    )
-  }
+  const trimmed = name.trim()
+  const duplicate =
+    source !== null &&
+    existingNames.includes(trimmed) &&
+    trimmed !== source.name // own-name vs collision read the same; the server still rejects equal-to-source
+  const canSubmit = source !== null && trimmed.length > 0 && !duplicate && !busy
 
   const submit = async () => {
-    if (!canSubmit || groupId === null) return
+    if (!source || !canSubmit) return
     setBusy(true)
     try {
-      const created = await createTimetable({
-        programme_semester_id: programmeSemesterId,
-        attendance_group_id: groupId,
-        name: name.trim(),
-        effective_from: from,
-        effective_to: to ? to : null,
-        working_days: days,
-        periods,
+      const created = await cloneTimetable(source.id, { name: trimmed })
+      toast.success("Template cloned", {
+        description: "Opened the clone — tweak as needed.",
       })
-      toast.success("Timetable created", {
-        description: "Opened the editor — add classes to the grid.",
-      })
-      onCreated(created)
+      onCloned(created)
     } catch (err) {
-      toast.error("Couldn't create timetable", {
+      toast.error("Couldn't clone template", {
         description:
           err instanceof ApiError ? err.message : "Please try again.",
       })
@@ -764,140 +891,48 @@ function CreateTimetableSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="sm:max-w-lg">
+      <SheetContent side="right" className="sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>New timetable</SheetTitle>
+          <SheetTitle>
+            Clone {source ? `"${source.name}"` : "template"}
+          </SheetTitle>
           <SheetDescription>
-            A timetable belongs to one attendance group. Set its effective
-            dates so you can plan revisions ahead.
+            The clone keeps the same group, working days, periods, courses
+            and grid cells. Pick a new name and tweak the copy for a variant
+            week (e.g. exam week or short day).
           </SheetDescription>
         </SheetHeader>
-        <SheetBody className="space-y-5">
+        <SheetBody className="space-y-3">
           <div className="space-y-1.5">
-            <Label>Attendance group</Label>
-            <Combobox
-              value={groupId}
-              options={groupOptions}
-              onChange={setGroupId}
-              placeholder="Select a group…"
-              searchPlaceholder="Search groups…"
-              emptyMessage="No groups"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="tt-name">Name</Label>
+            <Label htmlFor="clone-name" className="text-xs">
+              Name
+            </Label>
             <Input
-              id="tt-name"
+              id="clone-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Section A — Odd semester"
               maxLength={96}
+              placeholder="e.g. Exam week"
+              aria-invalid={duplicate}
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Effective from</Label>
-              <DatePicker value={from} onChange={setFrom} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Effective to</Label>
-              <DatePicker
-                value={to}
-                onChange={setTo}
-                allowClear
-                placeholder="Open-ended"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Working days</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {WEEKDAYS.map((d) => (
-                <button
-                  key={d.value}
-                  type="button"
-                  onClick={() => toggleDay(d.value)}
-                  className={cn(
-                    "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
-                    days.includes(d.value)
-                      ? "border-primary/40 bg-primary/10 text-primary"
-                      : "border-input bg-background text-muted-foreground hover:bg-accent",
-                  )}
-                >
-                  {d.short}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Period structure
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <NumField
-                label="Periods / day"
-                value={count}
-                min={1}
-                max={16}
-                onChange={setCount}
-              />
-              <div className="space-y-1.5">
-                <Label htmlFor="tt-start">Day starts</Label>
-                <Input
-                  id="tt-start"
-                  type="time"
-                  value={start}
-                  onChange={(e) => setStart(e.target.value)}
-                />
-              </div>
-              <NumField
-                label="Period length (min)"
-                value={length}
-                min={20}
-                max={180}
-                onChange={setLength}
-              />
-              <NumField
-                label="Break after period"
-                value={breakAfter}
-                min={0}
-                max={count}
-                onChange={setBreakAfter}
-                hint="0 = no break"
-              />
-              <NumField
-                label="Break length (min)"
-                value={breakMin}
-                min={10}
-                max={120}
-                onChange={setBreakMin}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {periods.length} rows · {start}–{lastEnd}. You can fine-tune
-              every period later in the editor.
-            </p>
-            {overflows && (
-              <p className="text-xs font-medium text-destructive">
-                The schedule runs past midnight — reduce the count or length.
+            {duplicate && (
+              <p className="text-xs text-destructive">
+                A template with this name already exists for this group.
               </p>
             )}
           </div>
         </SheetBody>
         <SheetFooter>
           <Button
-            variant="outline"
+            type="button"
+            variant="ghost"
             onClick={() => onOpenChange(false)}
             disabled={busy}
           >
             Cancel
           </Button>
-          <Button onClick={() => void submit()} disabled={!canSubmit}>
-            {busy ? "Creating…" : "Create timetable"}
+          <Button type="button" onClick={submit} disabled={!canSubmit}>
+            {busy ? "Cloning…" : "Clone & open"}
           </Button>
         </SheetFooter>
       </SheetContent>
@@ -905,55 +940,16 @@ function CreateTimetableSheet({
   )
 }
 
-function NumField({
-  label,
-  value,
-  min,
-  max,
-  onChange,
-  hint,
-}: {
-  label: string
-  value: number
-  min: number
-  max: number
-  onChange: (v: number) => void
-  hint?: string
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      <Input
-        type="number"
-        value={value}
-        min={min}
-        max={max}
-        onChange={(e) => {
-          const n = Number(e.target.value)
-          if (Number.isFinite(n)) onChange(Math.min(max, Math.max(min, n)))
-        }}
-      />
-      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
-    </div>
-  )
-}
-
-function ListSkeleton() {
-  return (
-    <>
-      <div className="rounded-lg border bg-card px-5 py-4 shadow-xs">
-        <Skeleton className="h-6 w-40" />
-        <Skeleton className="mt-2 h-4 w-64" />
-      </div>
-      <div className="space-y-4">
-        {Array.from({ length: 2 }).map((_, i) => (
-          <div key={i} className="rounded-lg border bg-card p-4 shadow-xs">
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="mt-3 h-12 w-full" />
-            <Skeleton className="mt-2 h-12 w-full" />
-          </div>
-        ))}
-      </div>
-    </>
-  )
+// Find an unused "<src> (copy)" / "<src> (copy 2)" / ... candidate so the
+// admin can hit Enter without renaming. Falls back to the source name +
+// numeric suffix when " (copy)" itself collides.
+function suggestCloneName(src: string, taken: string[]): string {
+  const set = new Set(taken)
+  const first = `${src} (copy)`
+  if (!set.has(first)) return first
+  for (let i = 2; i < 50; i++) {
+    const candidate = `${src} (copy ${i})`
+    if (!set.has(candidate)) return candidate
+  }
+  return first
 }

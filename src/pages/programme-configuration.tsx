@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { DatePicker } from "@/components/ui/date-picker"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +51,7 @@ import {
   bulkCreateProgrammeSemesters,
   completeProgrammeSemester,
   listProgrammeSemesters,
+  setProgrammeSemesterDates,
   startProgrammeSemester,
   type ProgrammeSemester,
   type ProgrammeSemesterStatus,
@@ -62,7 +64,10 @@ import {
   type AttendanceGroup,
 } from "@/lib/attendance-groups"
 
-type ManageSheetMode = { kind: "closed" } | { kind: "semesters" }
+type ManageSheetMode =
+  | { kind: "closed" }
+  | { kind: "semesters" }
+  | { kind: "dates"; row: ProgrammeSemester }
 
 export function ProgrammeConfigurationPage() {
   const navigate = useNavigate()
@@ -657,6 +662,7 @@ function SemestersCard({
                       onRequestTransition={(target) =>
                         setStatusConfirm({ row: ps, target })
                       }
+                      onEditDates={() => setSheet({ kind: "dates", row: ps })}
                       onOpenSettings={() =>
                         void navigate({
                           to: "/masters/programme-configuration/semester/$programmeSemesterId",
@@ -723,6 +729,17 @@ function SemestersCard({
                 await load()
               }}
               setBusy={setBusy}
+            />
+          )}
+          {sheet.kind === "dates" && (
+            <DatesForm
+              row={sheet.row}
+              onCancel={() => setSheet({ kind: "closed" })}
+              onSaved={async () => {
+                setSheet({ kind: "closed" })
+                toast.success("Planned dates saved.")
+                await load()
+              }}
             />
           )}
         </SheetContent>
@@ -813,6 +830,7 @@ function SemesterCard({
   busy,
   blockedBy,
   onRequestTransition,
+  onEditDates,
   onOpenSettings,
 }: {
   row: ProgrammeSemester
@@ -821,6 +839,7 @@ function SemesterCard({
   // either Sem 1 or has every active predecessor already completed.
   blockedBy: ProgrammeSemester | null
   onRequestTransition: (target: ProgrammeSemesterStatus) => void
+  onEditDates: () => void
   onOpenSettings: () => void
 }) {
   const canStart = row.status === "upcoming" && blockedBy === null
@@ -907,19 +926,38 @@ function SemesterCard({
                   Already completed
                 </DropdownMenuItem>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onEditDates}>
+                <CalendarRange />
+                Set start & end dates
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      {/* Placeholder body — start/end dates and the per-semester checklist
-        will land here. Kept visible (rather than hidden) so each card has
-        consistent height and so the slot is obvious during design. */}
       <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onEditDates}
+          className="flex items-center gap-1.5 rounded-sm text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          title="Set start & end dates"
+        >
           <CalendarRange className="size-3.5 opacity-60" />
-          <span className="italic">Dates not configured yet</span>
-        </div>
+          {row.planned_start_date || row.planned_end_date ? (
+            <span>
+              {row.planned_start_date
+                ? formatPlannedDate(row.planned_start_date)
+                : "open start"}
+              {" – "}
+              {row.planned_end_date
+                ? formatPlannedDate(row.planned_end_date)
+                : "open end"}
+            </span>
+          ) : (
+            <span className="italic">Set start & end dates</span>
+          )}
+        </button>
         {row.status === "upcoming" && blockedBy && (
           <div className="flex items-center gap-1.5">
             <Hourglass className="size-3.5 opacity-60" />
@@ -1264,6 +1302,121 @@ function StatusPill({ active }: { active: boolean }) {
       />
       {active ? "Active" : "Inactive"}
     </span>
+  )
+}
+
+const plannedDateFmt = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "2-digit",
+  year: "numeric",
+})
+
+// Format a 'YYYY-MM-DD' string in UTC so timezone never shifts the displayed
+// day off by one.
+function formatPlannedDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map((p) => Number(p))
+  const date = new Date(Date.UTC(y, m - 1, d))
+  return Number.isNaN(date.getTime()) ? iso : plannedDateFmt.format(date)
+}
+
+function DatesForm({
+  row,
+  onCancel,
+  onSaved,
+}: {
+  row: ProgrammeSemester
+  onCancel: () => void
+  onSaved: () => void | Promise<void>
+}) {
+  const [start, setStart] = React.useState<string>(
+    row.planned_start_date ?? "",
+  )
+  const [end, setEnd] = React.useState<string>(row.planned_end_date ?? "")
+  const [busy, setBusy] = React.useState(false)
+
+  const datesDirty =
+    (row.planned_start_date ?? "") !== start ||
+    (row.planned_end_date ?? "") !== end
+  const datesValid = !start || !end || end >= start
+
+  const save = async () => {
+    setBusy(true)
+    try {
+      await setProgrammeSemesterDates(row.id, {
+        planned_start_date: start || null,
+        planned_end_date: end || null,
+      })
+      await onSaved()
+    } catch (err) {
+      toast.error("Couldn't save dates", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <SheetHeader>
+        <SheetTitle>
+          Planned dates — {row.semester.code}
+        </SheetTitle>
+        <SheetDescription>
+          Both fields are optional. When set, the Schedule view stops the
+          group incharge from publishing weeks outside this window and the
+          session seeder uses the end date as a hard cap.
+        </SheetDescription>
+      </SheetHeader>
+      <SheetBody className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="planned-start" className="text-xs">
+              Start
+            </Label>
+            <DatePicker
+              id="planned-start"
+              value={start}
+              onChange={setStart}
+              allowClear
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="planned-end" className="text-xs">
+              End
+            </Label>
+            <DatePicker
+              id="planned-end"
+              value={end}
+              onChange={setEnd}
+              allowClear
+              invalid={!datesValid}
+            />
+            {!datesValid && (
+              <p className="text-xs text-destructive">
+                End must be on or after start.
+              </p>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Leave either field blank to keep that side open. Existing class
+          sessions outside a tightened window stay — use Manage on the
+          programme-semesters page if you need to trim them.
+        </p>
+      </SheetBody>
+      <SheetFooter>
+        <Button variant="ghost" onClick={onCancel} disabled={busy}>
+          Cancel
+        </Button>
+        <Button
+          onClick={() => void save()}
+          disabled={busy || !datesDirty || !datesValid}
+        >
+          {busy ? "Saving…" : "Save dates"}
+        </Button>
+      </SheetFooter>
+    </div>
   )
 }
 

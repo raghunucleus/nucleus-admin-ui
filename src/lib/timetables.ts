@@ -4,8 +4,6 @@ import type { Employee } from "@/lib/employees"
 import type { ProgrammeSemester } from "@/lib/programme-semesters"
 import type { Subject } from "@/lib/subjects"
 
-export type TimetableStatus = "draft" | "published" | "archived"
-
 // ISO weekday numbers (1 = Mon … 7 = Sun) with display labels.
 export const WEEKDAYS = [
   { value: 1, short: "Mon", long: "Monday" },
@@ -91,9 +89,11 @@ export type Timetable = {
   attendance_group_id: number
   attendance_group?: AttendanceGroup
   name: string
-  effective_from: string
-  effective_to: string | null
-  status: TimetableStatus
+  /**
+   * One template per (programme_semester, attendance_group) carries this
+   * flag. The Schedule preview modal auto-picks it.
+   */
+  is_default: boolean
   working_days: number[]
   periods: TimetablePeriod[]
   courses: TimetableCourse[]
@@ -109,9 +109,7 @@ export type TimetableListItem = {
   attendance_group_id: number
   attendance_group?: AttendanceGroup
   name: string
-  effective_from: string
-  effective_to: string | null
-  status: TimetableStatus
+  is_default: boolean
   working_days: number[]
   period_count: number
   teaching_period_count: number
@@ -135,16 +133,12 @@ export type CreateTimetableInput = {
   programme_semester_id: number
   attendance_group_id: number
   name: string
-  effective_from: string
-  effective_to?: string | null
   working_days: number[]
   periods: Omit<TimetablePeriodInput, "id">[]
 }
 
 export type UpdateTimetableInput = {
   name?: string
-  effective_from?: string
-  effective_to?: string | null
   working_days?: number[]
 }
 
@@ -171,11 +165,56 @@ export type UpsertTimetableEntryInput = {
   note?: string | null
 }
 
-export type DuplicateTimetableInput = {
-  name: string
-  effective_from: string
-  effective_to?: string | null
-  attendance_group_id?: number
+// Per-week preview / publish shapes —————————————————————————————————
+
+export type PreviewSession = {
+  session_date: string
+  day_of_week: number
+  timetable_period_id: number
+  period_label: string | null
+  period_start_time: string | null
+  period_end_time: string | null
+  span: number
+  timetable_entry_id: number
+  programme_semester_subject_id: number
+  programme_semester_subject_option_id: number | null
+  /** Set when this row is an elective cohort — the slot's placeholder name. */
+  slot_placeholder_name: string | null
+  subject_id: number
+  subject_code: string | null
+  subject_name: string | null
+  scheduled_employee_id: number
+  teacher_name: string | null
+  teacher_emp_code: string | null
+  room: string | null
+  already_exists: boolean
+}
+
+export type PreviewResult = {
+  sessions: PreviewSession[]
+  holidays: { date: string; name: string; end_date: string | null }[]
+  blocked_dates: string[]
+}
+
+export type PublishResult = {
+  inserted: number
+  skipped_holidays: number
+  replaced: number
+}
+
+export type WeekSummary = {
+  week_start: string
+  week_end: string
+  scheduled: number
+  completed: number
+  cancelled: number
+  rescheduled: number
+  has_any: boolean
+  /**
+   * Templates that produced sessions in this week. Usually one entry; rare
+   * multi-template weeks (mid-week template switch) list both.
+   */
+  templates: { id: number; name: string; session_count: number }[]
 }
 
 // --- API client -------------------------------------------------------------
@@ -215,21 +254,49 @@ export async function updateTimetable(
   })
 }
 
-export async function publishTimetable(id: number): Promise<Timetable> {
-  return api<Timetable>(`/admin/timetables/${id}/publish`, { method: "POST" })
-}
-
-export async function archiveTimetable(id: number): Promise<Timetable> {
-  return api<Timetable>(`/admin/timetables/${id}/archive`, { method: "POST" })
-}
-
-export async function duplicateTimetable(
+export async function previewTimetableWeek(
   id: number,
-  input: DuplicateTimetableInput,
+  window: { from: string; to: string },
+): Promise<PreviewResult> {
+  return api<PreviewResult>(`/admin/timetables/${id}/preview-week`, {
+    method: "POST",
+    body: window,
+  })
+}
+
+export async function publishTimetableWeek(
+  id: number,
+  window: { from: string; to: string },
+): Promise<PublishResult> {
+  return api<PublishResult>(`/admin/timetables/${id}/publish-week`, {
+    method: "POST",
+    body: window,
+  })
+}
+
+export async function getTimetableWeekSummaries(
+  id: number,
+  week_starts: string[],
+): Promise<WeekSummary[]> {
+  return api<WeekSummary[]>(`/admin/timetables/${id}/week-summaries`, {
+    method: "POST",
+    body: { week_starts },
+  })
+}
+
+export async function cloneTimetable(
+  id: number,
+  input: { name: string },
 ): Promise<Timetable> {
-  return api<Timetable>(`/admin/timetables/${id}/duplicate`, {
+  return api<Timetable>(`/admin/timetables/${id}/clone`, {
     method: "POST",
     body: input,
+  })
+}
+
+export async function setDefaultTimetable(id: number): Promise<Timetable> {
+  return api<Timetable>(`/admin/timetables/${id}/set-default`, {
+    method: "POST",
   })
 }
 

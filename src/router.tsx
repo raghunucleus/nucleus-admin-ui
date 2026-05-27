@@ -5,6 +5,7 @@ import {
   redirect,
 } from "@tanstack/react-router"
 
+import { AcademicHolidaysPage } from "@/pages/academic-holidays"
 import { AdminUsersPage } from "@/pages/admin-users"
 import { AppLayout } from "@/layouts/app-layout"
 import { AuthLayout } from "@/layouts/auth-layout"
@@ -36,6 +37,7 @@ import { StudentDetailsPage } from "@/pages/student-details"
 import { SubjectsPage } from "@/pages/subjects"
 import { SubjectTypesPage } from "@/pages/subject-types"
 import { TimetableEditorPage } from "@/pages/timetable-editor"
+import { TimetableSchedulePage } from "@/pages/timetable-schedule"
 import { MigrationsPage } from "@/pages/migrations"
 import { NotFoundPage } from "@/pages/not-found"
 import { ProfilePage } from "@/pages/profile"
@@ -109,6 +111,12 @@ const adminUsersRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
   path: "/admin-users",
   component: AdminUsersPage,
+})
+
+const academicHolidaysRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/academic-holidays",
+  component: AcademicHolidaysPage,
 })
 
 const mastersDegreesRoute = createRoute({
@@ -276,6 +284,13 @@ const mastersTimetableEditorRoute = createRoute({
   validateSearch: validateProgrammeBatchSearch,
 })
 
+const mastersTimetableScheduleRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/programme-configuration/semester/$programmeSemesterId/timetables/$timetableId/schedule",
+  component: TimetableSchedulePage,
+  validateSearch: validateProgrammeBatchSearch,
+})
+
 // Attendance groups are configured once per programme × admission-year batch
 // (shared across every semester), so this screen is scoped to the batch — not
 // nested under a semester.
@@ -394,6 +409,7 @@ const routeTree = rootRoute.addChildren([
     welcomeRoute,
     migrationsRoute,
     adminUsersRoute,
+    academicHolidaysRoute,
     mastersDegreesRoute,
     mastersDepartmentsRoute,
     mastersProgrammesRoute,
@@ -414,6 +430,7 @@ const routeTree = rootRoute.addChildren([
     mastersSlotEnrollmentsRoute,
     mastersSemesterTimetablesRoute,
     mastersTimetableEditorRoute,
+    mastersTimetableScheduleRoute,
     mastersProgrammeAttendanceGroupsRoute,
     employeesDesignationsRoute,
     employeesAllRoute,

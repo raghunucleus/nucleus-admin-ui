@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   ArrowUp,
   ArrowUpDown,
+  CalendarRange,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -29,6 +30,7 @@ import {
   Power,
   PowerOff,
   RefreshCw,
+  Scissors,
   SearchX,
   X,
 } from "lucide-react"
@@ -36,6 +38,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Label } from "@/components/ui/label"
 import {
@@ -62,8 +65,12 @@ import { listAdmissionYears, type AdmissionYear } from "@/lib/admission-years"
 import {
   activateProgrammeSemester,
   bulkCreateProgrammeSemesters,
+  completeProgrammeSemester,
   deactivateProgrammeSemester,
   listProgrammeSemesters,
+  setProgrammeSemesterDates,
+  startProgrammeSemester,
+  trimProgrammeSemesterSessions,
   type ListProgrammeSemestersParams,
   type ProgrammeSemester,
   type ProgrammeSemesterStatusFilter,
@@ -81,7 +88,10 @@ declare module "@tanstack/react-table" {
   }
 }
 
-type Mode = { kind: "list" } | { kind: "create" }
+type Mode =
+  | { kind: "list" }
+  | { kind: "create" }
+  | { kind: "manage"; row: ProgrammeSemester }
 
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
@@ -478,6 +488,22 @@ export function ProgrammeSemestersPage() {
               onSaved={handleCreated}
             />
           )}
+          {mode.kind === "manage" && (
+            <ManageSemesterForm
+              row={mode.row}
+              onClose={() => setMode({ kind: "list" })}
+              onChanged={async () => {
+                await load()
+                // Keep the sheet open so the admin can chain actions —
+                // refresh `row` from the latest list by id.
+                setMode((m) => {
+                  if (m.kind !== "manage") return m
+                  const fresh = rows.find((r) => r.id === m.row.id)
+                  return fresh ? { kind: "manage", row: fresh } : { kind: "list" }
+                })
+              }}
+            />
+          )}
         </SheetContent>
       </Sheet>
 
@@ -526,6 +552,7 @@ export function ProgrammeSemestersPage() {
             loadFailed={loadFailed}
             onRetry={() => void load()}
             onToggleActive={requestToggleActive}
+            onManage={(r) => setMode({ kind: "manage", row: r })}
             canCreate={!optionsLoading}
             onCreate={() => setMode({ kind: "create" })}
           />
@@ -743,6 +770,7 @@ function ProgrammeSemestersTable({
   loadFailed,
   onRetry,
   onToggleActive,
+  onManage,
   canCreate,
   onCreate,
 }: {
@@ -763,6 +791,7 @@ function ProgrammeSemestersTable({
   loadFailed: boolean
   onRetry: () => void
   onToggleActive: (r: ProgrammeSemester) => void
+  onManage: (r: ProgrammeSemester) => void
   canCreate: boolean
   onCreate: () => void
 }) {
@@ -879,6 +908,17 @@ function ProgrammeSemestersTable({
               <Button
                 variant="ghost"
                 size="icon"
+                className="size-8 text-muted-foreground hover:bg-accent hover:text-foreground"
+                onClick={() => onManage(r)}
+                disabled={isBusy || formOpen}
+                title="Lifecycle & dates"
+                aria-label="Lifecycle & dates"
+              >
+                <CalendarRange />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 className={cn(
                   "size-8",
                   r.is_active
@@ -897,7 +937,7 @@ function ProgrammeSemestersTable({
         },
       },
     ],
-    [busyId, formOpen, onToggleActive],
+    [busyId, formOpen, onToggleActive, onManage],
   )
 
   const table = useReactTable({
@@ -1599,5 +1639,260 @@ function BulkLinkForm({
         </Button>
       </SheetFooter>
     </form>
+  )
+}
+
+// --- Manage sheet (lifecycle + planned dates + trim) ---------------------
+
+function ManageSemesterForm({
+  row,
+  onClose,
+  onChanged,
+}: {
+  row: ProgrammeSemester
+  onClose: () => void
+  onChanged: () => void | Promise<void>
+}) {
+  const [busy, setBusy] = React.useState<
+    "start" | "complete" | "dates" | "trim" | null
+  >(null)
+  const [confirmTrim, setConfirmTrim] = React.useState(false)
+  const [start, setStart] = React.useState<string>(
+    row.planned_start_date ?? "",
+  )
+  const [end, setEnd] = React.useState<string>(row.planned_end_date ?? "")
+
+  const datesDirty =
+    (row.planned_start_date ?? "") !== start ||
+    (row.planned_end_date ?? "") !== end
+  const datesValid = !start || !end || end >= start
+
+  const doStart = async () => {
+    setBusy("start")
+    try {
+      await startProgrammeSemester(row.id)
+      toast.success("Semester started.", {
+        description:
+          "Sessions for the next two weeks are being seeded for every published timetable.",
+      })
+      await onChanged()
+    } catch (err) {
+      toast.error("Couldn't start semester", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const doComplete = async () => {
+    setBusy("complete")
+    try {
+      await completeProgrammeSemester(row.id)
+      toast.success("Semester completed.", {
+        description: "Future scheduled sessions cancelled, timetables archived.",
+      })
+      await onChanged()
+    } catch (err) {
+      toast.error("Couldn't complete semester", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const doSaveDates = async () => {
+    setBusy("dates")
+    try {
+      await setProgrammeSemesterDates(row.id, {
+        planned_start_date: start || null,
+        planned_end_date: end || null,
+      })
+      toast.success("Planned dates saved.")
+      await onChanged()
+    } catch (err) {
+      toast.error("Couldn't save dates", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const doTrim = async () => {
+    setBusy("trim")
+    try {
+      const res = await trimProgrammeSemesterSessions(row.id)
+      toast.success(`Trimmed ${res.deleted} session${res.deleted === 1 ? "" : "s"}.`, {
+        description:
+          res.deleted === 0
+            ? "Nothing past the planned end date."
+            : "Future scheduled sessions past the end date were removed.",
+      })
+      await onChanged()
+    } catch (err) {
+      toast.error("Couldn't trim", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setBusy(null)
+      setConfirmTrim(false)
+    }
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <SheetHeader>
+        <SheetTitle>
+          {row.programme.code} · {row.semester.code} · {row.admission_year.display_year}
+        </SheetTitle>
+        <SheetDescription>
+          Lifecycle, planned dates, and session cleanup for this batch's
+          semester. The seeder uses the planned dates as a hard upper bound.
+        </SheetDescription>
+      </SheetHeader>
+
+      <SheetBody className="space-y-6">
+        {/* Lifecycle */}
+        <section className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Lifecycle
+          </h3>
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
+                row.status === "ongoing"
+                  ? "bg-success/10 text-success"
+                  : row.status === "completed"
+                    ? "bg-muted text-muted-foreground"
+                    : "bg-amber-500/10 text-amber-700",
+              )}
+            >
+              <span className="size-1.5 rounded-full bg-current" />
+              {row.status[0].toUpperCase() + row.status.slice(1)}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {row.status === "upcoming" &&
+                "Sessions seed when you start the semester."}
+              {row.status === "ongoing" &&
+                "Sessions seed weekly; mark/edit allowed."}
+              {row.status === "completed" && "Read-only. Cannot be re-opened."}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {row.status === "upcoming" && (
+              <Button size="sm" onClick={doStart} disabled={busy !== null}>
+                Start semester
+              </Button>
+            )}
+            {row.status === "ongoing" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={doComplete}
+                disabled={busy !== null}
+              >
+                Complete semester
+              </Button>
+            )}
+          </div>
+        </section>
+
+        {/* Planned dates */}
+        <section className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Planned dates
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="planned-start" className="text-xs">
+                Start
+              </Label>
+              <DatePicker
+                id="planned-start"
+                value={start}
+                onChange={setStart}
+                allowClear
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="planned-end" className="text-xs">
+                End
+              </Label>
+              <DatePicker
+                id="planned-end"
+                value={end}
+                onChange={setEnd}
+                allowClear
+                invalid={!datesValid}
+              />
+              {!datesValid && (
+                <p className="text-xs text-destructive">
+                  End must be on or after start.
+                </p>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Sessions never seed past the end date. Used as the cap by the
+            publish action and the Sunday rollover cron.
+          </p>
+          <div className="flex gap-2 pt-1">
+            <Button
+              size="sm"
+              onClick={doSaveDates}
+              disabled={busy !== null || !datesDirty || !datesValid}
+            >
+              Save dates
+            </Button>
+            {row.planned_end_date && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmTrim(true)}
+                disabled={busy !== null}
+                title="Delete still-scheduled sessions past the planned end date"
+              >
+                <Scissors className="size-4" />
+                Trim past sessions
+              </Button>
+            )}
+          </div>
+        </section>
+      </SheetBody>
+
+      <SheetFooter>
+        <Button variant="ghost" onClick={onClose}>
+          Close
+        </Button>
+      </SheetFooter>
+
+      <ConfirmDialog
+        open={confirmTrim}
+        onOpenChange={setConfirmTrim}
+        title="Trim future scheduled sessions?"
+        description={
+          <>
+            Sessions still in <span className="font-medium">scheduled</span>{" "}
+            status past{" "}
+            <span className="font-medium text-foreground">
+              {row.planned_end_date}
+            </span>{" "}
+            will be deleted. Completed sessions (already marked) are left
+            untouched.
+          </>
+        }
+        confirmLabel="Trim"
+        tone="destructive"
+        loading={busy === "trim"}
+        onConfirm={doTrim}
+      />
+    </div>
   )
 }
