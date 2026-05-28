@@ -13,6 +13,7 @@ import {
   ClipboardList,
   Eye,
   FileSpreadsheet,
+  Layers,
   LayoutGrid,
   List,
   MapPin,
@@ -22,6 +23,7 @@ import {
   Star,
   UserCheck,
   UserCog,
+  Users,
   X,
 } from "lucide-react"
 
@@ -43,6 +45,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { ApiError } from "@/lib/api"
 import {
+  bulkCancelSessions,
+  bulkSubstituteSessions,
   cancelSession,
   getRoster,
   listClassSessions,
@@ -50,6 +54,7 @@ import {
   substituteSession,
   uncancelSession,
   type AttendanceStatus,
+  type BulkMutationResult,
   type ClassSession,
   type ClassSessionStatus,
   type RosterStudent,
@@ -133,6 +138,18 @@ const fullDateFmt = new Intl.DateTimeFormat(undefined, {
 const WEEKS_IN_STRIP = 8
 const STRIP_PREVIOUS_WEEKS = 1
 
+// Day-of-week labels used by the publish-day picker. ISO weekday order
+// (Mon=1..Sun=7) so the chips read like a printed timetable.
+const DAY_OF_WEEK_OPTIONS: { value: number; short: string; long: string }[] = [
+  { value: 1, short: "Mon", long: "Monday" },
+  { value: 2, short: "Tue", long: "Tuesday" },
+  { value: 3, short: "Wed", long: "Wednesday" },
+  { value: 4, short: "Thu", long: "Thursday" },
+  { value: 5, short: "Fri", long: "Friday" },
+  { value: 6, short: "Sat", long: "Saturday" },
+  { value: 7, short: "Sun", long: "Sunday" },
+]
+
 // --- page ------------------------------------------------------------------
 
 export function TimetableSchedulePage() {
@@ -157,7 +174,14 @@ export function TimetableSchedulePage() {
   )
   const [summaries, setSummaries] = React.useState<WeekSummary[]>([])
   const [shellLoading, setShellLoading] = React.useState(true)
-  const [shellFailed, setShellFailed] = React.useState(false)
+  // Hold the actual failure so the empty state can tell the user *why* it
+  // couldn't load — a generic "missing" message hides a 401 (sign-in
+  // expired), a 404 (template was deleted), and a 500 behind the same
+  // copy, leaving the admin with no recourse.
+  const [shellError, setShellError] = React.useState<{
+    title: string
+    description: string
+  } | null>(null)
   const [summariesLoading, setSummariesLoading] = React.useState(false)
 
   // A single modal flow for both "Preview" and "Publish" actions on a week.
@@ -177,7 +201,7 @@ export function TimetableSchedulePage() {
   React.useEffect(() => {
     let cancelled = false
     setShellLoading(true)
-    setShellFailed(false)
+    setShellError(null)
     void (async () => {
       try {
         const tt = await getTimetable(anchorTimetableId)
@@ -188,8 +212,34 @@ export function TimetableSchedulePage() {
           tt.attendance_group_id,
         )
         if (!cancelled) setTemplates(peers)
-      } catch {
-        if (!cancelled) setShellFailed(true)
+      } catch (err) {
+        if (cancelled) return
+        if (err instanceof ApiError) {
+          if (err.status === 401 || err.status === 403) {
+            setShellError({
+              title: "Sign-in needed",
+              description:
+                "Your session expired (or the admin role lost permission). Sign in again and reopen this page.",
+            })
+          } else if (err.status === 404) {
+            setShellError({
+              title: "Template not found",
+              description: `Timetable #${anchorTimetableId} has been deleted or never existed. Go back to the templates list and pick a current one.`,
+            })
+          } else {
+            setShellError({
+              title: "Couldn't load schedule",
+              description:
+                err.message || `Server returned ${err.status}. Try again.`,
+            })
+          }
+        } else {
+          setShellError({
+            title: "Couldn't load schedule",
+            description:
+              "The server didn't respond. Check that the API is up and retry.",
+          })
+        }
       } finally {
         if (!cancelled) setShellLoading(false)
       }
@@ -233,12 +283,14 @@ export function TimetableSchedulePage() {
     week_start: string
     week_end: string
     template_id: number
+    days_of_week?: number[]
   }) => {
     setPublishing(true)
     try {
       const res = await publishTimetableWeek(input.template_id, {
         from: input.week_start,
         to: input.week_end,
+        days_of_week: input.days_of_week,
       })
       const replacedNote =
         res.replaced > 0
@@ -294,12 +346,15 @@ export function TimetableSchedulePage() {
 
       {shellLoading ? (
         <Skeleton className="h-20 w-full" />
-      ) : shellFailed || !anchor ? (
+      ) : shellError || !anchor ? (
         <div className="rounded-lg border bg-card text-card-foreground">
           <EmptyState
             icon={AlertTriangle}
-            title="Couldn't load schedule"
-            description="The timetable used as the anchor for this URL is missing."
+            title={shellError?.title ?? "Couldn't load schedule"}
+            description={
+              shellError?.description ??
+              "The timetable used as the anchor for this URL is missing."
+            }
           />
         </div>
       ) : (
@@ -413,8 +468,9 @@ export function TimetableSchedulePage() {
         onTemplateChange={(id) =>
           setPreviewing((p) => (p ? { ...p, template_id: id } : p))
         }
-        onPublish={() => {
-          if (previewing) void handlePublish(previewing)
+        onPublish={(daysOfWeek) => {
+          if (previewing)
+            void handlePublish({ ...previewing, days_of_week: daysOfWeek })
         }}
       />
 
@@ -592,6 +648,18 @@ function WeekCard({
       </dl>
 
       <div className="mt-auto space-y-1.5 pt-3">
+        {week.has_any && !outOfRange && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-xs"
+            onClick={onManage}
+            title="Cancel a class, change a teacher, mark attendance"
+          >
+            <Settings2 className="size-4" />
+            Manage classes
+          </Button>
+        )}
         <Button
           size="sm"
           className="w-full"
@@ -613,18 +681,6 @@ function WeekCard({
             </>
           )}
         </Button>
-        {week.has_any && !outOfRange && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full text-xs"
-            onClick={onManage}
-            title="Cancel a class, change a teacher, mark attendance"
-          >
-            <Settings2 className="size-4" />
-            Manage classes
-          </Button>
-        )}
       </div>
     </div>
   )
@@ -663,7 +719,9 @@ function PreviewModal({
   publishing: boolean
   onOpenChange: (open: boolean) => void
   onTemplateChange: (id: number) => void
-  onPublish: () => void
+  // Selected ISO weekdays (1=Mon..7=Sun). Always non-empty when fired
+  // because the publish button is disabled with an empty selection.
+  onPublish: (daysOfWeek: number[]) => void
 }) {
   const [view, setView] = React.useState<"sessions" | "grid">("sessions")
   const [sessionData, setSessionData] = React.useState<PreviewResult | null>(
@@ -672,6 +730,22 @@ function PreviewModal({
   const [sessionFailed, setSessionFailed] = React.useState(false)
   const [gridData, setGridData] = React.useState<Timetable | null>(null)
   const [gridFailed, setGridFailed] = React.useState(false)
+  // Days the user wants to publish (1=Mon..7=Sun). Smart-preseeded from
+  // the chosen template's working_days, so the default "Publish" keeps
+  // its current Mon–Fri / Mon–Sat behavior; subsets only happen when
+  // the user explicitly deselects.
+  const [selectedDays, setSelectedDays] = React.useState<Set<number>>(
+    () => new Set(),
+  )
+
+  const selectedTemplate = React.useMemo(
+    () => templates.find((t) => t.id === week?.template_id) ?? null,
+    [templates, week?.template_id],
+  )
+  const templateWorkingDays = React.useMemo(
+    () => new Set(selectedTemplate?.working_days ?? []),
+    [selectedTemplate],
+  )
 
   // Reset state when the modal closes so a re-open doesn't flash stale data.
   React.useEffect(() => {
@@ -681,12 +755,36 @@ function PreviewModal({
       setGridData(null)
       setGridFailed(false)
       setView("sessions")
+      setSelectedDays(new Set())
     }
   }, [open])
 
-  // Load sessions whenever template / week changes.
+  // (Re)seed the day selection from the chosen template's working_days
+  // whenever the modal opens or the user picks a different template.
+  // Without this a Mon–Sat selection would persist if the user switched
+  // to a Mon–Fri template, which would silently try to publish Sat
+  // (and surface as a no-op).
+  React.useEffect(() => {
+    if (!open) return
+    setSelectedDays(new Set(selectedTemplate?.working_days ?? []))
+  }, [open, selectedTemplate])
+
+  // Stable serialization of the day set for both the API payload and as
+  // a useEffect dep (Set identity changes every render).
+  const daysPayload = React.useMemo(
+    () => Array.from(selectedDays).sort((a, b) => a - b),
+    [selectedDays],
+  )
+  const daysKey = daysPayload.join(",")
+
+  // Load sessions whenever template / week / day-set changes.
   React.useEffect(() => {
     if (!open || !week) return
+    if (daysPayload.length === 0) {
+      setSessionData(null)
+      setSessionFailed(false)
+      return
+    }
     let cancelled = false
     setSessionData(null)
     setSessionFailed(false)
@@ -695,6 +793,7 @@ function PreviewModal({
         const res = await previewTimetableWeek(week.template_id, {
           from: week.week_start,
           to: week.week_end,
+          days_of_week: daysPayload,
         })
         if (!cancelled) setSessionData(res)
       } catch {
@@ -704,7 +803,18 @@ function PreviewModal({
     return () => {
       cancelled = true
     }
-  }, [open, week])
+    // daysKey covers daysPayload — same data, primitive identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, week, daysKey])
+
+  function toggleDay(dow: number) {
+    setSelectedDays((prev) => {
+      const next = new Set(prev)
+      if (next.has(dow)) next.delete(dow)
+      else next.add(dow)
+      return next
+    })
+  }
 
   // Lazy-load the grid only when first requested.
   React.useEffect(() => {
@@ -761,9 +871,17 @@ function PreviewModal({
     sessionData?.sessions.filter((s) => s.already_exists).length ?? 0
   const templateName =
     templates.find((t) => t.id === week.template_id)?.name ?? "—"
-  const publishLabel = existingCount > 0 ? "Republish week" : "Publish week"
+  const isPartialWeek =
+    templateWorkingDays.size > 0 &&
+    selectedDays.size > 0 &&
+    selectedDays.size < templateWorkingDays.size
+  const baseVerb = existingCount > 0 ? "Republish" : "Publish"
+  const publishLabel = isPartialWeek
+    ? `${baseVerb} ${selectedDays.size} day${selectedDays.size === 1 ? "" : "s"}`
+    : `${baseVerb} week`
   const publishDisabled =
     publishing ||
+    selectedDays.size === 0 ||
     sessionData === null ||
     sessionData.sessions.length === 0
 
@@ -910,6 +1028,84 @@ function PreviewModal({
             </div>
           </div>
 
+          {/* Day picker — defaults to the chosen template's working_days.
+              Days the template doesn't define render as disabled chips
+              so the user understands why nothing would seed there. */}
+          <div className="border-b bg-muted/10 px-6 py-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <Label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Days to publish
+              </Label>
+              <div className="flex items-center gap-1 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedDays(
+                      new Set(selectedTemplate?.working_days ?? []),
+                    )
+                  }
+                  className="rounded-md px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  All working days
+                </button>
+                <span className="text-muted-foreground">·</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDays(new Set())}
+                  className="rounded-md px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  None
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {DAY_OF_WEEK_OPTIONS.map((d) => {
+                const inTemplate = templateWorkingDays.has(d.value)
+                const selected = selectedDays.has(d.value)
+                return (
+                  <button
+                    key={d.value}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={!inTemplate}
+                    onClick={() => toggleDay(d.value)}
+                    title={
+                      inTemplate
+                        ? d.long
+                        : `Template has no classes on ${d.long}`
+                    }
+                    className={cn(
+                      "min-w-[3rem] rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
+                      !inTemplate &&
+                      "cursor-not-allowed opacity-40 hover:bg-background",
+                      inTemplate && selected
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : inTemplate
+                          ? "bg-background hover:border-primary/30 hover:bg-accent/40"
+                          : "bg-background",
+                    )}
+                  >
+                    {d.short}
+                  </button>
+                )
+              })}
+            </div>
+            {selectedDays.size === 0 ? (
+              <p className="mt-1.5 text-[11px] text-amber-700">
+                Pick at least one day to publish.
+              </p>
+            ) : isPartialWeek ? (
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Partial publish — only{" "}
+                <span className="font-medium text-foreground">
+                  {selectedDays.size}
+                </span>{" "}
+                of {templateWorkingDays.size} working days will be
+                (re)seeded. Other days stay as they are.
+              </p>
+            ) : null}
+          </div>
+
           {/* Body */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {view === "sessions" && sessionFailed && (
@@ -983,7 +1179,7 @@ function PreviewModal({
                 Close
               </Button>
               <Button
-                onClick={onPublish}
+                onClick={() => onPublish(daysPayload)}
                 disabled={publishDisabled}
               >
                 <CalendarRange className="size-4" />
@@ -1000,16 +1196,16 @@ function PreviewModal({
 type PreviewRowGroup =
   | { kind: "regular"; row: PreviewResult["sessions"][number] }
   | {
-      kind: "elective"
-      slot_pss_id: number
-      timetable_period_id: number
-      period_label: string | null
-      period_start_time: string | null
-      period_end_time: string | null
-      span: number
-      slot_name: string
-      cohorts: PreviewResult["sessions"]
-    }
+    kind: "elective"
+    slot_pss_id: number
+    timetable_period_id: number
+    period_label: string | null
+    period_start_time: string | null
+    period_end_time: string | null
+    span: number
+    slot_name: string
+    cohorts: PreviewResult["sessions"]
+  }
 
 // Build the per-day display rows. Regular sessions stay one-per-row.
 // Elective cohorts collapse into one row per (slot, period) — teachers
@@ -1360,7 +1556,7 @@ function TemplateGrid({ timetable }: { timetable: Timetable }) {
                                   </span>
                                 ) : (
                                   (e.employee?.emp_display_name ??
-                                  "(no teacher)")
+                                    "(no teacher)")
                                 )}
                               </div>
                               {e.room && (
@@ -1410,6 +1606,70 @@ const STATUS_BADGE: Record<
   },
 }
 
+// One renderable item in the manage sheet:
+//   - "regular"  → a single session (one row per period)
+//   - "elective" → a slot header with N cohort sessions nested under it; the
+//     header carries the slot identity (e.g. "Open Elective 1") and the bulk
+//     actions, each child renders the per-(subject, teacher) cohort.
+type ManageGroup =
+  | { kind: "regular"; session: ClassSession }
+  | {
+    kind: "elective"
+    slot_pss_id: number
+    timetable_period_id: number
+    session_date: string
+    slot_name: string
+    period_label: string | null
+    period_start_time: string | null
+    period_end_time: string | null
+    cohorts: ClassSession[]
+  }
+
+function groupManageRowsForDay(rows: ClassSession[]): ManageGroup[] {
+  const electiveBuckets = new Map<string, ManageGroup & { kind: "elective" }>()
+  const out: ManageGroup[] = []
+  for (const s of rows) {
+    if (s.programme_semester_subject_option_id === null) {
+      out.push({ kind: "regular", session: s })
+      continue
+    }
+    const key = `${s.programme_semester_subject_id}:${s.timetable_period_id}`
+    const existing = electiveBuckets.get(key)
+    if (existing) {
+      existing.cohorts.push(s)
+      continue
+    }
+    const bucket: ManageGroup & { kind: "elective" } = {
+      kind: "elective",
+      slot_pss_id: s.programme_semester_subject_id,
+      timetable_period_id: s.timetable_period_id,
+      session_date: s.session_date,
+      slot_name:
+        s.programme_semester_subject?.placeholder_name ??
+        `Slot #${s.programme_semester_subject_id}`,
+      period_label: s.timetable_period?.label ?? null,
+      period_start_time: s.timetable_period?.start_time ?? null,
+      period_end_time: s.timetable_period?.end_time ?? null,
+      cohorts: [s],
+    }
+    electiveBuckets.set(key, bucket)
+    out.push(bucket)
+  }
+  // Stable order: by period start_time.
+  out.sort((a, b) => {
+    const aT =
+      a.kind === "regular"
+        ? (a.session.timetable_period?.start_time ?? "")
+        : (a.period_start_time ?? "")
+    const bT =
+      b.kind === "regular"
+        ? (b.session.timetable_period?.start_time ?? "")
+        : (b.period_start_time ?? "")
+    return aT.localeCompare(bT)
+  })
+  return out
+}
+
 function ManageWeekSheet({
   week,
   attendanceGroupId,
@@ -1425,8 +1685,23 @@ function ManageWeekSheet({
 }) {
   const [sessions, setSessions] = React.useState<ClassSession[] | null>(null)
   const [loadFailed, setLoadFailed] = React.useState(false)
-  const [editing, setEditing] = React.useState<ClassSession | null>(null)
+  // Cancellation and teacher-change are deliberately separate drawers — same
+  // shape, different intent. Splitting the state avoids a single "editing"
+  // drawer where the user has to scroll past the wrong section to act.
+  const [cancelling, setCancelling] = React.useState<ClassSession | null>(null)
+  const [substituting, setSubstituting] = React.useState<ClassSession | null>(
+    null,
+  )
   const [marking, setMarking] = React.useState<ClassSession | null>(null)
+  // The slot-level bulk action drawer. Holds the cohort sessions plus a
+  // hint so the form knows which CTA to highlight (cancel-all vs. proctor).
+  const [slotAction, setSlotAction] = React.useState<{
+    slot_name: string
+    session_date: string
+    period_label: string | null
+    cohorts: ClassSession[]
+    initial: "cancel" | "substitute"
+  } | null>(null)
 
   const reload = React.useCallback(async () => {
     setSessions(null)
@@ -1476,7 +1751,8 @@ function ManageWeekSheet({
         </SheetTitle>
         <SheetDescription>
           Cancel a class, assign a substitute teacher, or mark attendance.
-          All actions are logged on the session's audit trail.
+          Elective cohorts are grouped under their slot — cancel one cohort
+          or the whole slot. All actions are logged on the audit trail.
         </SheetDescription>
       </SheetHeader>
 
@@ -1507,6 +1783,7 @@ function ManageWeekSheet({
           dates.map((d) => {
             const rows = byDate.get(d) ?? []
             if (rows.length === 0) return null
+            const groups = groupManageRowsForDay(rows)
             return (
               <div
                 key={d}
@@ -1519,14 +1796,43 @@ function ManageWeekSheet({
                   </span>
                 </div>
                 <ul className="divide-y">
-                  {rows.map((s) => (
-                    <SessionRow
-                      key={s.id}
-                      session={s}
-                      onEdit={() => setEditing(s)}
-                      onMark={() => setMarking(s)}
-                    />
-                  ))}
+                  {groups.map((g, i) =>
+                    g.kind === "regular" ? (
+                      <SessionRow
+                        key={`r-${g.session.id}`}
+                        session={g.session}
+                        onCancel={() => setCancelling(g.session)}
+                        onSubstitute={() => setSubstituting(g.session)}
+                        onMark={() => setMarking(g.session)}
+                      />
+                    ) : (
+                      <ElectiveSlotRow
+                        key={`e-${d}-${g.slot_pss_id}-${i}`}
+                        group={g}
+                        onCancelCohort={(s) => setCancelling(s)}
+                        onSubstituteCohort={(s) => setSubstituting(s)}
+                        onMarkCohort={(s) => setMarking(s)}
+                        onCancelSlot={() =>
+                          setSlotAction({
+                            slot_name: g.slot_name,
+                            session_date: g.session_date,
+                            period_label: g.period_label,
+                            cohorts: g.cohorts,
+                            initial: "cancel",
+                          })
+                        }
+                        onSubstituteSlot={() =>
+                          setSlotAction({
+                            slot_name: g.slot_name,
+                            session_date: g.session_date,
+                            period_label: g.period_label,
+                            cohorts: g.cohorts,
+                            initial: "substitute",
+                          })
+                        }
+                      />
+                    ),
+                  )}
                 </ul>
               </div>
             )
@@ -1540,18 +1846,60 @@ function ManageWeekSheet({
       </SheetFooter>
 
       <Sheet
-        open={editing !== null}
+        open={cancelling !== null}
         onOpenChange={(o) => {
-          if (!o) setEditing(null)
+          if (!o) setCancelling(null)
         }}
       >
         <SheetContent side="right" className="w-full sm:max-w-md">
-          {editing && (
-            <SessionEditForm
-              session={editing}
-              onClose={() => setEditing(null)}
+          {cancelling && (
+            <CancelSessionForm
+              session={cancelling}
+              onClose={() => setCancelling(null)}
               onChanged={async () => {
-                setEditing(null)
+                setCancelling(null)
+                await reload()
+                await onChanged()
+              }}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
+
+      <Sheet
+        open={substituting !== null}
+        onOpenChange={(o) => {
+          if (!o) setSubstituting(null)
+        }}
+      >
+        <SheetContent side="right" className="w-full sm:max-w-md">
+          {substituting && (
+            <SubstituteSessionForm
+              session={substituting}
+              onClose={() => setSubstituting(null)}
+              onChanged={async () => {
+                setSubstituting(null)
+                await reload()
+                await onChanged()
+              }}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
+
+      <Sheet
+        open={slotAction !== null}
+        onOpenChange={(o) => {
+          if (!o) setSlotAction(null)
+        }}
+      >
+        <SheetContent side="right" className="w-full sm:max-w-md">
+          {slotAction && (
+            <SlotBulkActionForm
+              slot={slotAction}
+              onClose={() => setSlotAction(null)}
+              onChanged={async () => {
+                setSlotAction(null)
                 await reload()
                 await onChanged()
               }}
@@ -1586,11 +1934,13 @@ function ManageWeekSheet({
 
 function SessionRow({
   session,
-  onEdit,
+  onCancel,
+  onSubstitute,
   onMark,
 }: {
   session: ClassSession
-  onEdit: () => void
+  onCancel: () => void
+  onSubstitute: () => void
   onMark: () => void
 }) {
   const period = session.timetable_period
@@ -1607,6 +1957,7 @@ function SessionRow({
     ""
   const teacher =
     session.effective_employee?.emp_display_name ?? "(teacher TBD)"
+  const scheduled = session.scheduled_employee?.emp_display_name ?? null
   const isSub =
     session.effective_employee_id !== session.scheduled_employee_id
   const badge = STATUS_BADGE[session.status]
@@ -1642,11 +1993,6 @@ function SessionRow({
           >
             {badge.label}
           </span>
-          {session.programme_semester_subject_option_id !== null && (
-            <span className="rounded-md border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-indigo-700">
-              Elective
-            </span>
-          )}
           {isSub && (
             <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-700">
               Substitute
@@ -1657,6 +2003,12 @@ function SessionRow({
           <span className="inline-flex items-center gap-1">
             <UserCog className="size-3.5" />
             {teacher}
+            {isSub && scheduled && (
+              <span className="opacity-60">
+                {" "}
+                · sub for {scheduled}
+              </span>
+            )}
           </span>
           {session.room && (
             <span className="inline-flex items-center gap-1">
@@ -1676,41 +2028,319 @@ function SessionRow({
             {session.status === "completed" ? "Amend" : "Mark"}
           </Button>
         )}
-        <Button size="sm" variant="ghost" onClick={onEdit}>
-          Edit
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onSubstitute}
+          disabled={
+            session.status === "cancelled" || session.status === "completed"
+          }
+          title="Assign a substitute teacher"
+        >
+          <UserCog className="size-4" />
+          Teacher
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onCancel}
+          disabled={session.status === "completed"}
+          title={
+            session.status === "cancelled"
+              ? "Re-open this class"
+              : "Cancel this class"
+          }
+        >
+          {session.status === "cancelled" ? (
+            <>
+              <RotateCcw className="size-4" />
+              Re-open
+            </>
+          ) : (
+            <>
+              <X className="size-4" />
+              Cancel
+            </>
+          )}
         </Button>
       </div>
     </li>
   )
 }
 
-// --- edit one session (cancel / substitute / move) -----------------------
+// One slot card for a single elective slot on a single date. The header
+// carries the slot's identity and the bulk actions (cancel-all,
+// proctor-for-all); each cohort below shows its (subject, teacher) combo
+// with per-cohort substitute and cancel via the existing edit drawer.
+function ElectiveSlotRow({
+  group,
+  onCancelCohort,
+  onSubstituteCohort,
+  onMarkCohort,
+  onCancelSlot,
+  onSubstituteSlot,
+}: {
+  group: ManageGroup & { kind: "elective" }
+  onCancelCohort: (s: ClassSession) => void
+  onSubstituteCohort: (s: ClassSession) => void
+  onMarkCohort: (s: ClassSession) => void
+  onCancelSlot: () => void
+  onSubstituteSlot: () => void
+}) {
+  const cancelledCount = group.cohorts.filter(
+    (c) => c.status === "cancelled",
+  ).length
+  const completedCount = group.cohorts.filter(
+    (c) => c.status === "completed",
+  ).length
+  // All cohorts already cancelled / locked — neutralise the bulk CTAs so
+  // the admin doesn't get a "skipped: all already cancelled" toast surprise.
+  const anyActionable = group.cohorts.some(
+    (c) => c.status === "scheduled",
+  )
 
-function SessionEditForm({
+  return (
+    <li className="block px-0 py-0">
+      <div className="bg-indigo-500/[0.04]">
+        <div className="flex items-start gap-3 border-l-2 border-indigo-500/40 px-3 py-2.5">
+          <div className="flex w-24 shrink-0 flex-col gap-0.5 text-xs">
+            <span className="font-medium text-foreground">
+              {group.period_start_time?.slice(0, 5) ?? "?"}–
+              {group.period_end_time?.slice(0, 5) ?? "?"}
+            </span>
+            <span className="text-muted-foreground">
+              {group.period_label ?? "Period"}
+            </span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Layers className="size-3.5 text-indigo-700" />
+              <span className="truncate text-sm font-semibold">
+                {group.slot_name}
+              </span>
+              <span className="rounded-md border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-indigo-700">
+                Elective slot
+              </span>
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <Users className="size-3.5" />
+                {group.cohorts.length} cohort
+                {group.cohorts.length === 1 ? "" : "s"}
+              </span>
+              {cancelledCount > 0 && (
+                <span className="text-destructive">
+                  · {cancelledCount} cancelled
+                </span>
+              )}
+              {completedCount > 0 && (
+                <span className="text-emerald-700">
+                  · {completedCount} completed
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onSubstituteSlot}
+              disabled={!anyActionable}
+              title="Assign one teacher to every cohort (e.g. exam proctor)"
+            >
+              <UserCog className="size-4" />
+              Proctor
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onCancelSlot}
+              disabled={!anyActionable}
+              title="Cancel every cohort in this slot at once"
+            >
+              <X className="size-4" />
+              Cancel slot
+            </Button>
+          </div>
+        </div>
+        <ul className="divide-y border-t border-indigo-500/20">
+          {group.cohorts.map((c) => (
+            <ElectiveCohortRow
+              key={c.id}
+              session={c}
+              onCancel={() => onCancelCohort(c)}
+              onSubstitute={() => onSubstituteCohort(c)}
+              onMark={() => onMarkCohort(c)}
+            />
+          ))}
+        </ul>
+      </div>
+    </li>
+  )
+}
+
+// One cohort under a slot. Same shape as a regular SessionRow but indented,
+// without the period column (the slot header carries it), and with the
+// (subject, teacher) combo front-and-centre — which is the unit the admin
+// is reasoning about when they say "replace teacher for Java".
+function ElectiveCohortRow({
   session,
+  onCancel,
+  onSubstitute,
+  onMark,
+}: {
+  session: ClassSession
+  onCancel: () => void
+  onSubstitute: () => void
+  onMark: () => void
+}) {
+  const subjectName =
+    session.subject?.name ??
+    session.programme_semester_subject_option?.subject?.name ??
+    "(unknown)"
+  const subjectCode =
+    session.subject?.code ??
+    session.programme_semester_subject_option?.subject?.code ??
+    ""
+  const teacher =
+    session.effective_employee?.emp_display_name ?? "(teacher TBD)"
+  const scheduled = session.scheduled_employee?.emp_display_name ?? null
+  const isSub =
+    session.effective_employee_id !== session.scheduled_employee_id
+  const badge = STATUS_BADGE[session.status]
+  return (
+    <li
+      className={cn(
+        "flex items-start gap-3 px-3 py-2 pl-10",
+        session.status === "cancelled" && "opacity-70",
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate text-sm font-medium">
+            {subjectCode && (
+              <span className="text-muted-foreground">{subjectCode} </span>
+            )}
+            {subjectName}
+          </span>
+          <span className="text-muted-foreground">·</span>
+          <span className="inline-flex items-center gap-1 text-sm">
+            <UserCog className="size-3.5 text-muted-foreground" />
+            {teacher}
+          </span>
+          <span
+            className={cn(
+              "rounded-md px-1.5 py-0.5 text-[10px] uppercase tracking-wide",
+              badge.className,
+            )}
+          >
+            {badge.label}
+          </span>
+          {isSub && (
+            <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-700">
+              Substitute
+            </span>
+          )}
+        </div>
+        {(isSub && scheduled) || session.room || session.cancel_reason ? (
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            {isSub && scheduled && (
+              <span className="opacity-80">sub for {scheduled}</span>
+            )}
+            {session.room && (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="size-3.5" />
+                {session.room}
+              </span>
+            )}
+            {session.cancel_reason && (
+              <span className="italic">{session.cancel_reason}</span>
+            )}
+          </div>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        {session.status !== "cancelled" && (
+          <Button size="sm" variant="ghost" onClick={onMark}>
+            <UserCheck className="size-4" />
+            {session.status === "completed" ? "Amend" : "Mark"}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onSubstitute}
+          disabled={
+            session.status === "cancelled" || session.status === "completed"
+          }
+          title="Assign a substitute teacher for this cohort"
+        >
+          <UserCog className="size-4" />
+          Teacher
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onCancel}
+          disabled={session.status === "completed"}
+          title={
+            session.status === "cancelled"
+              ? "Re-open this cohort"
+              : "Cancel this cohort"
+          }
+        >
+          {session.status === "cancelled" ? (
+            <>
+              <RotateCcw className="size-4" />
+              Re-open
+            </>
+          ) : (
+            <>
+              <X className="size-4" />
+              Cancel
+            </>
+          )}
+        </Button>
+      </div>
+    </li>
+  )
+}
+
+// Slot-level bulk actions drawer. Opens from the slot header — covers
+// "cancel every cohort" and "assign one proctor to every cohort". The
+// dual-mode form keeps the same shape so the admin can switch between the
+// two without opening a different sheet.
+function SlotBulkActionForm({
+  slot,
   onClose,
   onChanged,
 }: {
-  session: ClassSession
+  slot: {
+    slot_name: string
+    session_date: string
+    period_label: string | null
+    cohorts: ClassSession[]
+    initial: "cancel" | "substitute"
+  }
   onClose: () => void
   onChanged: () => void | Promise<void>
 }) {
-  const [busy, setBusy] = React.useState<
-    "cancel" | "uncancel" | "substitute" | null
-  >(null)
-  const [confirmCancel, setConfirmCancel] = React.useState(false)
+  const [mode, setMode] = React.useState<"cancel" | "substitute">(slot.initial)
   const [cancelReason, setCancelReason] = React.useState("")
-  const [subEmployeeId, setSubEmployeeId] = React.useState<number | null>(
-    session.effective_employee_id,
-  )
+  const [subEmployeeId, setSubEmployeeId] = React.useState<number | null>(null)
   const [subReason, setSubReason] = React.useState("")
+  const [busy, setBusy] = React.useState(false)
+  const [confirmCancel, setConfirmCancel] = React.useState(false)
   const [employees, setEmployees] = React.useState<Employee[]>([])
   const [employeesLoading, setEmployeesLoading] = React.useState(false)
 
-  const isCancelled = session.status === "cancelled"
-  const isCompleted = session.status === "completed"
+  // Only "scheduled" cohorts are actionable in bulk. Cancelled / completed
+  // are skipped server-side anyway; surface that here so the count is honest.
+  const actionable = slot.cohorts.filter((c) => c.status === "scheduled")
+  const lockedCount = slot.cohorts.length - actionable.length
 
   React.useEffect(() => {
+    if (mode !== "substitute") return
     setEmployeesLoading(true)
     let cancelled = false
     void (async () => {
@@ -1730,7 +2360,290 @@ function SessionEditForm({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [mode])
+
+  const reportResult = (
+    res: BulkMutationResult,
+    verb: "cancelled" | "substituted",
+  ) => {
+    if (res.skipped.length === 0) {
+      toast.success(
+        `${res.updated} cohort${res.updated === 1 ? "" : "s"} ${verb}.`,
+      )
+      return
+    }
+    toast.info(
+      `${res.updated} cohort${res.updated === 1 ? "" : "s"} ${verb}; ${res.skipped.length} skipped.`,
+      {
+        description: res.skipped
+          .slice(0, 3)
+          .map((s) => `#${s.id}: ${s.reason}`)
+          .join("\n"),
+      },
+    )
+  }
+
+  const doCancelAll = async () => {
+    setBusy(true)
+    try {
+      const res = await bulkCancelSessions({
+        session_ids: actionable.map((c) => c.id),
+        reason: cancelReason.trim(),
+      })
+      reportResult(res, "cancelled")
+      await onChanged()
+    } catch (err) {
+      toast.error("Couldn't cancel the slot", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setBusy(false)
+      setConfirmCancel(false)
+    }
+  }
+
+  const doSubstituteAll = async () => {
+    if (subEmployeeId === null) return
+    setBusy(true)
+    try {
+      const res = await bulkSubstituteSessions({
+        session_ids: actionable.map((c) => c.id),
+        new_effective_employee_id: subEmployeeId,
+        reason: subReason.trim() || undefined,
+      })
+      reportResult(res, "substituted")
+      await onChanged()
+    } catch (err) {
+      toast.error("Couldn't assign the proctor", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <SheetHeader>
+        <SheetTitle>
+          {slot.slot_name} ·{" "}
+          {fullDateFmt.format(parseISO(slot.session_date))}
+        </SheetTitle>
+        <SheetDescription>
+          {slot.period_label ?? "Period"} ·{" "}
+          {slot.cohorts.length} cohort{slot.cohorts.length === 1 ? "" : "s"}
+          {lockedCount > 0
+            ? ` (${lockedCount} already cancelled or completed)`
+            : ""}
+        </SheetDescription>
+      </SheetHeader>
+
+      <SheetBody className="space-y-5">
+        <div className="inline-flex overflow-hidden rounded-md border bg-background text-xs">
+          <button
+            type="button"
+            onClick={() => setMode("cancel")}
+            className={cn(
+              "inline-flex items-center gap-1 px-3 py-1.5 transition-colors",
+              mode === "cancel"
+                ? "bg-destructive/10 text-destructive"
+                : "text-muted-foreground hover:bg-accent/40",
+            )}
+          >
+            <X className="size-3.5" />
+            Cancel whole slot
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("substitute")}
+            className={cn(
+              "inline-flex items-center gap-1 border-l px-3 py-1.5 transition-colors",
+              mode === "substitute"
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-accent/40",
+            )}
+          >
+            <UserCog className="size-3.5" />
+            Proctor for slot
+          </button>
+        </div>
+
+        <div className="rounded-md border bg-muted/20 p-3 text-xs">
+          <div className="font-medium text-foreground">
+            Cohorts affected ({actionable.length})
+          </div>
+          <ul className="mt-1 space-y-0.5 text-muted-foreground">
+            {slot.cohorts.map((c) => {
+              const sub =
+                c.subject?.code ?? c.programme_semester_subject_option?.subject?.code
+              const subjName =
+                c.subject?.name ?? c.programme_semester_subject_option?.subject?.name
+              const t = c.effective_employee?.emp_display_name ?? "—"
+              const locked = c.status !== "scheduled"
+              return (
+                <li
+                  key={c.id}
+                  className={cn(locked && "line-through opacity-60")}
+                >
+                  {sub ? `${sub} ` : ""}
+                  {subjName ?? "(unknown)"} · {t}
+                  {locked ? ` · ${c.status}` : ""}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+
+        {mode === "cancel" ? (
+          <section className="space-y-2">
+            <Label htmlFor="bulk-cancel-reason" className="text-xs">
+              Reason
+            </Label>
+            <Input
+              id="bulk-cancel-reason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              maxLength={256}
+              placeholder="e.g. Auditorium booking — slot relocated"
+            />
+            <Button
+              variant="destructive"
+              onClick={() => setConfirmCancel(true)}
+              disabled={
+                cancelReason.trim().length === 0 ||
+                busy ||
+                actionable.length === 0
+              }
+            >
+              <X className="size-4" />
+              Cancel all {actionable.length} cohort
+              {actionable.length === 1 ? "" : "s"}
+            </Button>
+          </section>
+        ) : (
+          <section className="space-y-2">
+            <Label className="text-xs">Proctor (one teacher for all cohorts)</Label>
+            <Combobox
+              value={subEmployeeId}
+              options={employees.map<ComboboxOption>((e) => ({
+                value: e.id,
+                label: e.emp_display_name,
+                sublabel: e.emp_code,
+              }))}
+              onChange={(v) => setSubEmployeeId(v)}
+              placeholder={employeesLoading ? "Loading…" : "Pick a teacher…"}
+              disabled={employeesLoading}
+            />
+            <Input
+              value={subReason}
+              onChange={(e) => setSubReason(e.target.value)}
+              maxLength={256}
+              placeholder="Reason (optional) — e.g. Mid-sem exam proctor"
+            />
+            <Button
+              onClick={doSubstituteAll}
+              disabled={
+                subEmployeeId === null || busy || actionable.length === 0
+              }
+            >
+              <UserCog className="size-4" />
+              Assign as proctor for {actionable.length} cohort
+              {actionable.length === 1 ? "" : "s"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              The same teacher will become the effective teacher for every
+              actionable cohort in this slot. Original (scheduled) teachers
+              are kept on each session for the audit trail.
+            </p>
+          </section>
+        )}
+      </SheetBody>
+
+      <SheetFooter>
+        <Button variant="ghost" onClick={onClose} disabled={busy}>
+          Close
+        </Button>
+      </SheetFooter>
+
+      <ConfirmDialog
+        open={confirmCancel}
+        onOpenChange={setConfirmCancel}
+        title={`Cancel ${actionable.length} cohort${actionable.length === 1 ? "" : "s"}?`}
+        description={
+          <>
+            Every cohort in{" "}
+            <span className="font-medium text-foreground">
+              {slot.slot_name}
+            </span>{" "}
+            on{" "}
+            <span className="font-medium text-foreground">
+              {fullDateFmt.format(parseISO(slot.session_date))}
+            </span>{" "}
+            will be cancelled. Students' "held" count won't increment for
+            this slot.
+          </>
+        }
+        confirmLabel="Cancel slot"
+        tone="destructive"
+        loading={busy}
+        onConfirm={doCancelAll}
+      />
+    </div>
+  )
+}
+
+// --- edit one session (cancel / substitute / move) -----------------------
+
+// Build the "(Java, within Open Elective 1)" descriptor used by both the
+// cancel and substitute drawers. Pulled out so the two forms always agree
+// on how a session identifies itself in copy.
+function describeSession(session: ClassSession): {
+  isElective: boolean
+  slotName: string | null
+  cohortSubject: string | null
+  cohortSubjectCode: string | null
+  subtitleLine: string
+} {
+  const isElective = session.programme_semester_subject_option_id !== null
+  const slotName =
+    session.programme_semester_subject?.placeholder_name ?? null
+  const cohortSubject =
+    session.subject?.name ??
+    session.programme_semester_subject_option?.subject?.name ??
+    null
+  const cohortSubjectCode =
+    session.subject?.code ??
+    session.programme_semester_subject_option?.subject?.code ??
+    null
+  const subtitleLine = isElective
+    ? `${fullDateFmt.format(parseISO(session.session_date))} · ${session.timetable_period?.label ?? "Period"} · ${cohortSubjectCode ? `${cohortSubjectCode} ` : ""}${cohortSubject ?? "Cohort"}${slotName ? ` (within ${slotName})` : ""}`
+    : `${fullDateFmt.format(parseISO(session.session_date))} · ${session.timetable_period?.label ?? "Period"} · ${session.subject?.name ?? "Class"}`
+  return { isElective, slotName, cohortSubject, cohortSubjectCode, subtitleLine }
+}
+
+// Focused drawer #1: cancel or re-open this session. Single responsibility
+// keeps the form short, the destructive action prominent, and avoids the
+// "edit drawer with two sections" pattern where users would scroll past the
+// substitute UI to find the cancel CTA (and vice-versa).
+function CancelSessionForm({
+  session,
+  onClose,
+  onChanged,
+}: {
+  session: ClassSession
+  onClose: () => void
+  onChanged: () => void | Promise<void>
+}) {
+  const [busy, setBusy] = React.useState<"cancel" | "uncancel" | null>(null)
+  const [confirmCancel, setConfirmCancel] = React.useState(false)
+  const [cancelReason, setCancelReason] = React.useState("")
+
+  const isCancelled = session.status === "cancelled"
+  const isCompleted = session.status === "completed"
+  const { isElective, slotName, cohortSubject, subtitleLine } =
+    describeSession(session)
 
   const doCancel = async () => {
     setBusy("cancel")
@@ -1765,150 +2678,96 @@ function SessionEditForm({
     }
   }
 
-  const doSubstitute = async () => {
-    if (!subEmployeeId) return
-    setBusy("substitute")
-    try {
-      await substituteSession(session.id, {
-        new_effective_employee_id: subEmployeeId,
-        reason: subReason.trim() || undefined,
-      })
-      toast.success("Substitute assigned.")
-      await onChanged()
-    } catch (err) {
-      toast.error("Couldn't substitute", {
-        description:
-          err instanceof ApiError ? err.message : "Please try again.",
-      })
-    } finally {
-      setBusy(null)
-    }
-  }
-
   return (
     <div className="flex h-full flex-col">
       <SheetHeader>
-        <SheetTitle>Edit class</SheetTitle>
-        <SheetDescription>
-          {fullDateFmt.format(parseISO(session.session_date))} ·{" "}
-          {session.timetable_period?.label} · {session.subject?.name}
-        </SheetDescription>
+        <SheetTitle>
+          {isCancelled
+            ? isElective
+              ? "Re-open cohort"
+              : "Re-open class"
+            : isElective
+              ? "Cancel cohort"
+              : "Cancel class"}
+        </SheetTitle>
+        <SheetDescription>{subtitleLine}</SheetDescription>
       </SheetHeader>
 
-      <SheetBody className="space-y-5">
-        {isCompleted && (
-          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800">
-            <p className="font-medium">Attendance already marked</p>
-            <p className="mt-1">
-              Cancel / substitute is disabled — use the amend flow on the
-              marking screen if you need to change the recorded attendance.
+      <SheetBody className="space-y-4">
+        {isElective && (
+          <div className="rounded-md border border-indigo-500/30 bg-indigo-500/5 p-3 text-xs">
+            <p className="font-medium text-indigo-900">
+              Elective cohort — affects only the students who picked{" "}
+              <span className="font-semibold">
+                {cohortSubject ?? "this subject"}
+              </span>
+              {slotName ? ` in ${slotName}` : ""}.
+            </p>
+            <p className="mt-1 text-muted-foreground">
+              To cancel every cohort of this slot at once, close this drawer
+              and use "Cancel slot" on the slot header.
             </p>
           </div>
         )}
 
-        {/* Cancel / Uncancel */}
-        <section className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Cancellation
-          </h3>
-          {isCancelled ? (
-            <div className="space-y-2 rounded-md border bg-muted/30 p-3">
-              <p className="text-sm">
-                Cancelled
-                {session.cancel_reason ? `: ${session.cancel_reason}` : "."}
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={doUncancel}
-                disabled={busy !== null || session.session_date < todayISO()}
-              >
-                <RotateCcw className="size-4" />
-                Re-open class
-              </Button>
-              {session.session_date < todayISO() && (
-                <p className="text-xs text-muted-foreground">
-                  Can't re-open a class whose date has passed.
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="cancel-reason" className="text-xs">
-                Reason
-              </Label>
-              <Input
-                id="cancel-reason"
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                maxLength={256}
-                placeholder="e.g. Faculty unavailable"
-                disabled={isCompleted}
-              />
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => setConfirmCancel(true)}
-                disabled={
-                  cancelReason.trim().length === 0 ||
-                  busy !== null ||
-                  isCompleted
-                }
-              >
-                <X className="size-4" />
-                Cancel class
-              </Button>
-            </div>
-          )}
-        </section>
-
-        {/* Substitute */}
-        <section className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Change teacher (substitute)
-          </h3>
-          <div className="space-y-2">
-            <Label className="text-xs">Effective teacher</Label>
-            <Combobox
-              value={subEmployeeId}
-              options={employees.map<ComboboxOption>((e) => ({
-                value: e.id,
-                label: e.emp_display_name,
-                sublabel: e.emp_code,
-              }))}
-              onChange={(v) => setSubEmployeeId(v)}
-              placeholder={employeesLoading ? "Loading…" : "Pick a teacher…"}
-              disabled={employeesLoading || isCancelled || isCompleted}
-            />
-            <p className="text-xs text-muted-foreground">
-              Scheduled:{" "}
-              {session.scheduled_employee?.emp_display_name ?? "—"} · Currently:{" "}
-              {session.effective_employee?.emp_display_name ?? "—"}
+        {isCompleted && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800">
+            <p className="font-medium">Attendance already marked</p>
+            <p className="mt-1">
+              You can't cancel a class that already has attendance — use the
+              amend flow on the marking screen instead.
             </p>
+          </div>
+        )}
+
+        {isCancelled ? (
+          <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+            <p className="text-sm">
+              Cancelled
+              {session.cancel_reason ? `: ${session.cancel_reason}` : "."}
+            </p>
+            <Button
+              variant="outline"
+              onClick={doUncancel}
+              disabled={busy !== null || session.session_date < todayISO()}
+            >
+              <RotateCcw className="size-4" />
+              Re-open class
+            </Button>
+            {session.session_date < todayISO() && (
+              <p className="text-xs text-muted-foreground">
+                Can't re-open a class whose date has passed.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="cancel-reason" className="text-xs">
+              Reason
+            </Label>
             <Input
-              value={subReason}
-              onChange={(e) => setSubReason(e.target.value)}
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
               maxLength={256}
-              placeholder="Reason (optional)"
-              disabled={isCancelled || isCompleted}
+              placeholder="e.g. Faculty unavailable"
+              disabled={isCompleted}
+              autoFocus
             />
             <Button
-              size="sm"
-              variant="outline"
-              onClick={doSubstitute}
+              variant="destructive"
+              onClick={() => setConfirmCancel(true)}
               disabled={
-                subEmployeeId === null ||
-                subEmployeeId === session.effective_employee_id ||
+                cancelReason.trim().length === 0 ||
                 busy !== null ||
-                isCancelled ||
                 isCompleted
               }
             >
-              <UserCog className="size-4" />
-              Save substitute
+              <X className="size-4" />
+              Cancel class
             </Button>
           </div>
-        </section>
+        )}
       </SheetBody>
 
       <SheetFooter>
@@ -1936,7 +2795,177 @@ function SessionEditForm({
         loading={busy === "cancel"}
         onConfirm={doCancel}
       />
+    </div>
+  )
+}
 
+// Focused drawer #2: change the effective teacher for this session.
+// Separate from cancel so the workflows don't visually compete — picking a
+// substitute is a constructive action that lives in its own surface.
+function SubstituteSessionForm({
+  session,
+  onClose,
+  onChanged,
+}: {
+  session: ClassSession
+  onClose: () => void
+  onChanged: () => void | Promise<void>
+}) {
+  const [busy, setBusy] = React.useState(false)
+  const [subEmployeeId, setSubEmployeeId] = React.useState<number | null>(
+    session.effective_employee_id,
+  )
+  const [subReason, setSubReason] = React.useState("")
+  const [employees, setEmployees] = React.useState<Employee[]>([])
+  const [employeesLoading, setEmployeesLoading] = React.useState(false)
+
+  const isCancelled = session.status === "cancelled"
+  const isCompleted = session.status === "completed"
+  const { isElective, slotName, cohortSubject, subtitleLine } =
+    describeSession(session)
+
+  React.useEffect(() => {
+    setEmployeesLoading(true)
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await listEmployees({
+          page: 1,
+          pageSize: 1000,
+          status: "active",
+        })
+        if (!cancelled) setEmployees(res.rows)
+      } catch {
+        if (!cancelled) setEmployees([])
+      } finally {
+        if (!cancelled) setEmployeesLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const doSubstitute = async () => {
+    if (!subEmployeeId) return
+    setBusy(true)
+    try {
+      await substituteSession(session.id, {
+        new_effective_employee_id: subEmployeeId,
+        reason: subReason.trim() || undefined,
+      })
+      toast.success("Substitute assigned.")
+      await onChanged()
+    } catch (err) {
+      toast.error("Couldn't substitute", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <SheetHeader>
+        <SheetTitle>
+          {isElective
+            ? `Change teacher for ${cohortSubject ?? "this subject"}`
+            : "Change teacher"}
+        </SheetTitle>
+        <SheetDescription>{subtitleLine}</SheetDescription>
+      </SheetHeader>
+
+      <SheetBody className="space-y-4">
+        {isElective && (
+          <div className="rounded-md border border-indigo-500/30 bg-indigo-500/5 p-3 text-xs">
+            <p className="font-medium text-indigo-900">
+              Replacing the teacher only for the{" "}
+              <span className="font-semibold">
+                {cohortSubject ?? "this subject"}
+              </span>{" "}
+              cohort
+              {slotName ? ` of ${slotName}` : ""}. Other cohorts stay on
+              their assigned teachers.
+            </p>
+            <p className="mt-1 text-muted-foreground">
+              For a single proctor across every cohort (e.g. an exam), close
+              this drawer and use "Proctor" on the slot header.
+            </p>
+          </div>
+        )}
+
+        {isCancelled && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800">
+            <p className="font-medium">Class is cancelled</p>
+            <p className="mt-1">
+              Re-open the class from the cancel drawer before assigning a
+              new teacher.
+            </p>
+          </div>
+        )}
+
+        {isCompleted && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800">
+            <p className="font-medium">Attendance already marked</p>
+            <p className="mt-1">
+              Substitute is locked once attendance has been recorded.
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label className="text-xs">
+            {isElective
+              ? `Effective teacher for ${cohortSubject ?? "this cohort"}`
+              : "Effective teacher"}
+          </Label>
+          <Combobox
+            value={subEmployeeId}
+            options={employees.map<ComboboxOption>((e) => ({
+              value: e.id,
+              label: e.emp_display_name,
+              sublabel: e.emp_code,
+            }))}
+            onChange={(v) => setSubEmployeeId(v)}
+            placeholder={employeesLoading ? "Loading…" : "Pick a teacher…"}
+            disabled={employeesLoading || isCancelled || isCompleted}
+          />
+          <p className="text-xs text-muted-foreground">
+            Scheduled:{" "}
+            {session.scheduled_employee?.emp_display_name ?? "—"} ·
+            Currently:{" "}
+            {session.effective_employee?.emp_display_name ?? "—"}
+          </p>
+          <Input
+            value={subReason}
+            onChange={(e) => setSubReason(e.target.value)}
+            maxLength={256}
+            placeholder="Reason (optional) — e.g. Original faculty on leave"
+            disabled={isCancelled || isCompleted}
+          />
+          <Button
+            onClick={doSubstitute}
+            disabled={
+              subEmployeeId === null ||
+              subEmployeeId === session.effective_employee_id ||
+              busy ||
+              isCancelled ||
+              isCompleted
+            }
+          >
+            <UserCog className="size-4" />
+            {busy ? "Saving…" : "Save substitute"}
+          </Button>
+        </div>
+      </SheetBody>
+
+      <SheetFooter>
+        <Button variant="ghost" onClick={onClose} disabled={busy}>
+          Close
+        </Button>
+      </SheetFooter>
     </div>
   )
 }

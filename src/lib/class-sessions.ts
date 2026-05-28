@@ -138,6 +138,32 @@ export async function substituteSession(
   })
 }
 
+export type BulkMutationResult = {
+  updated: number
+  skipped: { id: number; reason: string }[]
+}
+
+export async function bulkCancelSessions(input: {
+  session_ids: number[]
+  reason: string
+}): Promise<BulkMutationResult> {
+  return api<BulkMutationResult>("/admin/class-sessions/bulk-cancel", {
+    method: "POST",
+    body: input,
+  })
+}
+
+export async function bulkSubstituteSessions(input: {
+  session_ids: number[]
+  new_effective_employee_id: number
+  reason?: string
+}): Promise<BulkMutationResult> {
+  return api<BulkMutationResult>("/admin/class-sessions/bulk-substitute", {
+    method: "POST",
+    body: input,
+  })
+}
+
 export async function moveSession(
   id: number,
   input: {

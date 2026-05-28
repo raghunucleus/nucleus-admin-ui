@@ -254,9 +254,21 @@ export async function updateTimetable(
   })
 }
 
+/**
+ * Window passed to preview / publish. `days_of_week` is optional — when
+ * supplied (ISO weekday list, 1=Mon..7=Sun), preview only enumerates
+ * those days and publish wipes + reseeds only those days. Omit for the
+ * default full-window behavior.
+ */
+export interface TimetableWeekWindow {
+  from: string
+  to: string
+  days_of_week?: number[]
+}
+
 export async function previewTimetableWeek(
   id: number,
-  window: { from: string; to: string },
+  window: TimetableWeekWindow,
 ): Promise<PreviewResult> {
   return api<PreviewResult>(`/admin/timetables/${id}/preview-week`, {
     method: "POST",
@@ -266,7 +278,7 @@ export async function previewTimetableWeek(
 
 export async function publishTimetableWeek(
   id: number,
-  window: { from: string; to: string },
+  window: TimetableWeekWindow,
 ): Promise<PublishResult> {
   return api<PublishResult>(`/admin/timetables/${id}/publish-week`, {
     method: "POST",
