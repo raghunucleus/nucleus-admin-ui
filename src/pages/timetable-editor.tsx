@@ -226,6 +226,10 @@ export function TimetableEditorPage() {
   const [cellTarget, setCellTarget] = React.useState<{
     day: number
     period: TimetablePeriod
+    /** Longest span placeable here — the run of consecutive teaching periods
+        starting at this cell, stopping at the next break (backend rejects a
+        merged class that covers a break). */
+    maxSpan: number
   } | null>(null)
   const [structureOpen, setStructureOpen] = React.useState(false)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
@@ -522,7 +526,22 @@ export function TimetableEditorPage() {
             entryMap={entryMap}
             paletteForEntry={paletteForEntry}
             readOnly={!!readOnly}
-            onCellClick={(day, period) => setCellTarget({ day, period })}
+            onCellClick={(day, period) => {
+              const startIdx = periods.findIndex((p) => p.id === period.id)
+              let consecutive = 0
+              for (
+                let i = startIdx;
+                i < periods.length && !periods[i].is_break;
+                i += 1
+              ) {
+                consecutive += 1
+              }
+              setCellTarget({
+                day,
+                period,
+                maxSpan: Math.min(consecutive, 6), // cap UI choice at 6
+              })
+            }}
           />
         )}
       </section>
@@ -540,6 +559,7 @@ export function TimetableEditorPage() {
           timetableId={timetable.id}
           day={cellTarget.day}
           period={cellTarget.period}
+          maxSpan={cellTarget.maxSpan}
           existing={entryMap.get(
             cellKey(cellTarget.day, cellTarget.period.id),
           )}
@@ -1542,6 +1562,7 @@ function CellEditorModal({
   timetableId,
   day,
   period,
+  maxSpan,
   existing,
   palette,
   onClose,
@@ -1551,6 +1572,7 @@ function CellEditorModal({
   timetableId: number
   day: number
   period: TimetablePeriod
+  maxSpan: number
   existing: TimetableEntry | undefined
   palette: PaletteItem[]
   onClose: () => void
@@ -1569,6 +1591,9 @@ function CellEditorModal({
   )
   const [room, setRoom] = React.useState(existing?.room ?? "")
   const [note, setNote] = React.useState(existing?.note ?? "")
+  const [span, setSpan] = React.useState(
+    Math.min(Math.max(existing?.span ?? 1, 1), Math.max(maxSpan, 1)),
+  )
   const [search, setSearch] = React.useState("")
   const [busy, setBusy] = React.useState(false)
 
@@ -1616,7 +1641,8 @@ function CellEditorModal({
   const teacherSatisfied = selected
     ? selected.isElective || teacherId !== null
     : false
-  const canSave = !!selected && teacherSatisfied && !busy
+  const canSave =
+    !!selected && teacherSatisfied && span >= 1 && span <= maxSpan && !busy
 
   const save = async () => {
     if (!selected) return
@@ -1625,6 +1651,7 @@ function CellEditorModal({
       const entry = await upsertTimetableEntry(timetableId, {
         day_of_week: day,
         timetable_period_id: period.id,
+        span,
         programme_semester_subject_id:
           selected.kind === "semester" ? selected.refId : undefined,
         timetable_course_id:
@@ -1925,6 +1952,30 @@ function CellEditorModal({
               />
             </div>
           </div>
+          {maxSpan > 1 ? (
+            <div className="mt-3 space-y-1.5">
+              <Label htmlFor="cell-span">Span (periods)</Label>
+              <Input
+                id="cell-span"
+                type="number"
+                min={1}
+                max={maxSpan}
+                value={span}
+                onChange={(e) =>
+                  setSpan(
+                    Math.max(
+                      1,
+                      Math.min(maxSpan, Number(e.target.value) || 1),
+                    ),
+                  )
+                }
+                className="h-9 w-28"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Merge up to {maxSpan} consecutive periods (e.g. a lab).
+              </p>
+            </div>
+          ) : null}
         </section>
       </div>
     </Modal>
