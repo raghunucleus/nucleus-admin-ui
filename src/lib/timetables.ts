@@ -188,18 +188,39 @@ export type PreviewSession = {
   teacher_emp_code: string | null
   room: string | null
   already_exists: boolean
+  /** True when this (date, period) slot already holds a marked (completed)
+   *  class — publish keeps the held one and skips this row. */
+  kept_marked: boolean
+}
+
+/** A completed/cancelled session a (re)publish leaves untouched (history). */
+export type KeptSession = {
+  session_date: string
+  day_of_week: number
+  timetable_period_id: number
+  period_label: string | null
+  start_time: string | null
+  end_time: string | null
+  subject_id: number
+  subject_code: string | null
+  subject_name: string | null
+  teacher_name: string | null
+  status: "completed" | "cancelled"
 }
 
 export type PreviewResult = {
   sessions: PreviewSession[]
   holidays: { date: string; name: string; end_date: string | null }[]
   blocked_dates: string[]
+  kept_sessions: KeptSession[]
 }
 
 export type PublishResult = {
   inserted: number
   skipped_holidays: number
   replaced: number
+  /** Rows not seeded because their slot already held a marked class. */
+  kept_marked: number
 }
 
 export type WeekSummary = {

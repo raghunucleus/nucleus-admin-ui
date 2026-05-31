@@ -16,6 +16,7 @@ export type Employee = {
   emp_code: string
   emp_display_name: string
   gender: Gender
+  dob: string | null
   department_id: number
   department?: Department
   designation_id: number
@@ -33,6 +34,7 @@ export type CreateEmployeeInput = {
   emp_code: string
   emp_display_name: string
   gender: Gender
+  dob: string | null
   department_id: number
   designation_id: number
   mobile_number: string
@@ -45,6 +47,7 @@ export type UpdateEmployeeInput = {
   emp_code?: string
   emp_display_name?: string
   gender?: Gender
+  dob?: string | null
   department_id?: number
   designation_id?: number
   mobile_number?: string
@@ -141,6 +144,7 @@ export type BulkCreateEmployeeRow = {
   emp_code: string
   emp_display_name: string
   gender: Gender
+  dob: string | null
   department_code: string
   designation_code: string
   mobile_number: string

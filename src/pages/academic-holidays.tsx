@@ -3,10 +3,18 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import { z } from "zod"
-import { CalendarRange, Plus, RefreshCw, Trash2 } from "lucide-react"
+import {
+  CalendarRange,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  SearchX,
+  Trash2,
+  X,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -35,19 +43,10 @@ import {
   declareAcademicHoliday,
   listAcademicHolidays,
   removeAcademicHoliday,
+  updateAcademicHoliday,
   type AcademicHoliday,
-  type AcademicHolidayScope,
   type AcademicHolidayType,
 } from "@/lib/academic-holidays"
-import {
-  listAttendanceGroups,
-  type AttendanceGroup,
-} from "@/lib/attendance-groups"
-import { listProgrammes, type Programme } from "@/lib/programmes"
-import {
-  listAdmissionYears,
-  type AdmissionYear,
-} from "@/lib/admission-years"
 import { cn } from "@/lib/utils"
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -56,21 +55,30 @@ const HOLIDAY_TYPES: { value: AcademicHolidayType; label: string }[] = [
   { value: "public", label: "Public holiday" },
   { value: "institutional", label: "Institutional" },
   { value: "unplanned", label: "Unplanned closure" },
-  { value: "half_day", label: "Half-day" },
 ]
-
-const SCOPE_LABEL: Record<AcademicHolidayScope, string> = {
-  institution: "Institution",
-  programme: "Programme",
-  group: "Attendance group",
-}
 
 const TYPE_LABEL: Record<AcademicHolidayType, string> = {
   public: "Public",
   institutional: "Institutional",
   unplanned: "Unplanned",
-  half_day: "Half-day",
 }
+
+// Soft, scannable badge colours per type. Tokens keep them readable in both
+// light and dark themes.
+const TYPE_BADGE: Record<AcademicHolidayType, string> = {
+  public: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  institutional: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  unplanned: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+}
+
+type TypeFilter = AcademicHolidayType | "all"
+
+const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "public", label: "Public" },
+  { value: "institutional", label: "Institutional" },
+  { value: "unplanned", label: "Unplanned" },
+]
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
@@ -100,28 +108,11 @@ const HolidayFormSchema = z
       .or(z.literal(""))
       .optional(),
     name: z.string().trim().min(1, "Name is required").max(120),
-    scope: z.enum(["institution", "programme", "group"]),
-    programme_id: z.number().int().positive().nullable().optional(),
-    attendance_group_id: z.number().int().positive().nullable().optional(),
-    type: z.enum(["public", "institutional", "unplanned", "half_day"]),
+    type: z.enum(["public", "institutional", "unplanned"]),
     reason: z.string().trim().max(256).optional(),
     cancel_existing_sessions: z.boolean(),
   })
   .superRefine((v, ctx) => {
-    if (v.scope === "programme" && !v.programme_id) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Pick a programme",
-        path: ["programme_id"],
-      })
-    }
-    if (v.scope === "group" && !v.attendance_group_id) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Pick an attendance group",
-        path: ["attendance_group_id"],
-      })
-    }
     if (v.end_date && v.end_date.length > 0 && v.end_date < v.date) {
       ctx.addIssue({
         code: "custom",
@@ -141,21 +132,59 @@ const todayISO = (): string => {
   return `${y}-${m}-${day}`
 }
 
+// Quick date-range presets. Each returns the [from, to] pair the date filter
+// feeds to the server ("" = open-ended on that side).
+type DatePreset = { key: string; label: string; range: () => [string, string] }
+
+const DATE_PRESETS: DatePreset[] = [
+  { key: "upcoming", label: "Upcoming", range: () => [todayISO(), ""] },
+  {
+    key: "this-year",
+    label: "This year",
+    range: () => {
+      const y = new Date().getFullYear()
+      return [`${y}-01-01`, `${y}-12-31`]
+    },
+  },
+  {
+    key: "past",
+    label: "Past",
+    range: () => {
+      // Up to and including yesterday — strictly before today.
+      const d = new Date()
+      d.setDate(d.getDate() - 1)
+      const yesterday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        "0",
+      )}-${String(d.getDate()).padStart(2, "0")}`
+      return ["", yesterday]
+    },
+  },
+  { key: "all", label: "All time", range: () => ["", ""] },
+]
+
 export function AcademicHolidaysPage() {
   const [rows, setRows] = React.useState<AcademicHoliday[]>([])
   const [loading, setLoading] = React.useState(true)
   const [refreshing, setRefreshing] = React.useState(false)
   const [loadFailed, setLoadFailed] = React.useState(false)
   const [formOpen, setFormOpen] = React.useState(false)
+  const [editTarget, setEditTarget] = React.useState<AcademicHoliday | null>(
+    null,
+  )
   const [confirmTarget, setConfirmTarget] = React.useState<AcademicHoliday | null>(
     null,
   )
   const [busyId, setBusyId] = React.useState<number | null>(null)
 
-  // Filter: rolling window starting at today by default. Past holidays are
-  // useful for audit but not the first thing the admin needs to see.
+  // Server-side filter: rolling window starting at today by default. Past
+  // holidays are useful for audit but not the first thing the admin needs.
   const [filterFrom, setFilterFrom] = React.useState<string>(todayISO())
   const [filterTo, setFilterTo] = React.useState<string>("")
+
+  // Client-side filters over the fetched window — instant, no refetch.
+  const [search, setSearch] = React.useState("")
+  const [typeFilter, setTypeFilter] = React.useState<TypeFilter>("all")
 
   const initialLoadDoneRef = React.useRef(false)
   const loadIdRef = React.useRef(0)
@@ -193,6 +222,20 @@ export function AcademicHolidaysPage() {
   React.useEffect(() => {
     void load()
   }, [load])
+
+  const filtered = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return rows.filter((h) => {
+      if (typeFilter !== "all" && h.type !== typeFilter) return false
+      if (q) {
+        const haystack = `${h.name} ${h.reason ?? ""}`.toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
+      return true
+    })
+  }, [rows, search, typeFilter])
+
+  const clientFiltersActive = search.trim() !== "" || typeFilter !== "all"
 
   const handleDelete = async (h: AcademicHoliday) => {
     setBusyId(h.id)
@@ -244,51 +287,148 @@ export function AcademicHolidaysPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs">From</Label>
-          <DatePicker
-            value={filterFrom}
-            onChange={setFilterFrom}
-            allowClear
-            className="w-44"
-          />
+      <div className="space-y-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
+        {/* Search + type — instant client-side filters over the loaded window. */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-56 flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or reason…"
+              className="pl-8 pr-8"
+              aria-label="Search holidays"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center rounded-md border bg-background p-0.5">
+            {TYPE_FILTERS.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setTypeFilter(t.value)}
+                aria-pressed={typeFilter === t.value}
+                className={cn(
+                  "rounded-[5px] px-2.5 py-1 text-xs font-medium transition-colors",
+                  typeFilter === t.value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs">To</Label>
-          <DatePicker
-            value={filterTo}
-            onChange={setFilterTo}
-            allowClear
-            className="w-44"
-          />
+
+        {/* Date window — server-side range, with quick presets. */}
+        <div className="flex flex-wrap items-end gap-3 border-t pt-3">
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">From</Label>
+            <DatePicker
+              value={filterFrom}
+              onChange={setFilterFrom}
+              allowClear
+              className="w-44"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">To</Label>
+            <DatePicker
+              value={filterTo}
+              onChange={setFilterTo}
+              allowClear
+              className="w-44"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-1">
+            {DATE_PRESETS.map((p) => {
+              const [pf, pt] = p.range()
+              const active = filterFrom === pf && filterTo === pt
+              return (
+                <Button
+                  key={p.key}
+                  size="sm"
+                  variant={active ? "secondary" : "ghost"}
+                  className="h-8"
+                  onClick={() => {
+                    setFilterFrom(pf)
+                    setFilterTo(pt)
+                  }}
+                >
+                  {p.label}
+                </Button>
+              )
+            })}
+          </div>
+          <p className="ml-auto text-xs text-muted-foreground">
+            {loading
+              ? "Loading…"
+              : clientFiltersActive
+                ? `${filtered.length} of ${rows.length} shown`
+                : `${rows.length} holiday${rows.length === 1 ? "" : "s"}`}
+          </p>
         </div>
-        <p className="ml-auto text-xs text-muted-foreground">
-          Holidays inside this window are shown. Leaving fields blank widens
-          the range.
-        </p>
       </div>
 
       <Sheet
-        open={formOpen}
+        open={formOpen || editTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setFormOpen(false)
+          if (!open) {
+            setFormOpen(false)
+            setEditTarget(null)
+          }
         }}
       >
         <SheetContent side="right" className="w-full sm:max-w-lg">
-          {formOpen && (
+          {(formOpen || editTarget) && (
             <HolidayForm
-              onCancel={() => setFormOpen(false)}
-              onSaved={async (h, cancelled) => {
+              // Remount per target so the form resets cleanly between
+              // create and editing different rows.
+              key={editTarget ? `edit-${editTarget.id}` : "create"}
+              holiday={editTarget}
+              onCancel={() => {
                 setFormOpen(false)
+                setEditTarget(null)
+              }}
+              onSaved={async (h, cancelled, mode) => {
+                setFormOpen(false)
+                setEditTarget(null)
+                const verb = mode === "edit" ? "updated" : "declared"
                 toast.success(
                   cancelled > 0
-                    ? `${h.name} declared. ${cancelled} session${
+                    ? `${h.name} ${verb}. ${cancelled} session${
                         cancelled === 1 ? "" : "s"
                       } cancelled.`
-                    : `${h.name} declared.`,
+                    : `${h.name} ${verb}.`,
                 )
-                await load()
+                // Keep the just-saved holiday visible. The list defaults to a
+                // window starting today, so a past-dated holiday (e.g. a break
+                // that already ended) would save fine yet never appear — which
+                // reads as "it didn't add". Widen the window to include it;
+                // changing the filter triggers the load effect, otherwise we
+                // reload explicitly.
+                const start = h.date
+                const end = h.end_date ?? h.date
+                let windowChanged = false
+                if (filterFrom && end < filterFrom) {
+                  setFilterFrom(start)
+                  windowChanged = true
+                }
+                if (filterTo && start > filterTo) {
+                  setFilterTo(end)
+                  windowChanged = true
+                }
+                if (!windowChanged) await load()
               }}
             />
           )}
@@ -314,19 +454,24 @@ export function AcademicHolidaysPage() {
             title="No holidays in this window"
             description="Declare a holiday to skip seeded sessions on that date."
           />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={SearchX}
+            title="No holidays match your filters"
+            description="Clear the search or type filter to see the rest of this window."
+          />
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Scope</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead className="w-12 text-right">Actions</TableHead>
+                <TableHead className="w-24 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((h) => (
+              {filtered.map((h) => (
                 <TableRow key={h.id}>
                   <TableCell className="whitespace-nowrap font-medium">
                     {rangeLabel(h)}
@@ -339,30 +484,37 @@ export function AcademicHolidaysPage() {
                       </div>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm">
-                    {SCOPE_LABEL[h.scope]}
-                    {h.scope === "programme" && h.programme && (
-                      <span className="text-muted-foreground">
-                        {" "}— {h.programme.display_name}
-                      </span>
-                    )}
-                    {h.scope === "group" && h.attendance_group && (
-                      <span className="text-muted-foreground">
-                        {" "}— {h.attendance_group.name}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm">{TYPE_LABEL[h.type]}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Remove ${h.name}`}
-                      onClick={() => setConfirmTarget(h)}
-                      disabled={busyId === h.id}
+                  <TableCell>
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                        TYPE_BADGE[h.type],
+                      )}
                     >
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
+                      {TYPE_LABEL[h.type]}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-0.5">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Edit ${h.name}`}
+                        onClick={() => setEditTarget(h)}
+                        disabled={busyId === h.id}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Remove ${h.name}`}
+                        onClick={() => setConfirmTarget(h)}
+                        disabled={busyId === h.id}
+                      >
+                        <Trash2 className="size-4 text-destructive" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -392,12 +544,19 @@ export function AcademicHolidaysPage() {
 // --- form -----------------------------------------------------------------
 
 function HolidayForm({
+  holiday,
   onCancel,
   onSaved,
 }: {
+  holiday?: AcademicHoliday | null
   onCancel: () => void
-  onSaved: (h: AcademicHoliday, sessionsCancelled: number) => void
+  onSaved: (
+    h: AcademicHoliday,
+    sessionsCancelled: number,
+    mode: "create" | "edit",
+  ) => void
 }) {
+  const isEdit = !!holiday
   const {
     register,
     handleSubmit,
@@ -406,119 +565,65 @@ function HolidayForm({
     formState: { errors, isSubmitting },
   } = useForm<HolidayFormValues>({
     resolver: zodResolver(HolidayFormSchema),
-    defaultValues: {
-      date: "",
-      end_date: "",
-      name: "",
-      scope: "institution",
-      programme_id: null,
-      attendance_group_id: null,
-      type: "public",
-      reason: "",
-      cancel_existing_sessions: true,
-    },
+    defaultValues: holiday
+      ? {
+          date: holiday.date,
+          end_date: holiday.end_date ?? "",
+          name: holiday.name,
+          type: holiday.type,
+          reason: holiday.reason ?? "",
+          // Editing defaults to NOT re-cancelling — a metadata fix shouldn't
+          // touch classes. The admin opts in when extending the range.
+          cancel_existing_sessions: false,
+        }
+      : {
+          date: "",
+          end_date: "",
+          name: "",
+          type: "public",
+          reason: "",
+          cancel_existing_sessions: true,
+        },
   })
 
   const date = watch("date")
   const endDate = watch("end_date")
-  const scope = watch("scope")
-  const programmeId = watch("programme_id") ?? null
-  const attendanceGroupId = watch("attendance_group_id") ?? null
-  const cancelExisting = watch("cancel_existing_sessions")
   const type = watch("type")
 
-  const [programmes, setProgrammes] = React.useState<Programme[]>([])
-  const [admissionYears, setAdmissionYears] = React.useState<AdmissionYear[]>([])
-  const [groups, setGroups] = React.useState<AttendanceGroup[]>([])
-  const [groupBatchYearId, setGroupBatchYearId] = React.useState<number | null>(
-    null,
-  )
-  const [groupsLoading, setGroupsLoading] = React.useState(false)
-
-  React.useEffect(() => {
-    void (async () => {
-      try {
-        const [p, ay] = await Promise.all([
-          listProgrammes({ pageSize: 200, status: "active" }),
-          listAdmissionYears({ pageSize: 200, status: "active" }),
-        ])
-        setProgrammes(p.rows)
-        setAdmissionYears(ay.rows)
-      } catch {
-        // Surfaced via combobox empty states.
-      }
-    })()
-  }, [])
-
-  // Attendance groups are scoped to (programme, admission_year). The form
-  // surfaces a small "batch year" picker when scope='group' so the group
-  // combobox stays a flat list.
-  React.useEffect(() => {
-    if (scope !== "group" || !programmeId || !groupBatchYearId) {
-      setGroups([])
-      return
-    }
-    setGroupsLoading(true)
-    let cancelled = false
-    void (async () => {
-      try {
-        const list = await listAttendanceGroups(programmeId, groupBatchYearId)
-        if (!cancelled) setGroups(list)
-      } catch {
-        if (!cancelled) setGroups([])
-      } finally {
-        if (!cancelled) setGroupsLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [scope, programmeId, groupBatchYearId])
-
-  // Clear scope-specific fields when the scope changes so the request stays
-  // honest to the picked shape.
-  React.useEffect(() => {
-    if (scope !== "programme") setValue("programme_id", null)
-    if (scope !== "group") {
-      setValue("attendance_group_id", null)
-      setGroupBatchYearId(null)
-    }
-  }, [scope, setValue])
-
   const onSubmit = handleSubmit(async (values) => {
+    const payload = {
+      date: values.date,
+      end_date:
+        values.end_date && values.end_date.length > 0 ? values.end_date : null,
+      name: values.name,
+      type: values.type,
+      reason: values.reason && values.reason.length > 0 ? values.reason : null,
+      cancel_existing_sessions: values.cancel_existing_sessions,
+    }
     try {
-      const res = await declareAcademicHoliday({
-        date: values.date,
-        end_date: values.end_date && values.end_date.length > 0 ? values.end_date : null,
-        name: values.name,
-        scope: values.scope,
-        programme_id:
-          values.scope === "programme" ? (values.programme_id ?? null) : null,
-        attendance_group_id:
-          values.scope === "group"
-            ? (values.attendance_group_id ?? null)
-            : null,
-        type: values.type,
-        reason: values.reason && values.reason.length > 0 ? values.reason : null,
-        cancel_existing_sessions: values.cancel_existing_sessions,
-      })
-      onSaved(res.holiday, res.sessions_cancelled)
+      const res = holiday
+        ? await updateAcademicHoliday(holiday.id, payload)
+        : await declareAcademicHoliday(payload)
+      onSaved(res.holiday, res.sessions_cancelled, holiday ? "edit" : "create")
     } catch (err) {
-      toast.error("Couldn't declare holiday", {
-        description:
-          err instanceof ApiError ? err.message : "Please try again.",
-      })
+      toast.error(
+        isEdit ? "Couldn't update holiday" : "Couldn't declare holiday",
+        {
+          description:
+            err instanceof ApiError ? err.message : "Please try again.",
+        },
+      )
     }
   })
 
   return (
     <form className="flex h-full flex-col" onSubmit={onSubmit}>
       <SheetHeader>
-        <SheetTitle>Declare holiday</SheetTitle>
+        <SheetTitle>{isEdit ? "Edit holiday" : "Declare holiday"}</SheetTitle>
         <SheetDescription>
-          The session seeder honours this date going forward. If
-          “Cancel matching scheduled sessions” is on, already-seeded sessions
-          in the date range are cancelled in the same transaction.
+          {isEdit
+            ? "The session seeder honours this date going forward. Editing won’t re-cancel already-scheduled sessions."
+            : "The session seeder skips this date going forward, and any already-scheduled sessions in the date range are cancelled in the same transaction (a no-op before the semester starts, when there are none yet)."}
         </SheetDescription>
       </SheetHeader>
 
@@ -547,6 +652,7 @@ function HolidayForm({
               value={endDate ?? ""}
               onChange={(v) => setValue("end_date", v, { shouldValidate: true })}
               allowClear
+              align="end"
               invalid={!!errors.end_date}
             />
             {errors.end_date && (
@@ -589,133 +695,12 @@ function HolidayForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label className="text-xs">Scope</Label>
-          <div className="grid grid-cols-3 gap-2">
-            {(["institution", "programme", "group"] as const).map((s) => (
-              <RadioCard
-                key={s}
-                checked={scope === s}
-                label={SCOPE_LABEL[s]}
-                onClick={() => setValue("scope", s, { shouldValidate: true })}
-              />
-            ))}
-          </div>
-        </div>
-
-        {scope === "programme" && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Programme</Label>
-            <Combobox
-              value={programmeId}
-              options={programmes.map<ComboboxOption>((p) => ({
-                value: p.id,
-                label: p.display_name,
-                sublabel: p.code,
-              }))}
-              onChange={(v) =>
-                setValue("programme_id", v, { shouldValidate: true })
-              }
-              placeholder="Pick a programme…"
-              invalid={!!errors.programme_id}
-            />
-            {errors.programme_id && (
-              <p className="text-xs text-destructive">
-                {errors.programme_id.message}
-              </p>
-            )}
-          </div>
-        )}
-
-        {scope === "group" && (
-          <div className="space-y-3 rounded-md border bg-muted/30 p-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Programme</Label>
-              <Combobox
-                value={programmeId}
-                options={programmes.map<ComboboxOption>((p) => ({
-                  value: p.id,
-                  label: p.display_name,
-                  sublabel: p.code,
-                }))}
-                onChange={(v) => {
-                  setValue("programme_id", v, { shouldValidate: true })
-                  setValue("attendance_group_id", null)
-                }}
-                placeholder="Pick a programme…"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Batch (admission year)</Label>
-              <Combobox
-                value={groupBatchYearId}
-                options={admissionYears.map<ComboboxOption>((ay) => ({
-                  value: ay.id,
-                  label: ay.display_year,
-                }))}
-                onChange={(v) => {
-                  setGroupBatchYearId(v)
-                  setValue("attendance_group_id", null)
-                }}
-                placeholder="Pick a batch…"
-                disabled={!programmeId}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Attendance group</Label>
-              <Combobox
-                value={attendanceGroupId}
-                options={groups.map<ComboboxOption>((g) => ({
-                  value: g.id,
-                  label: g.name,
-                  sublabel: g.code,
-                }))}
-                onChange={(v) =>
-                  setValue("attendance_group_id", v, { shouldValidate: true })
-                }
-                placeholder={
-                  groupsLoading ? "Loading…" : "Pick a group…"
-                }
-                disabled={!programmeId || !groupBatchYearId || groupsLoading}
-                invalid={!!errors.attendance_group_id}
-              />
-              {errors.attendance_group_id && (
-                <p className="text-xs text-destructive">
-                  {errors.attendance_group_id.message}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-1.5">
           <Label htmlFor="reason" className="text-xs">
             Reason{" "}
             <span className="text-muted-foreground">(shown to teachers)</span>
           </Label>
           <Input id="reason" {...register("reason")} maxLength={256} />
         </div>
-
-        <label className="flex items-start gap-3 rounded-md border bg-muted/30 p-3 text-sm">
-          <input
-            type="checkbox"
-            className="mt-0.5 size-4"
-            checked={cancelExisting}
-            onChange={(e) =>
-              setValue("cancel_existing_sessions", e.target.checked)
-            }
-          />
-          <span className="space-y-0.5">
-            <span className="block font-medium">
-              Cancel matching scheduled sessions
-            </span>
-            <span className="block text-xs text-muted-foreground">
-              On for mid-semester declarations so students/teachers see the
-              cancellation in their day view. Turn off when adding holidays
-              before the semester starts — there are no sessions to cancel
-              yet.
-            </span>
-          </span>
-        </label>
       </SheetBody>
 
       <SheetFooter>
@@ -728,7 +713,13 @@ function HolidayForm({
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Declaring…" : "Declare holiday"}
+          {isSubmitting
+            ? isEdit
+              ? "Saving…"
+              : "Declaring…"
+            : isEdit
+              ? "Save changes"
+              : "Declare holiday"}
         </Button>
       </SheetFooter>
     </form>

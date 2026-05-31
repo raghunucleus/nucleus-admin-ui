@@ -38,6 +38,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -109,6 +110,20 @@ function formatDateTime(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return "—"
   return dateTimeFormatter.format(d)
+}
+
+const dateFormatter = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "short",
+  day: "2-digit",
+})
+
+// dob is a bare "YYYY-MM-DD" string; parse as a local date (avoid UTC shift).
+function formatDob(dob: string | null): string {
+  if (!dob) return "—"
+  const [y, m, d] = dob.split("-").map(Number)
+  if (!y || !m || !d) return "—"
+  return dateFormatter.format(new Date(y, m - 1, d))
 }
 
 export function EmployeesPage() {
@@ -886,6 +901,16 @@ function EmployeesTable({
         ),
       },
       {
+        id: "dob",
+        header: "DOB",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {formatDob(row.original.dob)}
+          </span>
+        ),
+      },
+      {
         id: "mobile_number",
         header: "Mobile",
         accessorKey: "mobile_number",
@@ -1162,6 +1187,7 @@ function EmployeesTable({
                     department: "w-32",
                     designation: "w-28",
                     gender: "w-16",
+                    dob: "w-24",
                     mobile_number: "w-28",
                     email: "w-48",
                     rm_emp_code: "w-20",
@@ -1436,6 +1462,13 @@ const employeeSchema = z.object({
   emp_code: empCodeField,
   emp_display_name: z.string().trim().min(1, "Name is required").max(128, "Too long"),
   gender: z.enum(GENDERS, { message: "Select a gender" }),
+  dob: z
+    .string()
+    .trim()
+    .refine(
+      (v) => v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v),
+      "Use YYYY-MM-DD",
+    ),
   department_id: z
     .number({ message: "Select a department" })
     .int()
@@ -1494,6 +1527,7 @@ function EmployeeForm(
           emp_code: props.employee.emp_code,
           emp_display_name: props.employee.emp_display_name,
           gender: props.employee.gender,
+          dob: props.employee.dob ?? "",
           department_id: props.employee.department_id,
           designation_id: props.employee.designation_id,
           mobile_number: props.employee.mobile_number,
@@ -1505,6 +1539,7 @@ function EmployeeForm(
           emp_code: "",
           emp_display_name: "",
           gender: "male",
+          dob: "",
           department_id: 0,
           designation_id: 0,
           mobile_number: "",
@@ -1597,6 +1632,7 @@ function EmployeeForm(
       emp_code: values.emp_code,
       emp_display_name: values.emp_display_name,
       gender: values.gender,
+      dob: values.dob === "" ? null : values.dob,
       department_id: values.department_id,
       designation_id: values.designation_id,
       mobile_number: values.mobile_number,
@@ -1674,6 +1710,27 @@ function EmployeeForm(
                 </option>
               ))}
             </select>
+          </Field>
+
+          <Field
+            label="Date of birth"
+            error={errors.dob?.message}
+            htmlFor="e-dob"
+            hint="Optional."
+          >
+            <Controller
+              control={control}
+              name="dob"
+              render={({ field, fieldState }) => (
+                <DatePicker
+                  id="e-dob"
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="Select date of birth"
+                  invalid={!!fieldState.error}
+                />
+              )}
+            />
           </Field>
 
           <Field

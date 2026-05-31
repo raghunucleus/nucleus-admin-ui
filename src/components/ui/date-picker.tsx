@@ -14,6 +14,12 @@ export interface DatePickerProps {
   maxYear?: number
   /** When set, renders a clear button next to the trigger. */
   allowClear?: boolean
+  /**
+   * Which edge of the trigger the calendar popover aligns to. Use "end" when
+   * the picker sits near the right edge of a narrow container so the popover
+   * doesn't overflow (and clip the next-month arrow). Defaults to "start".
+   */
+  align?: "start" | "end"
   disabled?: boolean
   invalid?: boolean
   id?: string
@@ -76,6 +82,7 @@ export function DatePicker({
   minYear,
   maxYear,
   allowClear = true,
+  align = "start",
   disabled,
   invalid,
   id,
@@ -225,7 +232,8 @@ export function DatePicker({
           role="dialog"
           aria-label="Choose date"
           className={cn(
-            "absolute left-0 top-full z-50 mt-1 w-72 overflow-hidden rounded-md border bg-popover p-3 text-popover-foreground shadow-lg",
+            "absolute top-full z-50 mt-1 w-72 overflow-hidden rounded-md border bg-popover p-3 text-popover-foreground shadow-lg",
+            align === "end" ? "right-0" : "left-0",
             "animate-in fade-in-0 zoom-in-95 duration-150",
           )}
         >

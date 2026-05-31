@@ -44,6 +44,7 @@ const COLUMNS = [
   { key: "emp_code", label: "emp_code", required: true, width: "min-w-[8rem]" },
   { key: "emp_display_name", label: "emp_display_name", required: true, width: "min-w-[14rem]" },
   { key: "gender", label: "gender", required: true, width: "min-w-[7rem]" },
+  { key: "dob", label: "dob (YYYY-MM-DD)", required: false, width: "min-w-[10rem]" },
   { key: "department_code", label: "department_code", required: true, width: "min-w-[10rem]" },
   { key: "designation_code", label: "designation_code", required: true, width: "min-w-[10rem]" },
   { key: "mobile_number", label: "mobile_number", required: true, width: "min-w-[9rem]" },
@@ -83,6 +84,7 @@ type GridRow = {
 const EMP_CODE_REGEX = /^[A-Z0-9._-]+$/
 const DIGITS_REGEX = /^[0-9]+$/
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const DOB_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
 let nextRowId = 1
 const newRowId = () => `r${nextRowId++}`
@@ -94,6 +96,7 @@ function emptyRow(): GridRow {
       emp_code: "",
       emp_display_name: "",
       gender: "",
+      dob: "",
       department_code: "",
       designation_code: "",
       mobile_number: "",
@@ -366,6 +369,7 @@ export function EmployeesBulkUploadPage() {
       emp_code: r.values.emp_code.toUpperCase(),
       emp_display_name: r.values.emp_display_name,
       gender: r.values.gender.toLowerCase() as Gender,
+      dob: r.values.dob.trim() || null,
       department_code: r.values.department_code.toUpperCase(),
       designation_code: r.values.designation_code.toUpperCase(),
       mobile_number: r.values.mobile_number,
@@ -771,6 +775,9 @@ function recomputeErrors(
     const g = r.values.gender.trim().toLowerCase()
     if (!g) errs.gender = "Required"
     else if (!GENDERS.includes(g as Gender)) errs.gender = "male / female / other"
+
+    const dob = r.values.dob.trim()
+    if (dob && !DOB_REGEX.test(dob)) errs.dob = "Use YYYY-MM-DD"
 
     const dept = r.values.department_code.trim()
     if (!dept) errs.department_code = "Required"

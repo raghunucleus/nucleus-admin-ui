@@ -300,8 +300,12 @@ export function TimetableSchedulePage() {
         res.skipped_holidays > 0
           ? ` ${res.skipped_holidays} skipped for holidays.`
           : ""
+      const keptNote =
+        res.kept_marked > 0
+          ? ` ${res.kept_marked} marked class${res.kept_marked === 1 ? "" : "es"} kept.`
+          : ""
       toast.success(
-        `Published ${res.inserted} session${res.inserted === 1 ? "" : "s"}.${replacedNote}${holidayNote}`,
+        `Published ${res.inserted} session${res.inserted === 1 ? "" : "s"}.${replacedNote}${keptNote}${holidayNote}`,
       )
       await refreshSummaries()
       setPreviewing(null)
@@ -865,10 +869,16 @@ function PreviewModal({
 
   if (!week) return null
 
+  // A kept-marked row won't be published (its slot already holds a marked
+  // class), so it counts as neither "new" nor "unchanged".
+  const keptMarkedCount =
+    sessionData?.sessions.filter((s) => s.kept_marked).length ?? 0
   const newCount =
-    sessionData?.sessions.filter((s) => !s.already_exists).length ?? 0
+    sessionData?.sessions.filter((s) => !s.already_exists && !s.kept_marked)
+      .length ?? 0
   const existingCount =
-    sessionData?.sessions.filter((s) => s.already_exists).length ?? 0
+    sessionData?.sessions.filter((s) => s.already_exists && !s.kept_marked)
+      .length ?? 0
   const templateName =
     templates.find((t) => t.id === week.template_id)?.name ?? "—"
   const isPartialWeek =
@@ -922,7 +932,11 @@ function PreviewModal({
                       {sessionData.sessions.length}
                     </span>{" "}
                     session{sessionData.sessions.length === 1 ? "" : "s"}{" "}
-                    ({newCount} new, {existingCount} unchanged)
+                    ({newCount} new, {existingCount} unchanged
+                    {keptMarkedCount > 0
+                      ? `, ${keptMarkedCount} marked kept`
+                      : ""}
+                    )
                   </>
                 ) : (
                   "Loading preview…"
@@ -1139,6 +1153,34 @@ function PreviewModal({
                           <> – {h.end_date}</>
                         )}
                         : {h.name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+            {view === "sessions" &&
+              sessionData &&
+              sessionData.kept_sessions.length > 0 && (
+                <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
+                  <p className="font-medium text-warning">
+                    {sessionData.kept_sessions.length} already-marked class
+                    {sessionData.kept_sessions.length === 1 ? "" : "es"} kept as
+                    history
+                  </p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    These were already taught/marked, so publishing this template
+                    won't change them.
+                  </p>
+                  <ul className="mt-1.5 space-y-0.5">
+                    {sessionData.kept_sessions.map((k, i) => (
+                      <li key={i}>
+                        <span className="tabular-nums">{k.session_date}</span> ·{" "}
+                        {k.period_label ?? `Period #${k.timetable_period_id}`} ·{" "}
+                        {k.subject_name ??
+                          k.subject_code ??
+                          `Subject #${k.subject_id}`}
+                        {k.status === "cancelled" ? " (cancelled)" : ""}
                       </li>
                     ))}
                   </ul>
@@ -1363,12 +1405,18 @@ function PreviewRegularRow({
       <span
         className={cn(
           "shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-          s.already_exists
-            ? "border border-input bg-muted text-muted-foreground"
-            : "border border-primary/30 bg-primary/10 text-primary",
+          s.kept_marked
+            ? "border border-warning/40 bg-warning/10 text-warning"
+            : s.already_exists
+              ? "border border-input bg-muted text-muted-foreground"
+              : "border border-primary/30 bg-primary/10 text-primary",
         )}
       >
-        {s.already_exists ? "Existing" : "New"}
+        {s.kept_marked
+          ? "Marked · kept"
+          : s.already_exists
+            ? "Existing"
+            : "New"}
       </span>
     </li>
   )
@@ -1394,8 +1442,12 @@ function PreviewElectiveRow({
     return Array.from(seen.values())
   }, [group.cohorts])
 
-  const newCount = group.cohorts.filter((c) => !c.already_exists).length
-  const allExisting = newCount === 0
+  const allKeptMarked =
+    group.cohorts.length > 0 && group.cohorts.every((c) => c.kept_marked)
+  const newCount = group.cohorts.filter(
+    (c) => !c.already_exists && !c.kept_marked,
+  ).length
+  const allExisting = !allKeptMarked && newCount === 0
   const room = group.cohorts.find((c) => c.room)?.room ?? null
 
   return (
@@ -1445,12 +1497,18 @@ function PreviewElectiveRow({
       <span
         className={cn(
           "shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-          allExisting
-            ? "border border-input bg-muted text-muted-foreground"
-            : "border border-primary/30 bg-primary/10 text-primary",
+          allKeptMarked
+            ? "border border-warning/40 bg-warning/10 text-warning"
+            : allExisting
+              ? "border border-input bg-muted text-muted-foreground"
+              : "border border-primary/30 bg-primary/10 text-primary",
         )}
       >
-        {allExisting ? "Existing" : `New${newCount > 1 ? ` ×${newCount}` : ""}`}
+        {allKeptMarked
+          ? "Marked · kept"
+          : allExisting
+            ? "Existing"
+            : `New${newCount > 1 ? ` ×${newCount}` : ""}`}
       </span>
     </li>
   )
