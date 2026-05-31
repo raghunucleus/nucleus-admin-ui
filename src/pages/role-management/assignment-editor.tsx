@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { ArrowLeft, Check, Loader2, Save, X } from "lucide-react"
 
+import { ProgrammeYearMatrixPicker } from "@/components/rbac/programme-year-matrix-picker"
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
@@ -568,6 +569,11 @@ function ScreenAttrSection({
                   All {attr.label.toLowerCase()} — unrestricted scope,
                   auto-includes new entries.
                 </div>
+              ) : attr.type === "ref:programme_admission_year" ? (
+                <ProgrammeYearMatrixPicker
+                  value={Array.isArray(raw) ? (raw as number[]) : []}
+                  onChange={(next) => onChange(key, next)}
+                />
               ) : attr.multi ? (
                 <MultiPicker
                   options={options}

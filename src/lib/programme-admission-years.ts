@@ -119,7 +119,11 @@ export async function deactivateProgrammeAdmissionYear(
 export type ProgrammeAdmissionYearMatrixCell = {
   id: number
   programme_id: number
+  programme_name: string
+  programme_code: string
   admission_year_id: number
+  admission_year_display: string
+  admission_year_value: number
   is_active: boolean
 }
 
