@@ -27,7 +27,6 @@ export type CreateHolidayInput = {
   name: string
   type: AcademicHolidayType
   reason?: string | null
-  cancel_existing_sessions?: boolean
 }
 
 export type DeclareHolidayResult = {
@@ -56,8 +55,9 @@ export async function declareAcademicHoliday(
   })
 }
 
-// Editing reuses the create shape. `cancel_existing_sessions` defaults to
-// false server-side on edit, so a plain metadata fix won't re-cancel classes.
+// Editing reuses the create shape. Scheduled sessions newly caught by the
+// edited range are cancelled server-side; previously-cancelled ones are never
+// restored.
 export type UpdateHolidayInput = CreateHolidayInput
 
 export async function updateAcademicHoliday(

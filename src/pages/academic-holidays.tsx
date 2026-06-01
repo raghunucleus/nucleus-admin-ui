@@ -110,7 +110,6 @@ const HolidayFormSchema = z
     name: z.string().trim().min(1, "Name is required").max(120),
     type: z.enum(["public", "institutional", "unplanned"]),
     reason: z.string().trim().max(256).optional(),
-    cancel_existing_sessions: z.boolean(),
   })
   .superRefine((v, ctx) => {
     if (v.end_date && v.end_date.length > 0 && v.end_date < v.date) {
@@ -572,9 +571,6 @@ function HolidayForm({
           name: holiday.name,
           type: holiday.type,
           reason: holiday.reason ?? "",
-          // Editing defaults to NOT re-cancelling — a metadata fix shouldn't
-          // touch classes. The admin opts in when extending the range.
-          cancel_existing_sessions: false,
         }
       : {
           date: "",
@@ -582,7 +578,6 @@ function HolidayForm({
           name: "",
           type: "public",
           reason: "",
-          cancel_existing_sessions: true,
         },
   })
 
@@ -598,7 +593,6 @@ function HolidayForm({
       name: values.name,
       type: values.type,
       reason: values.reason && values.reason.length > 0 ? values.reason : null,
-      cancel_existing_sessions: values.cancel_existing_sessions,
     }
     try {
       const res = holiday
@@ -622,7 +616,7 @@ function HolidayForm({
         <SheetTitle>{isEdit ? "Edit holiday" : "Declare holiday"}</SheetTitle>
         <SheetDescription>
           {isEdit
-            ? "The session seeder honours this date going forward. Editing won’t re-cancel already-scheduled sessions."
+            ? "The session seeder honours this date going forward. Scheduled sessions newly caught by the date range are cancelled; ones already cancelled stay cancelled."
             : "The session seeder skips this date going forward, and any already-scheduled sessions in the date range are cancelled in the same transaction (a no-op before the semester starts, when there are none yet)."}
         </SheetDescription>
       </SheetHeader>

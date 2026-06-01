@@ -33,6 +33,8 @@ import { SemesterTimetablesPage } from "@/pages/semester-timetables"
 import { SemestersPage } from "@/pages/semesters"
 import { StudentsPage } from "@/pages/students"
 import { StudentsBulkUploadPage } from "@/pages/students-bulk-upload"
+import { GuardiansPage } from "@/pages/guardians"
+import { GuardiansBulkUploadPage } from "@/pages/guardians-bulk-upload"
 import { StudentDetailsPage } from "@/pages/student-details"
 import { SubjectsPage } from "@/pages/subjects"
 import { SubjectTypesPage } from "@/pages/subject-types"
@@ -331,6 +333,18 @@ const studentsBulkUploadRoute = createRoute({
   component: StudentsBulkUploadPage,
 })
 
+const guardiansAllRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/guardians/all",
+  component: GuardiansPage,
+})
+
+const guardiansBulkUploadRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/guardians/bulk-upload",
+  component: GuardiansBulkUploadPage,
+})
+
 // Dynamic detail route. Static siblings (/students/all, /students/bulk-upload)
 // always win over this param route, so there's no collision.
 const studentDetailsRoute = createRoute({
@@ -437,6 +451,8 @@ const routeTree = rootRoute.addChildren([
     employeesBulkUploadRoute,
     studentsAllRoute,
     studentsBulkUploadRoute,
+    guardiansAllRoute,
+    guardiansBulkUploadRoute,
     studentDetailsRoute,
     roleManagementRolesRoute,
     roleManagementRoleEditorRoute,

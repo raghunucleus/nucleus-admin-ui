@@ -81,6 +81,16 @@ const nav: NavItem[] = [
   },
   {
     type: "group",
+    key: "guardians",
+    label: "Guardians/Parents",
+    icon: Users,
+    children: [
+      { to: "/guardians/all", label: "All Guardians" },
+      { to: "/guardians/bulk-upload", label: "Guardian Bulk Upload" },
+    ],
+  },
+  {
+    type: "group",
     key: "role-management",
     label: "Role management",
     icon: ShieldCheck,
