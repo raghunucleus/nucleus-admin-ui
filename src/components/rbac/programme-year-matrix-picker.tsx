@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   Table,
@@ -161,9 +162,10 @@ export function ProgrammeYearMatrixPicker({
 
   if (loading) {
     return (
-      <p className="text-xs text-muted-foreground">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Loader2 className="size-4 animate-spin text-primary" />
         Loading programme / admission-year matrix…
-      </p>
+      </div>
     )
   }
 
