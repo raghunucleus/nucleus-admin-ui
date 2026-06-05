@@ -14,6 +14,15 @@ export type StudentGroup = {
   updated_at: string
 }
 
+// One of a group's in-charge employees. The server returns a slimmed-down
+// employee (id, emp_code, emp_display_name) nested under `employee`.
+export type AttendanceGroupIncharge = {
+  id: number
+  attendance_group_id: number
+  employee_id: number
+  employee: Pick<Employee, "id" | "emp_code" | "emp_display_name">
+}
+
 // A named cohort of students within one programme × admission-year batch. The
 // grouping carries across every semester of the batch; a timetable is later
 // linked to each group, and its students follow that timetable.
@@ -24,9 +33,8 @@ export type AttendanceGroup = {
   name: string
   code: string
   description: string | null
-  group_incharge_employee_id: number | null
-  // Server returns a slimmed-down employee (id, emp_code, emp_display_name).
-  group_incharge: Pick<Employee, "id" | "emp_code" | "emp_display_name"> | null
+  // A group can have several in-charges; every one of them manages it.
+  incharges: AttendanceGroupIncharge[]
   is_active: boolean
   members: StudentGroup[]
   created_at: string
@@ -62,7 +70,7 @@ export async function createAttendanceGroup(input: {
   admission_year_id: number
   name: string
   code: string
-  group_incharge_employee_id: number
+  group_incharge_employee_ids: number[]
   description?: string | null
 }): Promise<AttendanceGroup> {
   return api<AttendanceGroup>("/admin/attendance-groups", {
@@ -76,7 +84,7 @@ export async function updateAttendanceGroup(
   input: {
     name: string
     code: string
-    group_incharge_employee_id: number
+    group_incharge_employee_ids: number[]
     description?: string | null
   },
 ): Promise<AttendanceGroup> {

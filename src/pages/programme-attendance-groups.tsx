@@ -20,6 +20,14 @@ import {
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -294,7 +302,7 @@ export function ProgrammeAttendanceGroupsPage() {
   const handleSubmitForm = async (
     name: string,
     code: string,
-    groupInchargeEmployeeId: number,
+    groupInchargeEmployeeIds: number[],
     description: string,
   ) => {
     if (programmeId === undefined || admissionYearId === undefined) return
@@ -306,7 +314,7 @@ export function ProgrammeAttendanceGroupsPage() {
           admission_year_id: admissionYearId,
           name,
           code,
-          group_incharge_employee_id: groupInchargeEmployeeId,
+          group_incharge_employee_ids: groupInchargeEmployeeIds,
           description,
         })
         setGroups((prev) => sortGroups([...prev, created]))
@@ -315,7 +323,7 @@ export function ProgrammeAttendanceGroupsPage() {
         const updated = await updateAttendanceGroup(formMode.group.id, {
           name,
           code,
-          group_incharge_employee_id: groupInchargeEmployeeId,
+          group_incharge_employee_ids: groupInchargeEmployeeIds,
           description,
         })
         setGroups((prev) =>
@@ -688,15 +696,15 @@ export function ProgrammeAttendanceGroupsPage() {
               initialCode={
                 formMode.kind === "edit" ? formMode.group.code : ""
               }
-              initialInchargeEmployeeId={
+              initialInchargeEmployeeIds={
                 formMode.kind === "edit"
-                  ? formMode.group.group_incharge_employee_id
-                  : null
+                  ? formMode.group.incharges.map((i) => i.employee_id)
+                  : []
               }
-              initialInchargeEmployee={
+              initialInchargeEmployees={
                 formMode.kind === "edit"
-                  ? formMode.group.group_incharge
-                  : null
+                  ? formMode.group.incharges.map((i) => i.employee)
+                  : []
               }
               initialDescription={
                 formMode.kind === "edit"
@@ -1046,14 +1054,8 @@ function GroupCard({
             )}
           </button>
         </div>
-        {group.group_incharge && (
-          <p
-            className="mt-0.5 truncate text-[11px] text-muted-foreground"
-            title={`${group.group_incharge.emp_display_name} (${group.group_incharge.emp_code})`}
-          >
-            <span className="font-medium text-foreground/80">In-charge:</span>{" "}
-            {group.group_incharge.emp_display_name}
-          </p>
+        {group.incharges.length > 0 && (
+          <InchargeList incharges={group.incharges} />
         )}
         {group.description && (
           <p
@@ -1221,13 +1223,77 @@ function AddStudentCombobox({
   )
 }
 
+// Group in-charges in the card header: the first couple inline, the rest
+// collapsed behind a "+N" pill that opens the complete list in a dropdown.
+function InchargeList({
+  incharges,
+}: {
+  incharges: AttendanceGroup["incharges"]
+}) {
+  const MAX_INLINE = 2
+  const shown = incharges.slice(0, MAX_INLINE)
+  const overflow = incharges.length - shown.length
+
+  return (
+    <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+      <span className="shrink-0 font-medium text-foreground/80">
+        In-charge{incharges.length > 1 ? "s" : ""}:
+      </span>
+      <span className="min-w-0 truncate">
+        {shown
+          .map(
+            (i) => `${i.employee.emp_display_name} (${i.employee.emp_code})`,
+          )
+          .join(", ")}
+      </span>
+      {overflow > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => e.stopPropagation()}
+              className="shrink-0 rounded-full border bg-muted/50 px-1.5 py-px text-[10px] font-medium text-foreground/70 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              aria-label={`Show all ${incharges.length} in-charges`}
+            >
+              +{overflow}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            className="max-h-64 overflow-y-auto"
+          >
+            <DropdownMenuLabel>
+              In-charges ({incharges.length})
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {incharges.map((i) => (
+              <DropdownMenuItem
+                key={i.id}
+                onSelect={(e) => e.preventDefault()}
+                className="flex-col items-start gap-0 !cursor-default"
+              >
+                <span className="text-sm text-foreground">
+                  {i.employee.emp_display_name}
+                </span>
+                <span className="font-mono text-xs text-muted-foreground">
+                  {i.employee.emp_code}
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  )
+}
+
 // Create / edit form for an attendance group.
 function GroupForm({
   mode,
   initialName,
   initialCode,
-  initialInchargeEmployeeId,
-  initialInchargeEmployee,
+  initialInchargeEmployeeIds,
+  initialInchargeEmployees,
   initialDescription,
   employees,
   submitting,
@@ -1237,59 +1303,72 @@ function GroupForm({
   mode: "create" | "edit"
   initialName: string
   initialCode: string
-  initialInchargeEmployeeId: number | null
-  initialInchargeEmployee:
-    | Pick<Employee, "id" | "emp_code" | "emp_display_name">
-    | null
+  initialInchargeEmployeeIds: number[]
+  initialInchargeEmployees: Pick<
+    Employee,
+    "id" | "emp_code" | "emp_display_name"
+  >[]
   initialDescription: string
   employees: Employee[]
   submitting: boolean
   onSubmit: (
     name: string,
     code: string,
-    groupInchargeEmployeeId: number,
+    groupInchargeEmployeeIds: number[],
     description: string,
   ) => void
   onCancel: () => void
 }) {
   const [name, setName] = React.useState(initialName)
   const [code, setCode] = React.useState(initialCode)
-  const [inchargeId, setInchargeId] = React.useState<number | null>(
-    initialInchargeEmployeeId,
+  const [inchargeIds, setInchargeIds] = React.useState<number[]>(
+    initialInchargeEmployeeIds,
   )
   const [description, setDescription] = React.useState(initialDescription)
   const valid =
-    name.trim().length > 0 && code.trim().length > 0 && inchargeId !== null
+    name.trim().length > 0 && code.trim().length > 0 && inchargeIds.length > 0
 
-  // If editing and the current in-charge isn't in the active-employee list
-  // (e.g. they've been deactivated since), surface them as a synthetic option
-  // so the value stays visible until the user picks someone else.
+  // Build the picker options. If editing and a current in-charge isn't in the
+  // active-employee list (e.g. they've been deactivated since), surface them as
+  // a synthetic option so they stay selectable/visible. Already-selected
+  // in-charges are filtered out of the add-picker.
   const inchargeOptions = React.useMemo<ComboboxOption[]>(() => {
-    const base = employees.map((e) => ({
+    const base: ComboboxOption[] = employees.map((e) => ({
       value: e.id,
       label: e.emp_display_name,
       sublabel: e.emp_code,
     }))
-    if (
-      initialInchargeEmployee &&
-      !employees.some((e) => e.id === initialInchargeEmployee.id)
-    ) {
-      base.unshift({
-        value: initialInchargeEmployee.id,
-        label: initialInchargeEmployee.emp_display_name,
-        sublabel: `${initialInchargeEmployee.emp_code} · current`,
-      })
+    for (const cur of initialInchargeEmployees) {
+      if (!employees.some((e) => e.id === cur.id)) {
+        base.unshift({
+          value: cur.id,
+          label: cur.emp_display_name,
+          sublabel: `${cur.emp_code} · current`,
+        })
+      }
     }
     return base
-  }, [employees, initialInchargeEmployee])
+  }, [employees, initialInchargeEmployees])
+
+  // Resolve an employee id to a display label for the selected-chip list.
+  const labelForId = React.useCallback(
+    (id: number) =>
+      inchargeOptions.find((o) => o.value === id)?.label ?? `#${id}`,
+    [inchargeOptions],
+  )
+
+  const addPickerOptions = React.useMemo(
+    () => inchargeOptions.filter((o) => !inchargeIds.includes(o.value)),
+    [inchargeOptions, inchargeIds],
+  )
 
   return (
     <form
       noValidate
       onSubmit={(e) => {
         e.preventDefault()
-        if (valid && inchargeId !== null)
-          onSubmit(name.trim(), code.trim(), inchargeId, description.trim())
+        if (valid)
+          onSubmit(name.trim(), code.trim(), inchargeIds, description.trim())
       }}
       className="flex h-full flex-col"
     >
@@ -1334,23 +1413,54 @@ function GroupForm({
           Code must be unique within this programme & admission year.
         </p>
         <div className="space-y-1.5">
-          <Label htmlFor="grp-incharge">Group in-charge</Label>
+          <Label htmlFor="grp-incharge">Group in-charges</Label>
+          {inchargeIds.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {inchargeIds.map((id) => (
+                <span
+                  key={id}
+                  className="inline-flex items-center gap-1 rounded-md border bg-muted/40 py-0.5 pl-2 pr-1 text-xs"
+                >
+                  <span className="truncate">{labelForId(id)}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setInchargeIds((ids) => ids.filter((x) => x !== id))
+                    }
+                    className="grid size-4 place-items-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    aria-label={`Remove ${labelForId(id)}`}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           <Combobox
             id="grp-incharge"
-            value={inchargeId}
-            options={inchargeOptions}
-            onChange={(v) => setInchargeId(v)}
+            value={null}
+            options={addPickerOptions}
+            onChange={(v) =>
+              v != null &&
+              setInchargeIds((ids) =>
+                ids.includes(v) ? ids : [...ids, v],
+              )
+            }
             placeholder={
               inchargeOptions.length === 0
                 ? "Loading employees…"
-                : "Select an employee…"
+                : addPickerOptions.length === 0
+                  ? "All employees added"
+                  : "Add an in-charge…"
             }
             searchPlaceholder="Search by name or emp code…"
             emptyMessage="No employees match"
-            disabled={inchargeOptions.length === 0}
+            disabled={
+              inchargeOptions.length === 0 || addPickerOptions.length === 0
+            }
           />
           <p className="text-xs text-muted-foreground">
-            The employee responsible for this group.
+            The employees responsible for this group. Add at least one.
           </p>
         </div>
         <div className="space-y-1.5">
