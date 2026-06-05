@@ -31,6 +31,21 @@ export type GuardianContact = {
   updated_at: string
 }
 
+// The raw per-student guardian row returned by `/by-student/:id`. Unlike the
+// paginated list it has no `student_roll`/`student_name` (the caller already
+// knows the student).
+export type StudentGuardianRow = {
+  id: number
+  student_id: number
+  relationship: GuardianRelationship
+  name: string
+  mobile_number: string
+  email: string | null
+  is_primary: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type CreateGuardianInput = {
   student_id: number
   relationship: GuardianRelationship
@@ -88,6 +103,16 @@ export async function listGuardians(
   if (params.studentSearch) qs.set("studentSearch", params.studentSearch)
   const suffix = qs.toString() ? `?${qs.toString()}` : ""
   return api<ListGuardiansResult>(`/admin/guardians${suffix}`, { method: "GET" })
+}
+
+/** All guardian/parent contacts attached to one student (primary first). */
+export async function getGuardiansByStudent(
+  studentId: number,
+): Promise<StudentGuardianRow[]> {
+  return api<StudentGuardianRow[]>(
+    `/admin/guardians/by-student/${studentId}`,
+    { method: "GET" },
+  )
 }
 
 export async function createGuardian(

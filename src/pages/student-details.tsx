@@ -7,15 +7,38 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  Mail,
+  MoreVertical,
+  Pencil,
+  Phone,
+  Plus,
   ShieldCheck,
+  Star,
+  Trash2,
   UserRound,
   Users,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
@@ -27,6 +50,19 @@ import {
   setStudentLoginPassword,
   type Student,
 } from "@/lib/students"
+import {
+  GUARDIAN_RELATIONSHIPS,
+  RELATIONSHIP_LABELS,
+  createGuardian,
+  getGuardiansByStudent,
+  removeGuardian,
+  updateGuardian,
+  type GuardianRelationship,
+  type StudentGuardianRow,
+} from "@/lib/guardians"
+
+const MOBILE_REGEX = /^[6-9]\d{9}$/
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // Sections of the student detail screen. New areas (parent details, academic
 // records, …) slot in here without touching the page shell.
@@ -145,12 +181,7 @@ export function StudentDetailsPage() {
 
           {section === "overview" && <OverviewSection student={student} />}
           {section === "login" && <LoginSection student={student} />}
-          {section === "parent" && (
-            <ComingSoonSection
-              title="Parent details coming soon"
-              description="Parent contact information and parent portal access will be managed from this section."
-            />
-          )}
+          {section === "parent" && <ParentDetailsSection student={student} />}
         </>
       )}
     </div>
@@ -389,16 +420,390 @@ function ResetByEmailPanel({ student }: { student: Student }) {
   )
 }
 
-function ComingSoonSection({
-  title,
-  description,
-}: {
-  title: string
-  description: string
-}) {
+function ParentDetailsSection({ student }: { student: Student }) {
+  const [rows, setRows] = React.useState<StudentGuardianRow[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [failed, setFailed] = React.useState(false)
+  const [formTarget, setFormTarget] = React.useState<
+    StudentGuardianRow | "create" | null
+  >(null)
+  const [deleteTarget, setDeleteTarget] =
+    React.useState<StudentGuardianRow | null>(null)
+  const [busyId, setBusyId] = React.useState<number | null>(null)
+
+  const load = React.useCallback(async () => {
+    setLoading(true)
+    setFailed(false)
+    try {
+      setRows(await getGuardiansByStudent(student.id))
+    } catch {
+      setFailed(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [student.id])
+
+  React.useEffect(() => {
+    void load()
+  }, [load])
+
+  // Relationships already in use — the backend enforces one contact per
+  // relationship per student, so don't offer a taken one when adding.
+  const usedRelationships = new Set(rows.map((r) => r.relationship))
+  // Every relationship type is taken — there's nothing left to add.
+  const allRelationshipsUsed =
+    usedRelationships.size >= GUARDIAN_RELATIONSHIPS.length
+
   return (
     <div className="rounded-lg border bg-card text-card-foreground shadow-xs">
-      <EmptyState icon={Users} title={title} description={description} />
+      <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
+        <div>
+          <h2 className="text-sm font-semibold">Parent / guardian contacts</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Contacts attached to this student. Each parent signs in to the
+            parent portal with their mobile number.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          className="shrink-0"
+          onClick={() => setFormTarget("create")}
+          disabled={loading || failed || allRelationshipsUsed}
+          title={
+            allRelationshipsUsed
+              ? "All relationship types (father, mother, guardian, other) already have a contact. Edit or remove one to make changes."
+              : undefined
+          }
+        >
+          <Plus />
+          Add contact
+        </Button>
+      </div>
+
+      {allRelationshipsUsed && !loading && !failed && (
+        <p className="border-b bg-muted/30 px-5 py-2 text-xs text-muted-foreground">
+          All relationship types have a contact. Edit or remove one to make
+          changes.
+        </p>
+      )}
+
+      {loading ? (
+        <div className="space-y-2 p-5">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      ) : failed ? (
+        <EmptyState
+          icon={Users}
+          title="Couldn't load contacts"
+          description="There was a problem reaching the server."
+          action={
+            <Button size="sm" onClick={() => void load()}>
+              Try again
+            </Button>
+          }
+        />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No parent contacts yet"
+          description="Add a father, mother, or guardian contact for this student."
+          action={
+            <Button size="sm" onClick={() => setFormTarget("create")}>
+              <Plus />
+              Add contact
+            </Button>
+          }
+        />
+      ) : (
+        <ul className="divide-y">
+          {rows.map((r) => (
+            <li
+              key={r.id}
+              className="flex items-start justify-between gap-3 px-5 py-4"
+            >
+              <div className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium">{r.name}</span>
+                  <span className="rounded-md border bg-muted/40 px-1.5 py-0.5 text-[11px] capitalize">
+                    {RELATIONSHIP_LABELS[r.relationship]}
+                  </span>
+                  {r.is_primary && (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
+                      <Star className="size-3" />
+                      Primary
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 font-mono tabular-nums">
+                    <Phone className="size-3.5" />
+                    {r.mobile_number}
+                  </span>
+                  {r.email && (
+                    <span className="inline-flex items-center gap-1.5 break-all">
+                      <Mail className="size-3.5" />
+                      {r.email}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="size-8 shrink-0">
+                    <MoreVertical />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setFormTarget(r)}>
+                    <Pencil /> Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => setDeleteTarget(r)}
+                    className="text-destructive data-[highlighted]:text-destructive"
+                  >
+                    <Trash2 /> Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {formTarget && (
+        <ParentFormSheet
+          student={student}
+          target={formTarget}
+          usedRelationships={usedRelationships}
+          onClose={() => setFormTarget(null)}
+          onSaved={() => {
+            setFormTarget(null)
+            void load()
+          }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+        title="Delete parent contact?"
+        tone="destructive"
+        description={
+          deleteTarget ? (
+            <>
+              This removes the{" "}
+              {RELATIONSHIP_LABELS[deleteTarget.relationship]} contact{" "}
+              <span className="font-medium text-foreground">
+                {deleteTarget.name}
+              </span>{" "}
+              for {student.display_name}. If this mobile is no longer attached
+              to any student, its login sessions are revoked.
+            </>
+          ) : undefined
+        }
+        confirmLabel="Delete"
+        loading={busyId === deleteTarget?.id}
+        onConfirm={async () => {
+          if (!deleteTarget) return
+          setBusyId(deleteTarget.id)
+          try {
+            await removeGuardian(deleteTarget.id)
+            toast.success("Contact deleted")
+            setDeleteTarget(null)
+            void load()
+          } catch (err) {
+            toast.error(err instanceof ApiError ? err.message : "Delete failed")
+          } finally {
+            setBusyId(null)
+          }
+        }}
+      />
+    </div>
+  )
+}
+
+function ParentFormSheet({
+  student,
+  target,
+  usedRelationships,
+  onClose,
+  onSaved,
+}: {
+  student: Student
+  target: StudentGuardianRow | "create"
+  usedRelationships: Set<GuardianRelationship>
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const isCreate = target === "create"
+  const existing = isCreate ? null : target
+
+  // When adding, default to the first relationship not already used.
+  const firstFree =
+    GUARDIAN_RELATIONSHIPS.find((r) => !usedRelationships.has(r)) ?? "guardian"
+
+  const [relationship, setRelationship] = React.useState<GuardianRelationship>(
+    existing?.relationship ?? firstFree,
+  )
+  const [name, setName] = React.useState(existing?.name ?? "")
+  const [mobile, setMobile] = React.useState(existing?.mobile_number ?? "")
+  const [email, setEmail] = React.useState(existing?.email ?? "")
+  const [isPrimary, setIsPrimary] = React.useState(existing?.is_primary ?? false)
+  const [saving, setSaving] = React.useState(false)
+  const [errors, setErrors] = React.useState<Record<string, string>>({})
+
+  const validate = (): boolean => {
+    const e: Record<string, string> = {}
+    if (!name.trim()) e.name = "Required"
+    if (!MOBILE_REGEX.test(mobile.trim()))
+      e.mobile = "10-digit Indian mobile (starts 6-9)"
+    if (email.trim() && !EMAIL_REGEX.test(email.trim()))
+      e.email = "Invalid email"
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  const onSubmit = async (ev: React.FormEvent) => {
+    ev.preventDefault()
+    if (!validate()) return
+    setSaving(true)
+    try {
+      if (isCreate) {
+        await createGuardian({
+          student_id: student.id,
+          relationship,
+          name: name.trim(),
+          mobile_number: mobile.trim(),
+          email: email.trim() || null,
+          is_primary: isPrimary,
+        })
+        toast.success("Contact added")
+      } else {
+        await updateGuardian(existing!.id, {
+          relationship,
+          name: name.trim(),
+          mobile_number: mobile.trim(),
+          email: email.trim() || null,
+          is_primary: isPrimary,
+        })
+        toast.success("Contact updated")
+      }
+      onSaved()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Save failed")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>
+            {isCreate ? "Add parent contact" : "Edit parent contact"}
+          </SheetTitle>
+          <SheetDescription>
+            For {student.student_id} · {student.display_name}
+          </SheetDescription>
+        </SheetHeader>
+        <form onSubmit={onSubmit}>
+          <SheetBody className="space-y-4">
+            <Field label="Relationship" required>
+              <select
+                value={relationship}
+                onChange={(e) =>
+                  setRelationship(e.target.value as GuardianRelationship)
+                }
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              >
+                {GUARDIAN_RELATIONSHIPS.map((r) => {
+                  // A relationship taken by another contact can't be reused.
+                  const taken =
+                    usedRelationships.has(r) && r !== existing?.relationship
+                  return (
+                    <option key={r} value={r} disabled={taken}>
+                      {RELATIONSHIP_LABELS[r]}
+                      {taken ? " (already added)" : ""}
+                    </option>
+                  )
+                })}
+              </select>
+            </Field>
+
+            <Field label="Contact name" error={errors.name} required>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </Field>
+
+            <Field label="Mobile number" error={errors.mobile} required>
+              <Input
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value)}
+                inputMode="numeric"
+              />
+            </Field>
+
+            <Field label="Email (optional)" error={errors.email}>
+              <Input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </Field>
+
+            <label className="flex items-start gap-2.5 rounded-md border bg-muted/30 p-3">
+              <input
+                type="checkbox"
+                checked={isPrimary}
+                onChange={(e) => setIsPrimary(e.target.checked)}
+                className="mt-0.5 size-4 rounded border-input accent-primary"
+              />
+              <span className="space-y-0.5">
+                <span className="block text-sm font-medium">
+                  Primary contact
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  The main point of contact for this student.
+                </span>
+              </span>
+            </label>
+          </SheetBody>
+          <SheetFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving…" : isCreate ? "Add" : "Save"}
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+function Field({
+  label,
+  error,
+  required,
+  children,
+}: {
+  label: string
+  error?: string
+  required?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm">
+        {label}
+        {required && <span className="ml-0.5 text-destructive">*</span>}
+      </Label>
+      {children}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   )
 }
