@@ -35,14 +35,48 @@ import {
 import { listProgrammes, type Programme } from "@/lib/programmes"
 import {
   BLOOD_GROUPS,
+  ENTRY_TYPES,
+  ENTRY_TYPE_LABELS,
   GENDERS,
   bulkCreateStudents,
   listStudentIds,
   type BloodGroup,
   type BulkCreateStudentRow,
   type BulkRowError,
+  type EntryType,
   type Gender,
 } from "@/lib/students"
+
+// Bulk-grid cells carry the human label ("Regular"/"Lateral"); the API wants
+// the numeric code (1/2). These helpers bridge the two, tolerant of casing and
+// of a raw "1"/"2" typed straight into the sheet.
+const ENTRY_TYPE_LABEL_LIST = ENTRY_TYPES.map((v) => ENTRY_TYPE_LABELS[v])
+const ENTRY_TYPE_BY_LABEL = new Map<string, EntryType>(
+  ENTRY_TYPES.map((v) => [ENTRY_TYPE_LABELS[v].toLowerCase(), v]),
+)
+
+// Normalize a parsed cell to its canonical label so the dropdown shows it
+// selected. Recognizes the labels (any case) and the raw numeric codes; leaves
+// anything else untouched so validation can flag it.
+function normalizeEntryTypeCell(raw: string): string {
+  const v = raw.trim()
+  if (v === "") return ""
+  const byLabel = ENTRY_TYPE_BY_LABEL.get(v.toLowerCase())
+  if (byLabel) return ENTRY_TYPE_LABELS[byLabel]
+  const num = Number(v)
+  if ((ENTRY_TYPES as readonly number[]).includes(num)) {
+    return ENTRY_TYPE_LABELS[num as EntryType]
+  }
+  return v
+}
+
+// Blank defaults to Regular (1); validation guarantees any non-blank value is a
+// known label by submit time.
+function entryTypeCellToValue(raw: string): EntryType {
+  const v = raw.trim().toLowerCase()
+  if (v === "") return 1
+  return ENTRY_TYPE_BY_LABEL.get(v) ?? 1
+}
 
 // Columns in the upload grid. The (programme, admission year) pair is locked
 // at the top via the matrix selector, so it's intentionally NOT a column here.
@@ -50,6 +84,12 @@ const COLUMNS = [
   { key: "student_id", label: "student_id", required: true, width: "min-w-[9rem]" },
   { key: "display_name", label: "display_name", required: true, width: "min-w-[14rem]" },
   { key: "gender", label: "gender", required: true, width: "min-w-[7rem]" },
+  {
+    key: "entry_type",
+    label: "entry_type",
+    required: false,
+    width: "min-w-[10rem]",
+  },
   { key: "email", label: "email", required: true, width: "min-w-[18rem]" },
   { key: "mobile_number", label: "mobile_number", required: true, width: "min-w-[10rem]" },
   { key: "dob", label: "dob (YYYY-MM-DD)", required: true, width: "min-w-[11rem]" },
@@ -82,6 +122,7 @@ function emptyRow(): GridRow {
       student_id: "",
       display_name: "",
       gender: "",
+      entry_type: "",
       email: "",
       mobile_number: "",
       dob: "",
@@ -312,6 +353,7 @@ export function StudentsBulkUploadPage() {
       .dataValidations
     const dropdowns: Array<{ key: ColumnKey; values: readonly string[] }> = [
       { key: "gender", values: GENDERS },
+      { key: "entry_type", values: ENTRY_TYPE_LABEL_LIST },
       { key: "blood_group", values: BLOOD_GROUPS },
     ]
     for (const { key, values } of dropdowns) {
@@ -368,6 +410,7 @@ export function StudentsBulkUploadPage() {
           student_id: "",
           display_name: "",
           gender: "",
+          entry_type: "",
           email: "",
           mobile_number: "",
           dob: "",
@@ -389,6 +432,9 @@ export function StudentsBulkUploadPage() {
             raw_v === undefined || raw_v === null ? "" : String(raw_v).trim()
           if (v !== "") values[col.key] = v
         }
+        // Coerce "1"/"2"/"regular"/… to the canonical label so the dropdown
+        // shows it selected and validation matches on the label.
+        values.entry_type = normalizeEntryTypeCell(values.entry_type)
         return {
           id: newRowId(),
           values,
@@ -463,6 +509,7 @@ export function StudentsBulkUploadPage() {
       student_id: r.values.student_id.toUpperCase(),
       display_name: r.values.display_name,
       gender: r.values.gender.toLowerCase() as Gender,
+      entry_type: entryTypeCellToValue(r.values.entry_type),
       email: r.values.email.toLowerCase(),
       mobile_number: r.values.mobile_number,
       dob: r.values.dob,
@@ -1112,6 +1159,33 @@ const CellEditor = React.memo(function CellEditor({
     )
   }
 
+  if (column === "entry_type") {
+    return (
+      <div className="space-y-0.5">
+        <select
+          ref={registerRef as React.Ref<HTMLSelectElement>}
+          value={value}
+          onChange={(e) => handleChange(e.target.value)}
+          className={cn(
+            "h-8 w-full rounded-md border border-input bg-background px-2 text-xs shadow-xs outline-none transition focus-visible:ring-2 focus-visible:ring-ring/60",
+            invalid && invalidClass,
+          )}
+          title={error}
+        >
+          <option value="">—</option>
+          {ENTRY_TYPE_LABEL_LIST.map((label) => (
+            <option key={label} value={label}>
+              {label}
+            </option>
+          ))}
+        </select>
+        {error && (
+          <p className="text-[10px] leading-tight text-destructive">{error}</p>
+        )}
+      </div>
+    )
+  }
+
   if (column === "blood_group") {
     return (
       <div className="space-y-0.5">
@@ -1231,6 +1305,11 @@ function recomputeErrors(
     if (!g) errs.gender = "Required"
     else if (!GENDERS.includes(g as Gender))
       errs.gender = "male / female / other"
+
+    // Optional — blank defaults to Regular on submit.
+    const et = r.values.entry_type.trim()
+    if (et && !ENTRY_TYPE_BY_LABEL.has(et.toLowerCase()))
+      errs.entry_type = "Regular or Lateral"
 
     const email = r.values.email.trim()
     if (!email) errs.email = "Required"

@@ -73,6 +73,8 @@ import { listAdmissionYears, type AdmissionYear } from "@/lib/admission-years"
 import { listProgrammes, type Programme } from "@/lib/programmes"
 import {
   BLOOD_GROUPS,
+  ENTRY_TYPES,
+  ENTRY_TYPE_LABELS,
   GENDERS,
   GENDER_LABELS,
   activateStudent,
@@ -81,6 +83,7 @@ import {
   listStudents,
   updateStudent,
   type BloodGroup,
+  type EntryType,
   type Gender,
   type ListStudentsParams,
   type Student,
@@ -136,6 +139,9 @@ export function StudentsPage() {
   const [pendingGender, setPendingGender] = React.useState<Gender | undefined>(
     undefined,
   )
+  const [pendingEntryType, setPendingEntryType] = React.useState<
+    EntryType | undefined
+  >(undefined)
   const [pendingBloodGroup, setPendingBloodGroup] = React.useState<
     BloodGroup | undefined
   >(undefined)
@@ -150,6 +156,9 @@ export function StudentsPage() {
     undefined,
   )
   const [gender, setGender] = React.useState<Gender | undefined>(undefined)
+  const [entryType, setEntryType] = React.useState<EntryType | undefined>(
+    undefined,
+  )
   const [bloodGroup, setBloodGroup] = React.useState<BloodGroup | undefined>(
     undefined,
   )
@@ -184,11 +193,20 @@ export function StudentsPage() {
     if (filterPanelOpen) {
       setPendingStatus(status)
       setPendingGender(gender)
+      setPendingEntryType(entryType)
       setPendingBloodGroup(bloodGroup)
       setPendingProgrammeId(programmeId)
       setPendingAdmissionYearId(admissionYearId)
     }
-  }, [filterPanelOpen, status, gender, bloodGroup, programmeId, admissionYearId])
+  }, [
+    filterPanelOpen,
+    status,
+    gender,
+    entryType,
+    bloodGroup,
+    programmeId,
+    admissionYearId,
+  ])
 
   React.useEffect(() => {
     if (!searchRowOpen) {
@@ -227,6 +245,7 @@ export function StudentsPage() {
   const applyFilters = () => {
     setStatus(pendingStatus)
     setGender(pendingGender)
+    setEntryType(pendingEntryType)
     setBloodGroup(pendingBloodGroup)
     setProgrammeId(pendingProgrammeId)
     setAdmissionYearId(pendingAdmissionYearId)
@@ -236,11 +255,13 @@ export function StudentsPage() {
   const resetFilters = () => {
     setPendingStatus(undefined)
     setPendingGender(undefined)
+    setPendingEntryType(undefined)
     setPendingBloodGroup(undefined)
     setPendingProgrammeId(undefined)
     setPendingAdmissionYearId(undefined)
     setStatus(undefined)
     setGender(undefined)
+    setEntryType(undefined)
     setBloodGroup(undefined)
     setProgrammeId(undefined)
     setAdmissionYearId(undefined)
@@ -250,6 +271,7 @@ export function StudentsPage() {
   const filtersDirty =
     pendingStatus !== status ||
     pendingGender !== gender ||
+    pendingEntryType !== entryType ||
     pendingBloodGroup !== bloodGroup ||
     pendingProgrammeId !== programmeId ||
     pendingAdmissionYearId !== admissionYearId
@@ -269,6 +291,7 @@ export function StudentsPage() {
   const activeFilterCount =
     (status ? 1 : 0) +
     (gender ? 1 : 0) +
+    (entryType ? 1 : 0) +
     (bloodGroup ? 1 : 0) +
     (programmeId ? 1 : 0) +
     (admissionYearId ? 1 : 0) +
@@ -299,6 +322,7 @@ export function StudentsPage() {
       abcIdSearch: appliedColumnSearch.abc_id || undefined,
       status,
       gender,
+      entryType,
       bloodGroup,
       programmeId,
       admissionYearId,
@@ -310,6 +334,7 @@ export function StudentsPage() {
     appliedColumnSearch,
     status,
     gender,
+    entryType,
     bloodGroup,
     programmeId,
     admissionYearId,
@@ -494,6 +519,7 @@ export function StudentsPage() {
           <FilterPanel
             pendingStatus={pendingStatus}
             pendingGender={pendingGender}
+            pendingEntryType={pendingEntryType}
             pendingBloodGroup={pendingBloodGroup}
             pendingProgrammeId={pendingProgrammeId}
             pendingAdmissionYearId={pendingAdmissionYearId}
@@ -501,6 +527,7 @@ export function StudentsPage() {
             admissionYears={admissionYears}
             onPendingStatusChange={setPendingStatus}
             onPendingGenderChange={setPendingGender}
+            onPendingEntryTypeChange={setPendingEntryType}
             onPendingBloodGroupChange={setPendingBloodGroup}
             onPendingProgrammeIdChange={setPendingProgrammeId}
             onPendingAdmissionYearIdChange={setPendingAdmissionYearId}
@@ -511,11 +538,13 @@ export function StudentsPage() {
             resetDisabled={
               !status &&
               !gender &&
+              !entryType &&
               !bloodGroup &&
               !programmeId &&
               !admissionYearId &&
               !pendingStatus &&
               !pendingGender &&
+              !pendingEntryType &&
               !pendingBloodGroup &&
               !pendingProgrammeId &&
               !pendingAdmissionYearId
@@ -647,6 +676,7 @@ function ToolbarIconToggle({
 function FilterPanel({
   pendingStatus,
   pendingGender,
+  pendingEntryType,
   pendingBloodGroup,
   pendingProgrammeId,
   pendingAdmissionYearId,
@@ -654,6 +684,7 @@ function FilterPanel({
   admissionYears,
   onPendingStatusChange,
   onPendingGenderChange,
+  onPendingEntryTypeChange,
   onPendingBloodGroupChange,
   onPendingProgrammeIdChange,
   onPendingAdmissionYearIdChange,
@@ -665,6 +696,7 @@ function FilterPanel({
 }: {
   pendingStatus: StudentStatusFilter | undefined
   pendingGender: Gender | undefined
+  pendingEntryType: EntryType | undefined
   pendingBloodGroup: BloodGroup | undefined
   pendingProgrammeId: number | undefined
   pendingAdmissionYearId: number | undefined
@@ -672,6 +704,7 @@ function FilterPanel({
   admissionYears: AdmissionYear[]
   onPendingStatusChange: (v: StudentStatusFilter | undefined) => void
   onPendingGenderChange: (v: Gender | undefined) => void
+  onPendingEntryTypeChange: (v: EntryType | undefined) => void
   onPendingBloodGroupChange: (v: BloodGroup | undefined) => void
   onPendingProgrammeIdChange: (v: number | undefined) => void
   onPendingAdmissionYearIdChange: (v: number | undefined) => void
@@ -732,6 +765,29 @@ function FilterPanel({
             {GENDERS.map((g) => (
               <option key={g} value={g}>
                 {GENDER_LABELS[g]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="filter-entry-type">Entry type</Label>
+          <select
+            id="filter-entry-type"
+            value={pendingEntryType ?? ""}
+            onChange={(e) =>
+              onPendingEntryTypeChange(
+                e.target.value === ""
+                  ? undefined
+                  : (Number(e.target.value) as EntryType),
+              )
+            }
+            className={selectClass}
+          >
+            <option value="">All</option>
+            {ENTRY_TYPES.map((et) => (
+              <option key={et} value={et}>
+                {ENTRY_TYPE_LABELS[et]}
               </option>
             ))}
           </select>
@@ -924,6 +980,17 @@ function StudentsTable({
         cell: ({ row }) => (
           <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
             {GENDER_LABELS[row.original.gender]}
+          </span>
+        ),
+      },
+      {
+        id: "entry_type",
+        header: "Entry type",
+        accessorKey: "entry_type",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            {ENTRY_TYPE_LABELS[row.original.entry_type] ?? "—"}
           </span>
         ),
       },
@@ -1217,6 +1284,7 @@ function StudentsTable({
                     programme: "w-24",
                     admission_year: "w-20",
                     gender: "w-16",
+                    entry_type: "w-20",
                     mobile_number: "w-28",
                     email: "w-48",
                     abc_id: "w-28",
@@ -1241,7 +1309,9 @@ function StudentsTable({
                         className={cn(
                           "h-4 inline-block align-middle",
                           widthCls,
-                          id === "status" || id === "gender"
+                          id === "status" ||
+                            id === "gender" ||
+                            id === "entry_type"
                             ? "rounded-full"
                             : undefined,
                         )}
@@ -1492,6 +1562,13 @@ const studentSchema = z.object({
   student_id: studentIdField,
   display_name: z.string().trim().min(1, "Name is required").max(128, "Too long"),
   gender: z.enum(GENDERS, { message: "Select a gender" }),
+  entry_type: z.coerce
+    .number({ message: "Select an entry type" })
+    .int()
+    .refine(
+      (v) => (ENTRY_TYPES as readonly number[]).includes(v),
+      "Select an entry type",
+    ),
   programme_id: z
     .number({ message: "Select a programme" })
     .int()
@@ -1554,6 +1631,7 @@ function StudentForm(
           student_id: props.student.student_id,
           display_name: props.student.display_name,
           gender: props.student.gender,
+          entry_type: props.student.entry_type,
           programme_id: props.student.programme_id,
           admission_year_id: props.student.admission_year_id,
           email: props.student.email,
@@ -1566,6 +1644,7 @@ function StudentForm(
           student_id: "",
           display_name: "",
           gender: "male",
+          entry_type: 1,
           programme_id: 0,
           admission_year_id: 0,
           email: "",
@@ -1613,6 +1692,7 @@ function StudentForm(
       admission_year_id: values.admission_year_id,
       display_name: values.display_name,
       gender: values.gender,
+      entry_type: values.entry_type as EntryType,
       dob: values.dob,
       blood_group:
         values.blood_group === "" ? null : (values.blood_group as BloodGroup),
@@ -1742,6 +1822,25 @@ function StudentForm(
               {GENDERS.map((g) => (
                 <option key={g} value={g}>
                   {GENDER_LABELS[g]}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field
+            label="Entry type"
+            error={errors.entry_type?.message}
+            htmlFor="s-entry-type"
+            required
+          >
+            <select
+              id="s-entry-type"
+              {...register("entry_type")}
+              className={selectClass}
+            >
+              {ENTRY_TYPES.map((et) => (
+                <option key={et} value={et}>
+                  {ENTRY_TYPE_LABELS[et]}
                 </option>
               ))}
             </select>

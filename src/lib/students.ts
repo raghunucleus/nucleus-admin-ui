@@ -23,6 +23,16 @@ export const BLOOD_GROUPS = [
 ] as const
 export type BloodGroup = (typeof BLOOD_GROUPS)[number]
 
+// How the student entered the programme. Stored in the DB as 1 (Regular) or
+// 2 (Lateral); the labels are only for display.
+export const ENTRY_TYPES = [1, 2] as const
+export type EntryType = (typeof ENTRY_TYPES)[number]
+
+export const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
+  1: "Regular",
+  2: "Lateral",
+}
+
 export type Student = {
   id: number
   student_id: string
@@ -32,6 +42,7 @@ export type Student = {
   admission_year?: AdmissionYear
   display_name: string
   gender: Gender
+  entry_type: EntryType
   dob: string
   blood_group: BloodGroup | null
   abc_id: string | null
@@ -48,6 +59,7 @@ export type CreateStudentInput = {
   admission_year_id: number
   display_name: string
   gender: Gender
+  entry_type: EntryType
   dob: string
   blood_group: BloodGroup | null
   abc_id: string | null
@@ -61,6 +73,7 @@ export type UpdateStudentInput = {
   admission_year_id?: number
   display_name?: string
   gender?: Gender
+  entry_type?: EntryType
   dob?: string
   blood_group?: BloodGroup | null
   abc_id?: string | null
@@ -96,6 +109,7 @@ export type ListStudentsParams = {
   abcIdSearch?: string
   status?: StudentStatusFilter
   gender?: Gender
+  entryType?: EntryType
   bloodGroup?: BloodGroup
   programmeId?: number
   admissionYearId?: number
@@ -125,6 +139,8 @@ export async function listStudents(
   if (params.abcIdSearch) qs.set("abcIdSearch", params.abcIdSearch)
   if (params.status) qs.set("status", params.status)
   if (params.gender) qs.set("gender", params.gender)
+  if (params.entryType !== undefined)
+    qs.set("entryType", String(params.entryType))
   if (params.bloodGroup) qs.set("bloodGroup", params.bloodGroup)
   if (params.programmeId !== undefined)
     qs.set("programmeId", String(params.programmeId))
@@ -192,6 +208,7 @@ export type BulkCreateStudentRow = {
   student_id: string
   display_name: string
   gender: Gender
+  entry_type: EntryType
   dob: string
   blood_group: BloodGroup | null
   abc_id: string | null

@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
 import {
+  ENTRY_TYPE_LABELS,
   GENDER_LABELS,
   getStudent,
   resetStudentLoginPassword,
@@ -186,6 +187,10 @@ function OverviewSection({ student }: { student: Student }) {
         <Detail label="Student ID" value={student.student_id} mono />
         <Detail label="Display name" value={student.display_name} />
         <Detail label="Gender" value={GENDER_LABELS[student.gender]} />
+        <Detail
+          label="Entry type"
+          value={ENTRY_TYPE_LABELS[student.entry_type] ?? "—"}
+        />
         <Detail label="Date of birth" value={student.dob || "—"} mono />
         <Detail label="Blood group" value={student.blood_group ?? "—"} />
         <Detail label="ABC ID" value={student.abc_id ?? "—"} mono />
