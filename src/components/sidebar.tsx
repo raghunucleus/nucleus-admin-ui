@@ -8,8 +8,9 @@ import {
   GraduationCap,
   Home,
   Layers,
+  Lock,
+  LockOpen,
   PanelLeftClose,
-  PanelLeftOpen,
   Search,
   ShieldCheck,
   Sparkles,
@@ -20,6 +21,13 @@ import {
 
 import { cn } from "@/lib/utils"
 import { useUiStore } from "@/store/ui-store"
+
+// Hover-to-expand only applies to devices with a real pointer. On touch a tap
+// synthesises mouseenter, which would leave the rail stuck open.
+const CAN_HOVER =
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(hover: hover) and (pointer: fine)").matches
 
 type NavLeaf = { type: "leaf"; to: string; label: string; icon: LucideIcon; exact?: boolean }
 type NavGroup = {
@@ -129,25 +137,56 @@ function filterNav(items: NavItem[], query: string): FilteredItem[] {
 }
 
 export function Sidebar() {
-  const collapsed = useUiStore((s) => s.sidebarCollapsed)
-  const toggleSidebar = useUiStore((s) => s.toggleSidebar)
-  const setSidebarCollapsed = useUiStore((s) => s.setSidebarCollapsed)
+  const locked = useUiStore((s) => s.sidebarLocked)
+  const toggleSidebarLock = useUiStore((s) => s.toggleSidebarLock)
+  const setSidebarLocked = useUiStore((s) => s.setSidebarLocked)
   const pathname = useLocation({ select: (l) => l.pathname })
 
   const [query, setQuery] = React.useState("")
+  const [hovered, setHovered] = React.useState(false)
+  const [searchFocused, setSearchFocused] = React.useState(false)
   const searchInputRef = React.useRef<HTMLInputElement>(null)
+
+  // Collapsed is derived, never stored: the rail expands when pinned, hovered,
+  // or while the search box has focus.
+  const collapsed = !(locked || hovered || searchFocused)
 
   React.useEffect(() => {
     if (collapsed && query) setQuery("")
   }, [collapsed, query])
+
+  // Cmd/Ctrl-K focuses the search (pinning open first if collapsed, since the
+  // input isn't mounted on the rail). Esc clears and blurs it.
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault()
+        if (collapsed) {
+          setSidebarLocked(true)
+          requestAnimationFrame(() => searchInputRef.current?.focus())
+        } else {
+          searchInputRef.current?.focus()
+        }
+      }
+      if (e.key === "Escape" && document.activeElement === searchInputRef.current) {
+        setQuery("")
+        searchInputRef.current?.blur()
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [collapsed, setSidebarLocked])
 
   const filtered = React.useMemo(() => filterNav(nav, query), [query])
   const searching = query.trim().length > 0
 
   return (
     <aside
+      id="sidebar"
+      onMouseEnter={CAN_HOVER ? () => setHovered(true) : undefined}
+      onMouseLeave={CAN_HOVER ? () => setHovered(false) : undefined}
       className={cn(
-        "flex flex-col border-r border-sidebar-border/70 bg-gradient-to-b from-sidebar to-sidebar/95 text-sidebar-foreground shadow-sm transition-[width] duration-200 ease-out",
+        "flex flex-col border-r border-sidebar-border/70 bg-gradient-to-b from-sidebar to-sidebar/95 text-sidebar-foreground shadow-sm transition-[width] duration-300 ease-out",
         collapsed ? "w-16" : "w-64",
       )}
     >
@@ -171,7 +210,7 @@ export function Sidebar() {
             type="button"
             title="Search"
             onClick={() => {
-              setSidebarCollapsed(false)
+              setSidebarLocked(true)
               requestAnimationFrame(() => searchInputRef.current?.focus())
             }}
             className="flex h-9 w-full items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
@@ -186,6 +225,8 @@ export function Sidebar() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
               placeholder="Search menu..."
               className="h-9 w-full rounded-md border border-sidebar-border/70 bg-background/40 pl-8 pr-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring/60 focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/40"
             />
@@ -220,7 +261,7 @@ export function Sidebar() {
                 item={item}
                 collapsed={collapsed}
                 pathname={pathname}
-                expandSidebar={() => setSidebarCollapsed(false)}
+                expandSidebar={() => setSidebarLocked(true)}
                 forceOpen={searching}
                 query={query}
               />
@@ -229,24 +270,59 @@ export function Sidebar() {
         )}
       </nav>
 
-      <button
-        type="button"
-        onClick={toggleSidebar}
+      {/* Footer controls. Collapse returns to the auto-hide rail; Lock pins open. */}
+      <div
         className={cn(
-          "flex h-11 items-center gap-2 border-t border-sidebar-border/70 px-4 text-xs font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-          collapsed && "justify-center px-0",
+          "flex shrink-0 items-center gap-1 border-t border-sidebar-border/70 p-2",
+          collapsed && "flex-col",
         )}
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
-        {collapsed ? (
-          <PanelLeftOpen className="size-4" />
-        ) : (
-          <>
-            <PanelLeftClose className="size-4" />
-            <span>Collapse</span>
-          </>
-        )}
-      </button>
+        {/* Collapse: unpin + close now so it returns to the auto-hide rail even
+            if the pointer is still over the sidebar. */}
+        <button
+          type="button"
+          onClick={() => {
+            setSidebarLocked(false)
+            setHovered(false)
+          }}
+          title="Collapse — auto-hide on hover"
+          aria-label="Collapse sidebar (auto-hide)"
+          className={cn(
+            "flex h-9 items-center gap-2 rounded-md text-xs font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+            collapsed ? "w-9 justify-center px-0" : "flex-1 justify-center px-2",
+          )}
+        >
+          <PanelLeftClose className="size-4 shrink-0" />
+          {!collapsed && <span className="truncate">Collapse</span>}
+        </button>
+
+        {/* Lock: pin open, disabling auto-hide on hover. */}
+        <button
+          type="button"
+          onClick={toggleSidebarLock}
+          aria-pressed={locked}
+          title={locked ? "Locked open — click to auto-hide" : "Auto-hide — click to keep open"}
+          aria-label={
+            locked
+              ? "Unlock sidebar (enable auto-hide)"
+              : "Keep sidebar open (disable auto-hide)"
+          }
+          className={cn(
+            "flex h-9 items-center gap-2 rounded-md text-xs font-medium transition-colors",
+            locked
+              ? "text-primary hover:bg-sidebar-accent/60"
+              : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+            collapsed ? "w-9 justify-center px-0" : "flex-1 justify-center px-2",
+          )}
+        >
+          {locked ? (
+            <Lock className="size-4 shrink-0" />
+          ) : (
+            <LockOpen className="size-4 shrink-0" />
+          )}
+          {!collapsed && <span className="truncate">{locked ? "Locked" : "Lock"}</span>}
+        </button>
+      </div>
     </aside>
   )
 }

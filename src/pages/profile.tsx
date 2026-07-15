@@ -104,8 +104,8 @@ function SideNav({ activeKey }: { activeKey: ProfileSection }) {
             className={cn(
               "group flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-sm transition-colors",
               isActive
-                ? "border-primary bg-accent/10 text-foreground"
-                : "border-transparent text-muted-foreground hover:bg-accent/10 hover:text-foreground",
+                ? "border-primary bg-accent text-foreground"
+                : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
             <Icon className="size-4 shrink-0" />

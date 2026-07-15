@@ -1,85 +1,120 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Register the `dark:` variant for Tailwind v4 (class-based, keyed off a
+ * `.dark` ancestor). Without this every `dark:` utility is a no-op. */
+@custom-variant dark (&:is(.dark *));
+
 /* ---------------------------------------------------------------------------
  * Theme is defined in a single place. To rebrand the whole app, change the
- * tokens in :root. To add dark mode later, uncomment the .dark block and add
- * a `class="dark"` to <html> (or toggle it from a theme provider).
+ * tokens in :root. Dark mode is driven by the `.dark` block below, toggled on
+ * <html> by the ThemeProvider (src/components/theme-provider.tsx).
  * ------------------------------------------------------------------------- */
 
 :root {
   /* Native UI (scrollbars, <select> popups) follows the app theme, not the OS.
      Never use `color-scheme: light dark` — that tracks the OS preference and
-     yields a dark scrollbar in this light-only app. When the .dark block below
-     is enabled, add `color-scheme: dark;` there too. */
+     yields a dark scrollbar in light mode. The .dark block sets `dark`. */
   color-scheme: light;
 
-  /* Brand — change these two to rebrand the entire app. */
-  --primary: oklch(56.123% 0.11942 250.81); /* #065ea8 */
-  --primary-foreground: oklch(1 0 0); /* #ffffff */
-
-  /* Surfaces — background is a deliberate light gray so white cards/popovers
-     lift clearly off it; the tints below give muted/border real presence. */
-  --background: #eef2f6;
-  --foreground: oklch(0.18 0.02 254);
-  --card: oklch(1 0 0);
-  --card-foreground: var(--foreground);
-  --popover: oklch(1 0 0);
-  --popover-foreground: var(--foreground);
-
-  /* Neutrals — derived from primary so they stay on-brand. */
-  --secondary: color-mix(in oklab, var(--primary) 9%, oklch(1 0 0));
-  --secondary-foreground: var(--primary);
-  --muted: color-mix(in oklab, var(--primary) 9%, oklch(1 0 0));
-  --muted-foreground: color-mix(in oklab, var(--foreground) 65%, oklch(1 0 0));
-  --accent: color-mix(in oklab, var(--primary) 16%, oklch(1 0 0));
-  --accent-foreground: var(--primary);
-
-  /* Semantic */
-  --destructive: oklch(0.55 0.19 27);
-  --destructive-foreground: oklch(1 0 0);
-  --success: oklch(0.56 0.13 150);
-  --warning: oklch(0.66 0.14 70);
-
-  /* Lines / inputs */
-  --border: color-mix(in oklab, var(--primary) 22%, oklch(1 0 0));
-  --input: color-mix(in oklab, var(--primary) 22%, oklch(1 0 0));
-  --ring: var(--primary);
+  /* Brand — light theme (shared with nucleus-ui) */
+  --brand-primary: #2563eb;     /* blue-600 */
+  --brand-secondary: #0ea5e9;   /* sky-500 — gradient partner for primary */
+  --brand-accent: #38bdf8;      /* sky-400 — lighter highlight in same family */
 
   /* Radius — single source of truth */
   --radius: 0.5rem;
 
-  /* Sidebar (used by future shell layouts) */
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: var(--accent);
-  --sidebar-accent-foreground: var(--accent-foreground);
-  --sidebar-border: var(--border);
-  --sidebar-ring: var(--ring);
+  /* Surfaces — canvas is a deliberate light gray so white cards/popovers lift
+     clearly off it. Cards stay pure white; the gray page + darker borders give
+     the UI depth in light mode. */
+  --background: oklch(0.966 0.004 286.3);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+
+  --primary: var(--brand-primary);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: var(--brand-secondary);
+  --secondary-foreground: oklch(0.985 0 0);
+  /* Subtle hover/selected surface (shadcn contract) — a soft brand tint, NOT the
+     vivid brand sky. The sky itself lives in --secondary / --brand-accent. */
+  --accent: color-mix(in oklab, var(--primary) 14%, var(--background));
+  --accent-foreground: var(--foreground);
+
+  --muted: oklch(0.938 0.004 286.3);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.55 0.13 152);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.62 0.14 65);
+  --warning-foreground: oklch(0.21 0.006 285.885);
+  --border: oklch(0.878 0.005 286.3);
+  --input: oklch(0.86 0.006 286.3);
+  --ring: var(--brand-primary);
+
+  /* Sidebar */
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.141 0.005 285.823);
+  --sidebar-primary: var(--brand-primary);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.938 0.004 286.3);
+  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
+  --sidebar-border: oklch(0.878 0.005 286.3);
+  --sidebar-ring: var(--brand-primary);
 }
 
-/* Future dark mode — uncomment and toggle `class="dark"` on <html>.
+/* Dark mode — activated by toggling `class="dark"` on <html> (ThemeProvider).
+   Values shared with nucleus-ui (central's warm gray-navy). */
 .dark {
   color-scheme: dark;
-  --background: oklch(0.18 0.02 254);
-  --foreground: oklch(1 0 0);
-  --card: oklch(0.22 0.025 254);
-  --card-foreground: oklch(1 0 0);
-  --popover: oklch(0.22 0.025 254);
-  --popover-foreground: oklch(1 0 0);
-  --secondary: color-mix(in oklab, var(--primary) 18%, oklch(0.18 0.02 254));
-  --secondary-foreground: oklch(1 0 0);
-  --muted: color-mix(in oklab, var(--primary) 12%, oklch(0.18 0.02 254));
-  --muted-foreground: color-mix(in oklab, oklch(1 0 0) 70%, oklch(0.18 0.02 254));
-  --accent: color-mix(in oklab, var(--primary) 25%, oklch(0.18 0.02 254));
-  --accent-foreground: oklch(1 0 0);
-  --border: color-mix(in oklab, var(--primary) 22%, oklch(0.18 0.02 254));
-  --input: color-mix(in oklab, var(--primary) 22%, oklch(0.18 0.02 254));
-  --sidebar: oklch(0.22 0.025 254);
+
+  /* Brand — dark theme (lighter shades for legibility on dark surfaces) */
+  --brand-primary: #60a5fa;     /* blue-400 */
+  --brand-secondary: #38bdf8;   /* sky-400 */
+  --brand-accent: #7dd3fc;      /* sky-300 */
+
+  /* Surfaces — cards/popover lift off the page; both stay near-neutral so the
+     brand-blue accents read against them. Muted/border/input color-mix from
+     these so re-darkening the whole theme is a one-line change. */
+  --background: #202124;
+  --foreground: oklch(0.985 0 0);
+  --card: #2a2b2e;
+  --card-foreground: oklch(0.985 0 0);
+  --popover: #2a2b2e;
+  --popover-foreground: oklch(0.985 0 0);
+
+  --primary: var(--brand-primary);
+  --primary-foreground: oklch(0.21 0.006 285.885);
+  --secondary: var(--brand-secondary);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --accent: color-mix(in oklab, var(--primary) 20%, var(--background));
+  --accent-foreground: var(--foreground);
+
+  --muted: color-mix(in oklab, var(--primary) 12%, var(--background));
+  --muted-foreground: color-mix(in oklab, oklch(0.98 0 0) 75%, var(--background));
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.72 0.16 156);
+  --success-foreground: oklch(0.21 0.006 285.885);
+  --warning: oklch(0.8 0.15 78);
+  --warning-foreground: oklch(0.21 0.006 285.885);
+  --border: color-mix(in oklab, oklch(0.985 0 0) 16%, var(--background));
+  --input: color-mix(in oklab, oklch(0.985 0 0) 24%, var(--background));
+  --ring: var(--brand-primary);
+
+  --sidebar: #111111;
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: var(--brand-primary);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: color-mix(in oklab, var(--primary) 16%, var(--sidebar));
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: color-mix(in oklab, oklch(0.985 0 0) 12%, var(--sidebar));
+  --sidebar-ring: var(--brand-primary);
 }
-*/
 
 @theme inline {
   --color-background: var(--background);
@@ -139,6 +174,15 @@
   background-repeat: no-repeat;
   animation: shimmer 1.4s linear infinite;
 }
+.dark .skeleton-shimmer {
+  background-color: rgba(255, 255, 255, 0.06);
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
 
 /* Slim, theme-aware scrollbar. Standard properties for Firefox + modern
  * Chrome; -webkit fallback for everything else. */
@@ -162,6 +206,15 @@
 }
 .thin-scrollbar::-webkit-scrollbar-corner {
   background: transparent;
+}
+.dark .thin-scrollbar {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+.dark .thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+.dark .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.32);
 }
 
 @layer base {

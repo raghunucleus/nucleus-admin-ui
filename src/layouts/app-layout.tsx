@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Sidebar } from "@/components/sidebar"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { useIdleLogout } from "@/hooks/use-idle-logout"
 import { logout } from "@/lib/auth"
 import { useAuthStore } from "@/store/auth-store"
@@ -19,7 +20,8 @@ import { useUiStore } from "@/store/ui-store"
 
 export function AppLayout() {
   const user = useAuthStore((s) => s.user)
-  const toggleSidebar = useUiStore((s) => s.toggleSidebar)
+  const sidebarLocked = useUiStore((s) => s.sidebarLocked)
+  const toggleSidebarLock = useUiStore((s) => s.toggleSidebarLock)
   const navigate = useNavigate()
   const [loggingOut, setLoggingOut] = React.useState(false)
 
@@ -54,13 +56,16 @@ export function AppLayout() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={toggleSidebar}
-              aria-label="Toggle sidebar"
+              onClick={toggleSidebarLock}
+              aria-label={sidebarLocked ? "Auto-hide menu" : "Pin menu open"}
+              aria-expanded={sidebarLocked}
+              aria-controls="sidebar"
             >
               <Menu />
             </Button>
           </div>
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button

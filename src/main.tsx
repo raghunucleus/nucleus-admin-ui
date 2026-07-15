@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import './index.css'
 import App from './App.tsx'
+import { ThemeProvider } from '@/components/theme-provider'
 
 // Auth used to persist in localStorage; we now scope it per-tab via sessionStorage.
 // Strip any leftover entry so old tokens don't linger after the upgrade.
@@ -16,7 +17,9 @@ const googleClientId = import.meta.env.VITE_GOOGLE_OIDC_CLIENT_ID as string | un
 
 const tree = (
   <StrictMode>
-    <App />
+    <ThemeProvider defaultTheme="system" storageKey="nucleus-admin-theme">
+      <App />
+    </ThemeProvider>
   </StrictMode>
 )
 

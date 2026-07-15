@@ -1,13 +1,13 @@
 import { RouterProvider } from "@tanstack/react-router"
 
-import { Toaster } from "@/components/ui/sonner"
+import { ThemedToaster } from "@/components/themed-toaster"
 import { router } from "@/router"
 
 function App() {
   return (
     <>
       <RouterProvider router={router} />
-      <Toaster />
+      <ThemedToaster />
     </>
   )
 }
