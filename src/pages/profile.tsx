@@ -102,16 +102,16 @@ function SideNav({ activeKey }: { activeKey: ProfileSection }) {
             to="/profile"
             search={{ section: item.key }}
             className={cn(
-              "group flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+              "group flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-sm transition-colors",
               isActive
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:bg-accent/60 hover:text-accent-foreground",
+                ? "border-primary bg-accent/10 text-foreground"
+                : "border-transparent text-muted-foreground hover:bg-accent/10 hover:text-foreground",
             )}
           >
             <Icon className="size-4 shrink-0" />
             <span className="flex-1">
               <span className="block font-medium">{item.label}</span>
-              <span className="block text-xs text-muted-foreground/80">
+              <span className="block text-xs text-muted-foreground">
                 {item.description}
               </span>
             </span>
