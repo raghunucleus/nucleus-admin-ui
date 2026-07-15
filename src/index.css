@@ -8,12 +8,19 @@
  * ------------------------------------------------------------------------- */
 
 :root {
+  /* Native UI (scrollbars, <select> popups) follows the app theme, not the OS.
+     Never use `color-scheme: light dark` — that tracks the OS preference and
+     yields a dark scrollbar in this light-only app. When the .dark block below
+     is enabled, add `color-scheme: dark;` there too. */
+  color-scheme: light;
+
   /* Brand — change these two to rebrand the entire app. */
   --primary: oklch(56.123% 0.11942 250.81); /* #065ea8 */
   --primary-foreground: oklch(1 0 0); /* #ffffff */
 
-  /* Surfaces */
-  --background: #f4f7f9;
+  /* Surfaces — background is a deliberate light gray so white cards/popovers
+     lift clearly off it; the tints below give muted/border real presence. */
+  --background: #eef2f6;
   --foreground: oklch(0.18 0.02 254);
   --card: oklch(1 0 0);
   --card-foreground: var(--foreground);
@@ -21,11 +28,11 @@
   --popover-foreground: var(--foreground);
 
   /* Neutrals — derived from primary so they stay on-brand. */
-  --secondary: color-mix(in oklab, var(--primary) 5%, oklch(1 0 0));
+  --secondary: color-mix(in oklab, var(--primary) 9%, oklch(1 0 0));
   --secondary-foreground: var(--primary);
-  --muted: color-mix(in oklab, var(--primary) 4%, oklch(1 0 0));
+  --muted: color-mix(in oklab, var(--primary) 9%, oklch(1 0 0));
   --muted-foreground: color-mix(in oklab, var(--foreground) 65%, oklch(1 0 0));
-  --accent: color-mix(in oklab, var(--primary) 10%, oklch(1 0 0));
+  --accent: color-mix(in oklab, var(--primary) 16%, oklch(1 0 0));
   --accent-foreground: var(--primary);
 
   /* Semantic */
@@ -35,8 +42,8 @@
   --warning: oklch(0.66 0.14 70);
 
   /* Lines / inputs */
-  --border: color-mix(in oklab, var(--primary) 14%, oklch(1 0 0));
-  --input: color-mix(in oklab, var(--primary) 14%, oklch(1 0 0));
+  --border: color-mix(in oklab, var(--primary) 22%, oklch(1 0 0));
+  --input: color-mix(in oklab, var(--primary) 22%, oklch(1 0 0));
   --ring: var(--primary);
 
   /* Radius — single source of truth */
@@ -55,6 +62,7 @@
 
 /* Future dark mode — uncomment and toggle `class="dark"` on <html>.
 .dark {
+  color-scheme: dark;
   --background: oklch(0.18 0.02 254);
   --foreground: oklch(1 0 0);
   --card: oklch(0.22 0.025 254);
