@@ -36,6 +36,8 @@ import { StudentsBulkUploadPage } from "@/pages/students-bulk-upload"
 import { GuardiansPage } from "@/pages/guardians"
 import { GuardiansBulkUploadPage } from "@/pages/guardians-bulk-upload"
 import { StudentDetailsPage } from "@/pages/student-details"
+import { AddressAttributesPage } from "@/pages/address-attributes/address-attributes"
+import { StudentAttributesPage } from "@/pages/student-attributes/student-attributes"
 import { SubjectsPage } from "@/pages/subjects"
 import { SubjectTypesPage } from "@/pages/subject-types"
 import { TimetableEditorPage } from "@/pages/timetable-editor"
@@ -397,6 +399,54 @@ const roleManagementAssignmentEditorRoute = createRoute({
   validateSearch: validateAssignmentsListSearch,
 })
 
+const studentAttributeTabs = [
+  "industry-certification",
+  "entrance-exam",
+  "xth-board",
+  "xiith-board",
+  "diploma-board",
+] as const
+export type StudentAttributeTab = (typeof studentAttributeTabs)[number]
+
+const additionalAttributesStudentRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/additional-attributes/student",
+  component: StudentAttributesPage,
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { tab: StudentAttributeTab } => {
+    const t = search.tab
+    return {
+      tab:
+        typeof t === "string" &&
+        (studentAttributeTabs as readonly string[]).includes(t)
+          ? (t as StudentAttributeTab)
+          : "industry-certification",
+    }
+  },
+})
+
+const addressAttributeTabs = ["countries", "states", "districts"] as const
+export type AddressAttributeTab = (typeof addressAttributeTabs)[number]
+
+const additionalAttributesAddressRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/additional-attributes/address",
+  component: AddressAttributesPage,
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { tab: AddressAttributeTab } => {
+    const t = search.tab
+    return {
+      tab:
+        typeof t === "string" &&
+        (addressAttributeTabs as readonly string[]).includes(t)
+          ? (t as AddressAttributeTab)
+          : "countries",
+    }
+  },
+})
+
 const profileSections = ["profile", "password", "security"] as const
 export type ProfileSection = (typeof profileSections)[number]
 
@@ -454,6 +504,8 @@ const routeTree = rootRoute.addChildren([
     guardiansAllRoute,
     guardiansBulkUploadRoute,
     studentDetailsRoute,
+    additionalAttributesStudentRoute,
+    additionalAttributesAddressRoute,
     roleManagementRolesRoute,
     roleManagementRoleEditorRoute,
     roleManagementAssignmentsRoute,

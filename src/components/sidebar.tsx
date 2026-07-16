@@ -13,6 +13,7 @@ import {
   PanelLeftClose,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Users,
   X,
@@ -85,6 +86,16 @@ const nav: NavItem[] = [
     children: [
       { to: "/students/all", label: "All Students" },
       { to: "/students/bulk-upload", label: "Students Bulk Upload" },
+    ],
+  },
+  {
+    type: "group",
+    key: "additional-attributes",
+    label: "Additional Attributes",
+    icon: SlidersHorizontal,
+    children: [
+      { to: "/additional-attributes/student", label: "Student attributes" },
+      { to: "/additional-attributes/address", label: "Address attributes" },
     ],
   },
   {
