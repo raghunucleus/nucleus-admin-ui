@@ -116,6 +116,34 @@ export async function deactivateProgrammeAdmissionYear(
   )
 }
 
+export type ProfileVerifier = {
+  id: number
+  emp_code: string
+  emp_display_name: string
+}
+
+export async function getProfileVerifiers(
+  payId: number,
+): Promise<ProfileVerifier[]> {
+  return api<ProfileVerifier[]>(
+    `/admin/programme-admission-years/${payId}/profile-verifiers`,
+    { method: "GET" },
+  )
+}
+
+export async function setProfileVerifiers(
+  payId: number,
+  employeeIds: number[],
+): Promise<ProfileVerifier[]> {
+  return api<ProfileVerifier[]>(
+    `/admin/programme-admission-years/${payId}/profile-verifiers`,
+    {
+      method: "PUT",
+      body: { profile_verifier_employee_ids: employeeIds },
+    },
+  )
+}
+
 export type ProgrammeAdmissionYearMatrixCell = {
   id: number
   programme_id: number

@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
   ArrowRight,
+  BadgeCheck,
   CalendarRange,
   CheckCircle2,
   GraduationCap,
@@ -13,6 +14,7 @@ import {
   ScrollText,
   Settings2,
   UsersRound,
+  X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -43,8 +45,11 @@ import { ApiError } from "@/lib/api"
 import { listAdmissionYears, type AdmissionYear } from "@/lib/admission-years"
 import {
   createProgrammeAdmissionYear,
+  getProfileVerifiers,
   listProgrammeAdmissionYears,
+  setProfileVerifiers,
   updateProgrammeAdmissionYear,
+  type ProfileVerifier,
   type ProgrammeAdmissionYear,
 } from "@/lib/programme-admission-years"
 import {
@@ -63,6 +68,7 @@ import {
   listAttendanceGroups,
   type AttendanceGroup,
 } from "@/lib/attendance-groups"
+import { listEmployees, type Employee } from "@/lib/employees"
 
 type ManageSheetMode =
   | { kind: "closed" }
@@ -282,6 +288,7 @@ export function ProgrammeConfigurationPage() {
             programmeId={programmeId}
             admissionYearId={yearId}
           />
+          <ProfileVerifiersCard payId={currentRegulation?.id ?? null} />
           <ComingSoonCard />
         </>
       ) : (
@@ -1233,6 +1240,182 @@ function AttendanceGroupsCard({
 }
 
 // --------------------------------------------------------------------- card 4
+
+function ProfileVerifiersCard({ payId }: { payId: number | null }) {
+  const [employees, setEmployees] = React.useState<Employee[]>([])
+  // Current verifiers persisted server-side — kept to seed synthetic options
+  // for any who have since been deactivated, and to compute dirtiness.
+  const [current, setCurrent] = React.useState<ProfileVerifier[]>([])
+  const [selectedIds, setSelectedIds] = React.useState<number[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [busy, setBusy] = React.useState(false)
+
+  const load = React.useCallback(async () => {
+    if (payId == null) return
+    setLoading(true)
+    try {
+      const [emps, verifiers] = await Promise.all([
+        listEmployees({
+          status: "active",
+          pageSize: 100,
+          sortBy: "emp_display_name",
+          sortOrder: "asc",
+        }),
+        getProfileVerifiers(payId),
+      ])
+      setEmployees(emps.rows)
+      setCurrent(verifiers)
+      setSelectedIds(verifiers.map((v) => v.id))
+    } catch (err) {
+      toast.error("Couldn't load profile verifiers", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [payId])
+
+  React.useEffect(() => {
+    void load()
+  }, [load])
+
+  // Build the picker options. Any current verifier missing from the active
+  // list (e.g. deactivated since) is surfaced as a synthetic option so they
+  // stay visible/selectable.
+  const options = React.useMemo<ComboboxOption[]>(() => {
+    const base: ComboboxOption[] = employees.map((e) => ({
+      value: e.id,
+      label: e.emp_display_name,
+      sublabel: e.emp_code,
+    }))
+    for (const cur of current) {
+      if (!employees.some((e) => e.id === cur.id)) {
+        base.unshift({
+          value: cur.id,
+          label: cur.emp_display_name,
+          sublabel: `${cur.emp_code} · current`,
+        })
+      }
+    }
+    return base
+  }, [employees, current])
+
+  const labelForId = React.useCallback(
+    (id: number) => options.find((o) => o.value === id)?.label ?? `#${id}`,
+    [options],
+  )
+
+  const addPickerOptions = React.useMemo(
+    () => options.filter((o) => !selectedIds.includes(o.value)),
+    [options, selectedIds],
+  )
+
+  const isDirty = React.useMemo(() => {
+    const a = [...selectedIds].sort((x, y) => x - y)
+    const b = current.map((v) => v.id).sort((x, y) => x - y)
+    return a.length !== b.length || a.some((v, i) => v !== b[i])
+  }, [selectedIds, current])
+
+  const onSave = async () => {
+    if (payId == null || selectedIds.length === 0) return
+    setBusy(true)
+    try {
+      const saved = await setProfileVerifiers(payId, selectedIds)
+      setCurrent(saved)
+      setSelectedIds(saved.map((v) => v.id))
+      toast.success("Profile verifiers updated.")
+    } catch (err) {
+      toast.error("Couldn't save profile verifiers", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <SectionCard
+      icon={BadgeCheck}
+      title="Profile verifiers"
+      description="Teachers who verify the details of this batch's students."
+    >
+      {payId == null ? (
+        <div className="text-sm text-muted-foreground">
+          Assign a regulation for this batch first — verifiers are configured
+          per batch.
+        </div>
+      ) : loading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Label htmlFor="cfg-verifiers" className="text-xs text-muted-foreground">
+            Verifiers
+          </Label>
+          {selectedIds.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {selectedIds.map((id) => (
+                <span
+                  key={id}
+                  className="inline-flex items-center gap-1 rounded-md border bg-muted/40 py-0.5 pl-2 pr-1 text-xs"
+                >
+                  <span className="truncate">{labelForId(id)}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedIds((ids) => ids.filter((x) => x !== id))
+                    }
+                    className="grid size-4 place-items-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    aria-label={`Remove ${labelForId(id)}`}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <Combobox
+            id="cfg-verifiers"
+            value={null}
+            options={addPickerOptions}
+            onChange={(v) =>
+              v != null &&
+              setSelectedIds((ids) => (ids.includes(v) ? ids : [...ids, v]))
+            }
+            placeholder={
+              options.length === 0
+                ? "Loading employees…"
+                : addPickerOptions.length === 0
+                  ? "All employees added"
+                  : "Add a verifier…"
+            }
+            searchPlaceholder="Search by name or emp code…"
+            emptyMessage="No employees match"
+            disabled={busy || options.length === 0 || addPickerOptions.length === 0}
+          />
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <p className="text-xs text-muted-foreground">
+              Add at least one teacher.
+            </p>
+            <Button
+              size="sm"
+              onClick={onSave}
+              disabled={busy || selectedIds.length === 0 || !isDirty}
+            >
+              {busy ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
+// --------------------------------------------------------------------- card 5
 
 function ComingSoonCard() {
   return (
