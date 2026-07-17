@@ -255,4 +255,74 @@
       font-size: 16px;
     }
   }
+
+  /* ---------------------------------------------------------------------------
+     Page-width convention & wide-tier caps.
+
+     Pages have no shared width wrapper — each picks its own `mx-auto max-w-*`.
+     Convention: forms / detail / single-column reading pages use
+     max-w-3xl/4xl/5xl (readable line length); tables, lists, dashboards and
+     two-column tools use max-w-7xl (laptop-filling).
+
+     A `max-w-*` block already stretches to fill its parent up to the cap, so
+     raising the wide-tier caps below = "fill on laptops, gutter only on large
+     monitors" (the rem density knob above scales the cap up on big screens
+     automatically). This lifts every max-w-6xl / max-w-7xl page at once with no
+     page edits. Form tiers (3xl/4xl/5xl) and dialog sizes (sm/md/lg/xl) are
+     untouched, so forms stay readable and modals don't change.
+     ------------------------------------------------------------------------- */
+  :root {
+    --container-6xl: 80rem; /* was 72rem */
+    --container-7xl: 90rem; /* was 80rem */
+  }
+}
+
+/* =============================================================================
+   Glass toasts (Teams-inspired). Neutral frosted surface for all toasts; the
+   toast TYPE is shown by a colored left accent + tinted icon, not a colored fill.
+   Targets sonner's data-attributes so it holds regardless of <Toaster> props.
+   ============================================================================= */
+[data-sonner-toast][data-styled='true'] {
+  background: color-mix(in oklab, var(--popover) 78%, transparent) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid var(--border) !important;
+  color: var(--popover-foreground) !important;
+  border-radius: calc(var(--radius) + 0.35rem) !important;
+  box-shadow:
+    0 10px 34px -8px rgb(0 0 0 / 0.28),
+    0 2px 8px -3px rgb(0 0 0 / 0.18) !important;
+}
+
+/* Dark: lift the panel off the near-black page — translucent gray, a brighter
+   hairline border, and a top inner highlight for the glass sheen. */
+.dark [data-sonner-toast][data-styled='true'] {
+  background: color-mix(in oklab, var(--popover) 66%, transparent) !important;
+  border-color: color-mix(in oklab, white 15%, transparent) !important;
+  box-shadow:
+    0 12px 40px -8px rgb(0 0 0 / 0.62),
+    inset 0 1px 0 0 color-mix(in oklab, white 9%, transparent) !important;
+}
+
+/* Description text keeps the muted tone. */
+[data-sonner-toast] [data-description] {
+  color: var(--muted-foreground) !important;
+}
+
+/* Type accent: colored left edge + tinted icon (no colored background fill). */
+[data-sonner-toast][data-type='success'] { border-left: 3px solid var(--success) !important; }
+[data-sonner-toast][data-type='error']   { border-left: 3px solid var(--destructive) !important; }
+[data-sonner-toast][data-type='warning'] { border-left: 3px solid var(--warning) !important; }
+[data-sonner-toast][data-type='info']    { border-left: 3px solid var(--primary) !important; }
+
+[data-sonner-toast][data-type='success'] [data-icon] { color: var(--success); }
+[data-sonner-toast][data-type='error']   [data-icon] { color: var(--destructive); }
+[data-sonner-toast][data-type='warning'] [data-icon] { color: var(--warning); }
+[data-sonner-toast][data-type='info']    [data-icon] { color: var(--primary); }
+
+/* Close button blends into the glass. */
+[data-sonner-toast] [data-close-button] {
+  background: color-mix(in oklab, var(--popover) 70%, transparent) !important;
+  border-color: var(--border) !important;
+  color: var(--muted-foreground) !important;
 }
