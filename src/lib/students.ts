@@ -1,6 +1,11 @@
 import { api } from "@/lib/api"
+import type { Country, District, State } from "@/lib/address-attributes"
 import type { AdmissionYear } from "@/lib/admission-years"
+import type { DiplomaBoard } from "@/lib/diploma-boards"
+import type { EntranceExam } from "@/lib/entrance-exams"
 import type { Programme } from "@/lib/programmes"
+import type { SchoolBoardX } from "@/lib/school-boards-x"
+import type { SchoolBoardXii } from "@/lib/school-boards-xii"
 
 export const GENDERS = ["male", "female", "other"] as const
 export type Gender = (typeof GENDERS)[number]
@@ -51,6 +56,81 @@ export type Student = {
   is_active: boolean
   created_at: string
   updated_at: string
+
+  // --- Extended profile ----------------------------------------------------
+  // Numeric (Postgres `numeric`) columns serialize as strings, e.g. "85.50".
+  first_name: string | null
+  middle_name: string | null
+  last_name: string | null
+  personal_email: string | null
+  // Unverified address staged while a student OTP is in flight.
+  personal_email_pending: string | null
+  pass_out_year: number | null
+  tenth_percentage: string | null
+  twelfth_percentage: string | null
+  diploma_percentage: string | null
+  ug_cgpa: string | null
+  current_backlogs: number | null
+  backlog_history: boolean
+  resume_uploaded_at: string | null
+  // Alternative resume link set by the student/admin. Independent of the
+  // hosted file — both links are handed out to recruiters, so one failing
+  // (storage down, revoked Drive permissions) still leaves the other working.
+  resume_external_url: string | null
+  // Opens of the hosted Nucleus link only — external-link traffic is invisible.
+  resume_download_count: number
+  resume_last_downloaded_at: string | null
+  parent_name: string | null
+  parent_mobile: string | null
+  parent_email: string | null
+  guardian_name: string | null
+  guardian_mobile: string | null
+  guardian_email: string | null
+  home_address: string | null
+  home_district_id: number | null
+  home_pincode: string | null
+  home_state_id: number | null
+  home_country_id: number | null
+  aadhaar_number: string | null
+  pan_number: string | null
+  entrance_exam_na: boolean
+  entrance_exam_rank: number | null
+  entrance_exam_id: number | null
+  entrance_exam_year: number | null
+  year_of_gap: number | null
+  reason_of_gap: string | null
+  tenth_board_id: number | null
+  tenth_institution: string | null
+  tenth_year_of_pass: number | null
+  tenth_state_id: number | null
+  twelfth_board_id: number | null
+  twelfth_institution: string | null
+  twelfth_year_of_pass: number | null
+  twelfth_state_id: number | null
+  diploma_board_id: number | null
+  diploma_institution: string | null
+  diploma_year_of_pass: number | null
+  diploma_specialization: string | null
+  diploma_state_id: number | null
+  allowed_by_dept_for_placements: boolean | null
+  interested_in_placements_self: boolean | null
+
+  // Loaded relations + resume URL — present on GET /admin/students/:id only
+  // (list rows and PATCH responses omit them).
+  home_district?: District | null
+  home_state?: State | null
+  home_country?: Country | null
+  entrance_exam?: EntranceExam | null
+  tenth_board?: SchoolBoardX | null
+  tenth_state?: State | null
+  twelfth_board?: SchoolBoardXii | null
+  twelfth_state?: State | null
+  diploma_board?: DiplomaBoard | null
+  diploma_state?: State | null
+  // Permanent tokenized share link (`<api>/public/resumes/<token>`). It never
+  // changes across re-uploads and returns 404 while no file is uploaded; null
+  // only when a file was never uploaded.
+  resume_url?: string | null
 }
 
 export type CreateStudentInput = {
@@ -79,6 +159,53 @@ export type UpdateStudentInput = {
   abc_id?: string | null
   mobile_number?: string
   email?: string
+
+  // --- Extended profile (all optional; null clears a nullable field) --------
+  first_name?: string | null
+  middle_name?: string | null
+  last_name?: string | null
+  personal_email?: string | null
+  pass_out_year?: number | null
+  tenth_percentage?: number | null
+  twelfth_percentage?: number | null
+  diploma_percentage?: number | null
+  ug_cgpa?: number | null
+  current_backlogs?: number | null
+  backlog_history?: boolean
+  parent_name?: string | null
+  parent_mobile?: string | null
+  parent_email?: string | null
+  guardian_name?: string | null
+  guardian_mobile?: string | null
+  guardian_email?: string | null
+  home_address?: string | null
+  home_district_id?: number | null
+  home_pincode?: string | null
+  home_state_id?: number | null
+  home_country_id?: number | null
+  aadhaar_number?: string | null
+  pan_number?: string | null
+  entrance_exam_na?: boolean
+  entrance_exam_id?: number | null
+  entrance_exam_rank?: number | null
+  entrance_exam_year?: number | null
+  year_of_gap?: number | null
+  reason_of_gap?: string | null
+  tenth_board_id?: number | null
+  tenth_institution?: string | null
+  tenth_year_of_pass?: number | null
+  tenth_state_id?: number | null
+  twelfth_board_id?: number | null
+  twelfth_institution?: string | null
+  twelfth_year_of_pass?: number | null
+  twelfth_state_id?: number | null
+  diploma_board_id?: number | null
+  diploma_institution?: string | null
+  diploma_year_of_pass?: number | null
+  diploma_specialization?: string | null
+  diploma_state_id?: number | null
+  allowed_by_dept_for_placements?: boolean | null
+  interested_in_placements_self?: boolean | null
 }
 
 export type StudentsSortField =
@@ -242,4 +369,112 @@ export async function listStudentIds(): Promise<string[]> {
     method: "GET",
   })
   return result.ids
+}
+
+/* ----------------------------------------------------- certifications */
+
+export type StudentCertification = {
+  id: number
+  industry_certification_id: number
+  name: string
+  // Presigned read URL; null when the file couldn't be resolved.
+  certificate_file_url: string | null
+  created_at: string
+}
+
+export async function listStudentCertifications(
+  studentId: number,
+): Promise<StudentCertification[]> {
+  return api<StudentCertification[]>(
+    `/admin/students/${studentId}/certifications`,
+    { method: "GET" },
+  )
+}
+
+/**
+ * Add a certification with its supporting file (PDF/JPEG/PNG, ≤ 5 MB).
+ * Returns the updated list. 409 when the student already holds it.
+ */
+export async function addStudentCertification(
+  studentId: number,
+  industryCertificationId: number,
+  file: File,
+): Promise<StudentCertification[]> {
+  const form = new FormData()
+  form.set("industry_certification_id", String(industryCertificationId))
+  form.set("file", file)
+  return api<StudentCertification[]>(
+    `/admin/students/${studentId}/certifications`,
+    { method: "POST", body: form },
+  )
+}
+
+export async function removeStudentCertification(
+  studentId: number,
+  certRowId: number,
+): Promise<void> {
+  return api<void>(
+    `/admin/students/${studentId}/certifications/${certRowId}`,
+    { method: "DELETE" },
+  )
+}
+
+/* ------------------------------------------------------------- resume */
+
+/**
+ * Snapshot of the student's resume links returned by resume mutations. The two
+ * links are independent peers — neither masks the other, and recruiters get
+ * both so that one failing still leaves a working link.
+ */
+export type ResumeView = {
+  // Permanent tokenized share link — stable across re-uploads, 404s while no
+  // file is uploaded; null when a file was never uploaded.
+  hosted_url: string | null
+  external_url: string | null
+  uploaded_at: string | null
+  // Opens of the hosted link only. The route redirects to a cached file URL,
+  // link-preview bots inflate it, and external-link traffic is never counted.
+  download_count: number
+  last_downloaded_at: string | null
+}
+
+/** Upload (or replace) the student's resume — PDF, smaller than 2 MB. */
+export async function uploadStudentResume(
+  studentId: number,
+  file: File,
+): Promise<ResumeView> {
+  const form = new FormData()
+  form.set("file", file)
+  return api<ResumeView>(`/admin/students/${studentId}/resume`, {
+    method: "POST",
+    body: form,
+  })
+}
+
+export async function removeStudentResume(studentId: number): Promise<void> {
+  return api<void>(`/admin/students/${studentId}/resume`, {
+    method: "DELETE",
+  })
+}
+
+/**
+ * Set the student's external resume link (https:// only, max 512 chars). It
+ * sits alongside the hosted file rather than replacing it.
+ */
+export async function setStudentResumeExternalUrl(
+  studentId: number,
+  url: string,
+): Promise<ResumeView> {
+  return api<ResumeView>(`/admin/students/${studentId}/resume/external-url`, {
+    method: "PUT",
+    body: { url },
+  })
+}
+
+export async function clearStudentResumeExternalUrl(
+  studentId: number,
+): Promise<ResumeView> {
+  return api<ResumeView>(`/admin/students/${studentId}/resume/external-url`, {
+    method: "DELETE",
+  })
 }

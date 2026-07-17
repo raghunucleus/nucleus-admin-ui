@@ -57,7 +57,10 @@ async function refreshTokens(): Promise<string | null> {
 function buildRequest(path: string, opts: ApiOptions): Request {
   const { body, auth = true, headers, ...rest } = opts
   const h = new Headers(headers)
-  if (body !== undefined) h.set("Content-Type", "application/json")
+  // FormData bodies (file uploads) set their own multipart boundary — the
+  // browser must own the Content-Type header for those.
+  const isForm = body instanceof FormData
+  if (body !== undefined && !isForm) h.set("Content-Type", "application/json")
   if (auth) {
     const token = useAuthStore.getState().accessToken
     if (token) h.set("Authorization", `Bearer ${token}`)
@@ -65,7 +68,7 @@ function buildRequest(path: string, opts: ApiOptions): Request {
   return new Request(`${API_BASE}${path}`, {
     ...rest,
     headers: h,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: isForm ? body : body !== undefined ? JSON.stringify(body) : undefined,
   })
 }
 

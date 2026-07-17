@@ -41,10 +41,17 @@ export function Combobox({
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState("")
   const [activeIndex, setActiveIndex] = React.useState(0)
+  // The panel sizes to its content rather than to the trigger, so it can spill
+  // past the right edge of the viewport when the trigger sits in a right-hand
+  // grid column. Anchor it to whichever edge keeps it on screen.
+  const [align, setAlign] = React.useState<"left" | "right">("left")
+  const [labelTruncated, setLabelTruncated] = React.useState(false)
 
   const rootRef = React.useRef<HTMLDivElement>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
   const listRef = React.useRef<HTMLDivElement>(null)
+  const panelRef = React.useRef<HTMLDivElement>(null)
+  const labelRef = React.useRef<HTMLSpanElement>(null)
 
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -118,6 +125,22 @@ export function Combobox({
     el?.scrollIntoView({ block: "nearest" })
   }, [activeIndex, open])
 
+  // Pick the anchor edge once the panel has been laid out at its natural width.
+  // Resets to 'left' on close so the next open re-measures from a known state.
+  React.useLayoutEffect(() => {
+    if (!open) {
+      setAlign("left")
+      return
+    }
+    const panel = panelRef.current
+    const root = rootRef.current
+    if (!panel || !root) return
+    const { left } = root.getBoundingClientRect()
+    const overflowsRight =
+      left + panel.offsetWidth > document.documentElement.clientWidth - 8
+    setAlign(overflowsRight ? "right" : "left")
+  }, [open])
+
   const commitRow = (row: Row) => {
     if (row.kind === "clear") {
       onChange(null)
@@ -165,6 +188,19 @@ export function Combobox({
 
   const triggerLabel = selected?.label ?? placeholder
 
+  // Only surface the title tooltip when the label is genuinely clipped — an
+  // always-on tooltip over a short value is noise. Re-measured on resize
+  // because the trigger width is column-driven, not fixed.
+  React.useLayoutEffect(() => {
+    const measure = () => {
+      const el = labelRef.current
+      if (el) setLabelTruncated(el.scrollWidth > el.clientWidth + 1)
+    }
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [triggerLabel])
+
   return (
     <div ref={rootRef} className={cn("relative", className)}>
       <button
@@ -175,6 +211,7 @@ export function Combobox({
         aria-controls={id ? `${id}-listbox` : undefined}
         aria-haspopup="listbox"
         disabled={disabled}
+        title={labelTruncated && !open ? triggerLabel : undefined}
         onClick={() => !disabled && setOpen((o) => !o)}
         onKeyDown={onTriggerKeyDown}
         className={cn(
@@ -186,8 +223,9 @@ export function Combobox({
         )}
       >
         <span
+          ref={labelRef}
           className={cn(
-            "truncate text-left",
+            "min-w-0 truncate text-left",
             !selected && "text-muted-foreground",
           )}
         >
@@ -198,9 +236,11 @@ export function Combobox({
 
       {open && (
         <div
+          ref={panelRef}
           className={cn(
-            "absolute left-0 top-full z-50 mt-1 w-full min-w-[14rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-lg",
+            "absolute top-full z-50 mt-1 w-max min-w-full max-w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-lg",
             "animate-in fade-in-0 zoom-in-95 duration-150",
+            align === "right" ? "right-0" : "left-0",
           )}
         >
           <div className="flex items-center gap-2 border-b px-3 py-2">
@@ -267,22 +307,24 @@ export function Combobox({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => commitRow(row)}
                     className={cn(
-                      "flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm",
+                      "flex w-full items-start justify-between gap-2 px-3 py-1.5 text-left text-sm",
                       isActive && "bg-accent text-accent-foreground",
                       row.kind === "clear" &&
                         "italic text-muted-foreground",
                     )}
                   >
-                    <span className="min-w-0 truncate">
-                      {row.kind === "clear" ? row.label : row.option.label}
+                    <span className="flex min-w-0 items-baseline gap-2">
+                      <span className="min-w-0 whitespace-normal break-words">
+                        {row.kind === "clear" ? row.label : row.option.label}
+                      </span>
                       {row.kind === "option" && row.option.sublabel && (
-                        <span className="ml-2 text-xs text-muted-foreground">
+                        <span className="shrink-0 text-xs text-muted-foreground">
                           {row.option.sublabel}
                         </span>
                       )}
                     </span>
                     {isSelected && (
-                      <Check className="size-4 shrink-0 text-primary" />
+                      <Check className="mt-0.5 size-4 shrink-0 text-primary" />
                     )}
                   </button>
                 )

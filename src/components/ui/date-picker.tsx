@@ -206,7 +206,7 @@ export function DatePicker({
         >
           <span
             className={cn(
-              "truncate text-left",
+              "min-w-0 truncate text-left",
               !triggerLabel && "text-muted-foreground",
             )}
           >
