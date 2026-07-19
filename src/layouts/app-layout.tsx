@@ -16,10 +16,12 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { useIdleLogout } from "@/hooks/use-idle-logout"
 import { logout } from "@/lib/auth"
 import { useAuthStore } from "@/store/auth-store"
+import { useConnectivityStore } from "@/store/connectivity-store"
 import { useUiStore } from "@/store/ui-store"
 
 export function AppLayout() {
   const user = useAuthStore((s) => s.user)
+  const reconnectNonce = useConnectivityStore((s) => s.reconnectNonce)
   const sidebarLocked = useUiStore((s) => s.sidebarLocked)
   const toggleSidebarLock = useUiStore((s) => s.toggleSidebarLock)
   const navigate = useNavigate()
@@ -128,7 +130,9 @@ export function AppLayout() {
           </div>
         </header>
         <main className="flex-1 overflow-auto px-6 py-8">
-          <Outlet />
+          {/* Keyed on the reconnect nonce: on recovery the active page remounts
+              and its data-loading effects re-run, clearing stale empty states. */}
+          <Outlet key={reconnectNonce} />
         </main>
       </div>
     </div>
