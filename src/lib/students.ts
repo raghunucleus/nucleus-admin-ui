@@ -72,14 +72,9 @@ export type Student = {
   ug_cgpa: string | null
   current_backlogs: number | null
   backlog_history: boolean
-  resume_uploaded_at: string | null
-  // Alternative resume link set by the student/admin. Independent of the
-  // hosted file — both links are handed out to recruiters, so one failing
-  // (storage down, revoked Drive permissions) still leaves the other working.
+  // The student's resume: a link they host elsewhere (Drive, portfolio…) and
+  // keep reachable. We don't host resume files.
   resume_external_url: string | null
-  // Opens of the hosted Nucleus link only — external-link traffic is invisible.
-  resume_download_count: number
-  resume_last_downloaded_at: string | null
   parent_name: string | null
   parent_mobile: string | null
   parent_email: string | null
@@ -115,8 +110,8 @@ export type Student = {
   allowed_by_dept_for_placements: boolean | null
   interested_in_placements_self: boolean | null
 
-  // Loaded relations + resume URL — present on GET /admin/students/:id only
-  // (list rows and PATCH responses omit them).
+  // Loaded relations — present on GET /admin/students/:id only (list rows and
+  // PATCH responses omit them).
   home_district?: District | null
   home_state?: State | null
   home_country?: Country | null
@@ -127,10 +122,6 @@ export type Student = {
   twelfth_state?: State | null
   diploma_board?: DiplomaBoard | null
   diploma_state?: State | null
-  // Permanent tokenized share link (`<api>/public/resumes/<token>`). It never
-  // changes across re-uploads and returns 404 while no file is uploaded; null
-  // only when a file was never uploaded.
-  resume_url?: string | null
 }
 
 export type CreateStudentInput = {
@@ -421,46 +412,12 @@ export async function removeStudentCertification(
 
 /* ------------------------------------------------------------- resume */
 
-/**
- * Snapshot of the student's resume links returned by resume mutations. The two
- * links are independent peers — neither masks the other, and recruiters get
- * both so that one failing still leaves a working link.
- */
+/** Snapshot of the student's resume link returned by resume mutations. */
 export type ResumeView = {
-  // Permanent tokenized share link — stable across re-uploads, 404s while no
-  // file is uploaded; null when a file was never uploaded.
-  hosted_url: string | null
   external_url: string | null
-  uploaded_at: string | null
-  // Opens of the hosted link only. The route redirects to a cached file URL,
-  // link-preview bots inflate it, and external-link traffic is never counted.
-  download_count: number
-  last_downloaded_at: string | null
 }
 
-/** Upload (or replace) the student's resume — PDF, smaller than 2 MB. */
-export async function uploadStudentResume(
-  studentId: number,
-  file: File,
-): Promise<ResumeView> {
-  const form = new FormData()
-  form.set("file", file)
-  return api<ResumeView>(`/admin/students/${studentId}/resume`, {
-    method: "POST",
-    body: form,
-  })
-}
-
-export async function removeStudentResume(studentId: number): Promise<void> {
-  return api<void>(`/admin/students/${studentId}/resume`, {
-    method: "DELETE",
-  })
-}
-
-/**
- * Set the student's external resume link (https:// only, max 512 chars). It
- * sits alongside the hosted file rather than replacing it.
- */
+/** Set the student's resume link (https:// only, max 512 chars). */
 export async function setStudentResumeExternalUrl(
   studentId: number,
   url: string,

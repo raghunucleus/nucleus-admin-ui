@@ -8,14 +8,11 @@ import {
   Briefcase,
   ClipboardList,
   Copy,
-  Download,
   ExternalLink,
   Eye,
   EyeOff,
-  FileText,
   GraduationCap,
   IdCard,
-  Info,
   KeyRound,
   Link2,
   Mail,
@@ -28,7 +25,6 @@ import {
   ShieldCheck,
   Star,
   Trash2,
-  Upload,
   UserRound,
   Users,
 } from "lucide-react"
@@ -76,12 +72,10 @@ import {
   getStudent,
   listStudentCertifications,
   removeStudentCertification,
-  removeStudentResume,
   resetStudentLoginPassword,
   setStudentLoginPassword,
   setStudentResumeExternalUrl,
   updateStudent,
-  uploadStudentResume,
   type Student,
   type StudentCertification,
   type UpdateStudentInput,
@@ -1124,7 +1118,6 @@ function AcademicRecordForm({
   )
 }
 
-const RESUME_MAX_BYTES = 2 * 1024 * 1024
 const RESUME_EXTERNAL_URL_MAX = 512
 
 function resumeExternalUrlError(value: string): string | null {
@@ -1149,52 +1142,14 @@ async function copyLink(text: string) {
 }
 
 function ResumeCard({ student, onSaved }: SectionProps) {
-  const inputRef = React.useRef<HTMLInputElement>(null)
-  const [busy, setBusy] = React.useState(false)
-  const [confirmRemove, setConfirmRemove] = React.useState(false)
-
-  // External-link editor. `editingExternal` distinguishes "editing the saved
-  // link" (shows Cancel) from "no link yet" (bare input).
+  // Link editor. `editingExternal` distinguishes "editing the saved link"
+  // (shows Cancel) from "no link yet" (bare input).
   const [editingExternal, setEditingExternal] = React.useState(false)
   const [externalDraft, setExternalDraft] = React.useState("")
   const [externalError, setExternalError] = React.useState<string | null>(null)
   const [externalBusy, setExternalBusy] = React.useState(false)
 
-  // The permanent share link exists once a file has ever been uploaded; a
-  // file is currently hosted only while `resume_uploaded_at` is set.
-  const hasHostedFile = student.resume_uploaded_at !== null
-  const shareUrl = student.resume_url ?? null
   const externalUrl = student.resume_external_url
-  // The two links are peers — recruiters get both. Exactly one set is worth a
-  // nudge; neither set is already covered by the empty states below.
-  const onlyOneSource =
-    (hasHostedFile && !externalUrl) || (!hasHostedFile && !!externalUrl)
-
-  const onPick = async (file: File | undefined) => {
-    if (!file) return
-    if (file.type !== "application/pdf") {
-      toast.error("Resume must be a PDF.")
-      return
-    }
-    if (file.size >= RESUME_MAX_BYTES) {
-      toast.error("Resume must be smaller than 2 MB.")
-      return
-    }
-    setBusy(true)
-    try {
-      await uploadStudentResume(student.id, file)
-      toast.success("Resume uploaded")
-      await onSaved()
-    } catch (err) {
-      toast.error("Couldn't upload resume", {
-        description:
-          err instanceof ApiError ? err.message : "Please try again.",
-      })
-    } finally {
-      setBusy(false)
-      if (inputRef.current) inputRef.current.value = ""
-    }
-  }
 
   const saveExternal = async (ev: React.FormEvent) => {
     ev.preventDefault()
@@ -1205,7 +1160,7 @@ function ResumeCard({ student, onSaved }: SectionProps) {
     setExternalBusy(true)
     try {
       await setStudentResumeExternalUrl(student.id, value)
-      toast.success("External resume link saved")
+      toast.success("Resume link saved")
       setEditingExternal(false)
       setExternalDraft("")
       await onSaved()
@@ -1223,7 +1178,7 @@ function ResumeCard({ student, onSaved }: SectionProps) {
     setExternalBusy(true)
     try {
       await clearStudentResumeExternalUrl(student.id)
-      toast.success("External resume link cleared")
+      toast.success("Resume link cleared")
       await onSaved()
     } catch (err) {
       toast.error("Couldn't clear the link", {
@@ -1240,139 +1195,12 @@ function ResumeCard({ student, onSaved }: SectionProps) {
       <div className="border-b px-5 py-4">
         <h2 className="text-sm font-semibold">Resume</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Hosted PDF (smaller than 2 MB) and an external link. The two work
-          independently — recruiters are given both, so if one stops working
-          the other still does.
+          A link the student hosts elsewhere (Drive, portfolio…). Recruiters
+          open it directly — Nucleus does not host resume files.
         </p>
       </div>
       <div className="space-y-5 p-5">
-        <input
-          ref={inputRef}
-          type="file"
-          accept="application/pdf,.pdf"
-          className="hidden"
-          onChange={(e) => void onPick(e.target.files?.[0])}
-        />
-
-        {/* ------------------------------------------------ hosted file */}
         <div className="space-y-3">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Hosted file
-          </h3>
-          {hasHostedFile ? (
-            <div className="flex flex-col gap-3 rounded-md border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                <FileText className="size-5 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">Resume.pdf</p>
-                  <p className="text-xs text-muted-foreground">
-                    {student.resume_uploaded_at
-                      ? `Uploaded ${formatDate(student.resume_uploaded_at)}`
-                      : "Uploaded"}
-                  </p>
-                </div>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => inputRef.current?.click()}
-                >
-                  <Upload />
-                  {busy ? "Uploading…" : "Replace"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => setConfirmRemove(true)}
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 />
-                  Remove
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-2 rounded-md border border-dashed bg-muted/20 px-4 py-6 text-center">
-              <FileText className="size-6 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                No resume file uploaded yet.
-              </p>
-              <Button
-                size="sm"
-                disabled={busy}
-                onClick={() => inputRef.current?.click()}
-              >
-                <Upload />
-                {busy ? "Uploading…" : "Upload resume"}
-              </Button>
-            </div>
-          )}
-          {shareUrl && (
-            <div className="rounded-md border bg-muted/30 p-3">
-              <div className="flex items-center gap-2">
-                <p className="min-w-0 flex-1 truncate font-mono text-xs">
-                  {shareUrl}
-                </p>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void copyLink(shareUrl)}
-                  >
-                    <Copy />
-                    Copy
-                  </Button>
-                  <Button asChild size="sm" variant="outline">
-                    <a
-                      href={shareUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink />
-                      Open
-                    </a>
-                  </Button>
-                </div>
-              </div>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Permanent share link — it stays the same across re-uploads
-                {hasHostedFile
-                  ? "."
-                  : ", and returns 404 until a new file is uploaded."}
-              </p>
-            </div>
-          )}
-          {shareUrl && (
-            <div className="rounded-md border bg-muted/30 p-3">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <p className="flex items-center gap-2 text-sm font-medium">
-                  <Download className="size-4 shrink-0 text-muted-foreground" />
-                  Opened {student.resume_download_count}{" "}
-                  {student.resume_download_count === 1 ? "time" : "times"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {student.resume_last_downloaded_at
-                    ? `Last opened ${formatDate(student.resume_last_downloaded_at)}`
-                    : "Never opened"}
-                </p>
-              </div>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Counts opens of the Nucleus link above, which redirects to the
-                file — link-preview bots can inflate it. Traffic on the
-                external link is handed out raw and isn&apos;t counted.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* ---------------------------------------------- external link */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            External link
-          </h3>
           {externalUrl && !editingExternal ? (
             <div className="flex flex-col gap-3 rounded-md border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-3">
@@ -1467,52 +1295,11 @@ function ResumeCard({ student, onSaved }: SectionProps) {
                 )}
               >
                 {externalError ??
-                  "https:// links only — e.g. a Drive or portfolio link. It sits alongside the hosted file rather than replacing it."}
+                  "https:// links only — e.g. a Drive or portfolio link. It must stay publicly viewable for recruiters to open it."}
               </p>
             </form>
           )}
         </div>
-
-        {onlyOneSource && (
-          <p className="flex items-start gap-2 rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
-            <Info className="mt-px size-3.5 shrink-0" />
-            <span>
-              Only {hasHostedFile ? "the hosted file" : "the external link"} is
-              set. Recruiters get both links, so keeping{" "}
-              {hasHostedFile ? "an external link" : "a hosted file"} as well
-              leaves a fallback if this one ever fails — nudge the student, or
-              add it here on their behalf.
-            </span>
-          </p>
-        )}
-
-        <ConfirmDialog
-          open={confirmRemove}
-          onOpenChange={(open) => {
-            if (!busy) setConfirmRemove(open)
-          }}
-          title="Remove resume?"
-          tone="destructive"
-          description="The file is deleted from storage. The permanent share link stays the same but returns 404 until a new file is uploaded. This cannot be undone."
-          confirmLabel="Remove"
-          loading={busy}
-          onConfirm={async () => {
-            setBusy(true)
-            try {
-              await removeStudentResume(student.id)
-              toast.success("Resume removed")
-              setConfirmRemove(false)
-              await onSaved()
-            } catch (err) {
-              toast.error("Couldn't remove resume", {
-                description:
-                  err instanceof ApiError ? err.message : "Please try again.",
-              })
-            } finally {
-              setBusy(false)
-            }
-          }}
-        />
       </div>
     </div>
   )
