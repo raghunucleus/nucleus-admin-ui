@@ -10,7 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
 import type { AttendanceGroup } from "@/lib/attendance-groups"
-import { listEmployees, type Employee } from "@/lib/employees"
+import { useEmployeeSearch } from "@/lib/employee-search"
+import { type Employee } from "@/lib/employees"
 import {
   listProgrammeSemesters,
   type ProgrammeSemester,
@@ -67,7 +68,6 @@ export function SemesterFacultyPage() {
   const [shellLoading, setShellLoading] = React.useState(true)
   const [failed, setFailed] = React.useState(false)
 
-  const [employees, setEmployees] = React.useState<Employee[]>([])
   const [matrix, setMatrix] = React.useState<FacultyMatrixResult | null>(null)
   const [electiveEntries, setElectiveEntries] = React.useState<
     ProgrammeSemesterSubject[]
@@ -113,29 +113,6 @@ export function SemesterFacultyPage() {
   React.useEffect(() => {
     void loadShell()
   }, [loadShell])
-
-  React.useEffect(() => {
-    let cancelled = false
-    listEmployees({
-      status: "active",
-      pageSize: 100,
-      sortBy: "emp_display_name",
-      sortOrder: "asc",
-    })
-      .then((r) => {
-        if (!cancelled) setEmployees(r.rows)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        toast.error("Couldn't load faculty list", {
-          description:
-            err instanceof ApiError ? err.message : "Please try again.",
-        })
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const loadData = React.useCallback(async () => {
     if (
@@ -376,7 +353,6 @@ export function SemesterFacultyPage() {
               subjects={matrix.subjects}
               groups={matrix.groups}
               cellByKey={cellByKey}
-              employees={employees}
               savingKeys={savingKeys}
               onSelect={applyCell}
               onClear={(sid, gid) => applyCell(sid, gid, null)}
@@ -386,7 +362,6 @@ export function SemesterFacultyPage() {
           {!dataLoading && electiveEntries.length > 0 && (
             <ElectiveLegacySection
               entries={electiveEntries}
-              employees={employees}
               savingKeys={savingKeys}
               onApply={applyOptionFaculty}
             />
@@ -403,7 +378,6 @@ function FacultyMatrixCard({
   subjects,
   groups,
   cellByKey,
-  employees,
   savingKeys,
   onSelect,
   onClear,
@@ -411,7 +385,6 @@ function FacultyMatrixCard({
   subjects: ProgrammeSemesterSubject[]
   groups: AttendanceGroup[]
   cellByKey: Map<string, ProgrammeSemesterSubjectGroupFacultyCell>
-  employees: Employee[]
   savingKeys: Set<string>
   onSelect: (subjectId: number, groupId: number, employeeId: number) => void
   onClear: (subjectId: number, groupId: number) => void
@@ -486,7 +459,6 @@ function FacultyMatrixCard({
                         subjectName={s.subject?.name ?? "(unnamed)"}
                         groupName={g.name}
                         cell={cell}
-                        employees={employees}
                         saving={savingKeys.has(key)}
                         disabled={disabled}
                         onSelect={(empId) => onSelect(s.id, g.id, empId)}
@@ -510,7 +482,6 @@ function MatrixCell({
   subjectName,
   groupName,
   cell,
-  employees,
   saving,
   disabled,
   onSelect,
@@ -519,7 +490,6 @@ function MatrixCell({
   subjectName: string
   groupName: string
   cell: ProgrammeSemesterSubjectGroupFacultyCell | undefined
-  employees: Employee[]
   saving: boolean
   disabled?: boolean
   onSelect: (employeeId: number) => void
@@ -534,7 +504,6 @@ function MatrixCell({
           disabled={saving || disabled}
         />
         <SingleFacultyPicker
-          employees={employees}
           excludeId={cell.employee_id}
           label={
             <span className="inline-flex items-center gap-1 text-muted-foreground">
@@ -554,7 +523,6 @@ function MatrixCell({
   return (
     <div className="flex items-center gap-1.5">
       <SingleFacultyPicker
-        employees={employees}
         excludeId={null}
         label={
           <span className="inline-flex items-center gap-1">
@@ -582,12 +550,10 @@ function MatrixCell({
 // allocation flow in a future change — the note above makes that explicit.
 function ElectiveLegacySection({
   entries,
-  employees,
   savingKeys,
   onApply,
 }: {
   entries: ProgrammeSemesterSubject[]
-  employees: Employee[]
   savingKeys: Set<string>
   onApply: (
     optionId: number,
@@ -615,7 +581,6 @@ function ElectiveLegacySection({
           <ElectiveGroup
             key={entry.id}
             entry={entry}
-            employees={employees}
             savingKeys={savingKeys}
             onApply={(optionId, employeeIds) =>
               onApply(optionId, entry.id, employeeIds)
@@ -629,12 +594,10 @@ function ElectiveLegacySection({
 
 function ElectiveGroup({
   entry,
-  employees,
   savingKeys,
   onApply,
 }: {
   entry: ProgrammeSemesterSubject
-  employees: Employee[]
   savingKeys: Set<string>
   onApply: (optionId: number, employeeIds: number[]) => void
 }) {
@@ -660,7 +623,6 @@ function ElectiveGroup({
             <OptionFacultyRow
               key={o.id}
               option={o}
-              employees={employees}
               saving={savingKeys.has(`o${o.id}`)}
               onAdd={(empId) =>
                 onApply(o.id, [
@@ -686,13 +648,11 @@ function ElectiveGroup({
 
 function OptionFacultyRow({
   option,
-  employees,
   saving,
   onAdd,
   onRemove,
 }: {
   option: ProgrammeSemesterSubjectOption
-  employees: Employee[]
   saving: boolean
   onAdd: (employeeId: number) => void
   onRemove: (employeeId: number) => void
@@ -713,7 +673,6 @@ function OptionFacultyRow({
           )}
         </div>
         <MultiFacultyPicker
-          employees={employees}
           assignedIds={assignedIds}
           onAdd={onAdd}
           disabled={saving}
@@ -794,14 +753,12 @@ type PickerPos = {
 // either the "+ Assign" pill (empty cell) or a small change-pencil (when the
 // cell already has someone).
 function SingleFacultyPicker({
-  employees,
   excludeId,
   label,
   ariaLabel,
   disabled,
   onSelect,
 }: {
-  employees: Employee[]
   excludeId: number | null
   label: React.ReactNode
   ariaLabel: string
@@ -818,22 +775,13 @@ function SingleFacultyPicker({
   const inputRef = React.useRef<HTMLInputElement>(null)
   const listRef = React.useRef<HTMLDivElement>(null)
 
-  const available = React.useMemo(
-    () => employees.filter((e) => e.id !== excludeId),
-    [employees, excludeId],
+  const { rows } = useEmployeeSearch(query)
+  const filtered = React.useMemo(
+    () => rows.filter((e) => e.id !== excludeId),
+    [rows, excludeId],
   )
-  const filtered = React.useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return available
-    return available.filter(
-      (e) =>
-        e.emp_display_name.toLowerCase().includes(q) ||
-        e.emp_code.toLowerCase().includes(q),
-    )
-  }, [available, query])
 
-  const noFaculty = employees.length === 0
-  const triggerDisabled = disabled || noFaculty
+  const triggerDisabled = disabled
 
   const reposition = React.useCallback(() => {
     const t = triggerRef.current
@@ -1057,12 +1005,10 @@ function SingleFacultyPicker({
 // faculty can be added in a row. Otherwise the same picker shape as
 // SingleFacultyPicker.
 function MultiFacultyPicker({
-  employees,
   assignedIds,
   onAdd,
   disabled,
 }: {
-  employees: Employee[]
   assignedIds: number[]
   onAdd: (employeeId: number) => void
   disabled?: boolean
@@ -1077,23 +1023,15 @@ function MultiFacultyPicker({
   const inputRef = React.useRef<HTMLInputElement>(null)
   const listRef = React.useRef<HTMLDivElement>(null)
 
-  const available = React.useMemo(
-    () => employees.filter((e) => !assignedIds.includes(e.id)),
-    [employees, assignedIds],
+  const { rows, loading } = useEmployeeSearch(query)
+  const filtered = React.useMemo(
+    () => rows.filter((e) => !assignedIds.includes(e.id)),
+    [rows, assignedIds],
   )
-  const filtered = React.useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return available
-    return available.filter(
-      (e) =>
-        e.emp_display_name.toLowerCase().includes(q) ||
-        e.emp_code.toLowerCase().includes(q),
-    )
-  }, [available, query])
 
-  const noFaculty = employees.length === 0
-  const allAdded = !noFaculty && available.length === 0
-  const triggerDisabled = disabled || noFaculty || allAdded
+  const noFaculty = !loading && rows.length === 0
+  const allAdded = !noFaculty && filtered.length === 0
+  const triggerDisabled = disabled
 
   const reposition = React.useCallback(() => {
     const t = triggerRef.current
@@ -1174,7 +1112,7 @@ function MultiFacultyPicker({
 
   const commit = (employee: Employee) => {
     onAdd(employee.id)
-    if (available.length <= 1) {
+    if (filtered.length <= 1) {
       setOpen(false)
       triggerRef.current?.focus()
     } else {

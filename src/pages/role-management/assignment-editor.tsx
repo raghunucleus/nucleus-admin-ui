@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
-import { listEmployees, type Employee } from "@/lib/employees"
+import { EmployeePicker } from "@/components/employee-picker"
 import {
   WILDCARD_ALL,
   createAssignment,
@@ -50,7 +50,6 @@ export function AssignmentEditorPage() {
 
   const [catalog, setCatalog] = React.useState<Catalog | null>(null)
   const [roles, setRoles] = React.useState<RoleDetail[]>([])
-  const [employees, setEmployees] = React.useState<Employee[]>([])
 
   const [loadingShell, setLoadingShell] = React.useState(true)
   const [saving, setSaving] = React.useState(false)
@@ -85,16 +84,14 @@ export function AssignmentEditorPage() {
     void (async () => {
       setLoadingShell(true)
       try {
-        const [cat, roleRes, empRes, existing] = await Promise.all([
+        const [cat, roleRes, existing] = await Promise.all([
           getCatalog(),
           listRoles({ page: 1, pageSize: 100, status: "active" }),
-          listEmployees({ page: 1, pageSize: 100, status: "active" }),
           isCreate ? Promise.resolve(null) : getAssignment(Number(assignmentId)),
         ])
         if (!alive) return
         setCatalog(cat)
         setRoles(roleRes.rows)
-        setEmployees(empRes.rows)
         if (existing) {
           setRoleId(existing.role_id)
           setEmployeeId(existing.employee_id)
@@ -335,11 +332,6 @@ export function AssignmentEditorPage() {
     value: r.id,
     label: r.name,
   }))
-  const employeeOptions: ComboboxOption[] = employees.map((e) => ({
-    value: e.id,
-    label: e.emp_display_name,
-    sublabel: e.emp_code,
-  }))
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 py-2">
@@ -401,9 +393,8 @@ export function AssignmentEditorPage() {
             <Label>
               Employee <span className="text-destructive">*</span>
             </Label>
-            <Combobox
+            <EmployeePicker
               value={employeeId}
-              options={employeeOptions}
               onChange={(v) => setEmployeeId(v)}
               placeholder="Pick an employee…"
               disabled={!isCreate}

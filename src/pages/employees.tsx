@@ -36,6 +36,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { EmployeePicker } from "@/components/employee-picker"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -353,24 +354,10 @@ export function EmployeesPage() {
     void load()
   }, [load])
 
-  // Departments, designations, and (potential) managers for filter/form selects.
+  // Departments and designations for the filter/form selects. (The reporting
+  // manager picker searches the server as you type, so it loads itself.)
   const [departments, setDepartments] = React.useState<Department[]>([])
   const [designations, setDesignations] = React.useState<Designation[]>([])
-  const [managers, setManagers] = React.useState<Employee[]>([])
-
-  const refreshManagers = React.useCallback(async () => {
-    try {
-      const result = await listEmployees({
-        status: "active",
-        pageSize: 100,
-        sortBy: "emp_display_name",
-        sortOrder: "asc",
-      })
-      setManagers(result.rows)
-    } catch {
-      // Non-fatal: manager dropdown will just be empty.
-    }
-  }, [])
 
   React.useEffect(() => {
     let cancelled = false
@@ -387,11 +374,10 @@ export function EmployeesPage() {
         // Non-fatal: filter/form selects will just be empty.
       }
     })()
-    void refreshManagers()
     return () => {
       cancelled = true
     }
-  }, [refreshManagers])
+  }, [])
 
   const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
     setSorting((prev) => (typeof updater === "function" ? updater(prev) : updater))
@@ -434,7 +420,7 @@ export function EmployeesPage() {
         ? `${updated.emp_display_name} created.`
         : `${updated.emp_display_name} updated.`,
     )
-    await Promise.all([load(), refreshManagers()])
+    await load()
   }
 
   return (
@@ -481,7 +467,6 @@ export function EmployeesPage() {
               mode="create"
               departments={departments}
               designations={designations}
-              managers={managers}
               onCancel={() => setMode({ kind: "list" })}
               onSaved={(e) => handleSaved(e, "create")}
             />
@@ -493,7 +478,6 @@ export function EmployeesPage() {
               employee={mode.employee}
               departments={departments}
               designations={designations}
-              managers={managers}
               onCancel={() => setMode({ kind: "list" })}
               onSaved={(e) => handleSaved(e, "edit")}
             />
@@ -1516,7 +1500,6 @@ function EmployeeForm(
   ) & {
     departments: Department[]
     designations: Designation[]
-    managers: Employee[]
     onCancel: () => void
     onSaved: (e: Employee) => void
   },
@@ -1579,53 +1562,7 @@ function EmployeeForm(
     [props.designations],
   )
 
-  const selfEmpCode = props.mode === "edit" ? props.employee.emp_code : null
-  const initialRmEmpCode =
-    props.mode === "edit" ? props.employee.rm_emp_code : null
-
-  // Manager options: active employees minus self. If editing and the stored
-  // rm_emp_code points to someone not in the active list (e.g. inactive),
-  // surface a synthetic row so the current value stays visible & selectable.
-  const managerOptions: ComboboxOption[] = React.useMemo(() => {
-    const base = props.managers
-      .filter((m) => m.emp_code !== selfEmpCode)
-      .map((m) => ({
-        value: m.id,
-        label: m.emp_display_name,
-        sublabel: m.emp_code,
-      }))
-    if (
-      initialRmEmpCode &&
-      !props.managers.some((m) => m.emp_code === initialRmEmpCode)
-    ) {
-      base.unshift({
-        value: -1,
-        label: initialRmEmpCode,
-        sublabel: "current",
-      })
-    }
-    return base
-  }, [props.managers, selfEmpCode, initialRmEmpCode])
-
-  const rmEmpCodeToId = React.useCallback(
-    (empCode: string): number | null => {
-      if (!empCode) return null
-      const found = props.managers.find((m) => m.emp_code === empCode)
-      if (found) return found.id
-      if (empCode === initialRmEmpCode) return -1
-      return null
-    },
-    [props.managers, initialRmEmpCode],
-  )
-
-  const rmIdToEmpCode = React.useCallback(
-    (id: number | null): string => {
-      if (id === null) return ""
-      if (id === -1) return initialRmEmpCode ?? ""
-      return props.managers.find((m) => m.id === id)?.emp_code ?? ""
-    },
-    [props.managers, initialRmEmpCode],
-  )
+  const selfId = props.mode === "edit" ? props.employee.id : null
 
   const onSubmit = handleSubmit(async (values) => {
     const payload = {
@@ -1835,16 +1772,11 @@ function EmployeeForm(
               name="rm_emp_code"
               render={({ field, fieldState }) => (
                 <div className="flex items-center gap-2">
-                  <Combobox
+                  <ReportingManagerPicker
                     id="e-rm"
-                    value={rmEmpCodeToId(field.value)}
-                    options={managerOptions}
-                    onChange={(v) => field.onChange(rmIdToEmpCode(v))}
-                    placeholder="No reporting manager"
-                    searchPlaceholder="Search by name or emp code…"
-                    emptyMessage="No employees match"
-                    clearLabel="No reporting manager"
-                    disabled={managerOptions.length === 0}
+                    empCode={field.value}
+                    onChange={field.onChange}
+                    excludeId={selfId}
                     invalid={!!fieldState.error}
                     className="flex-1"
                   />
@@ -1894,6 +1826,80 @@ function EmployeeForm(
         </Button>
       </SheetFooter>
     </form>
+  )
+}
+
+/**
+ * Reporting-manager picker.
+ *
+ * The form field stores `rm_emp_code` (a string), but {@link EmployeePicker}
+ * works in ids — so this bridges the two: it resolves the incoming emp_code to
+ * an id once, and writes the picked employee's emp_code back out.
+ */
+function ReportingManagerPicker({
+  id,
+  empCode,
+  onChange,
+  excludeId,
+  invalid,
+  className,
+}: {
+  id?: string
+  empCode: string
+  onChange: (empCode: string) => void
+  excludeId: number | null
+  invalid?: boolean
+  className?: string
+}) {
+  const [resolvedId, setResolvedId] = React.useState<number | null>(null)
+
+  // Resolve the initial emp_code to an id. Only the first non-empty value needs
+  // this — every later change comes back through onSelect with the id in hand.
+  const resolvedForRef = React.useRef<string | null>(null)
+  React.useEffect(() => {
+    if (!empCode || resolvedForRef.current === empCode) return
+    resolvedForRef.current = empCode
+    let cancelled = false
+    void listEmployees({ q: empCode, pageSize: 10 })
+      .then((res) => {
+        if (cancelled) return
+        const match = res.rows.find((e) => e.emp_code === empCode)
+        if (match) setResolvedId(match.id)
+      })
+      .catch(() => {
+        // Non-fatal: the picker shows its placeholder, the stored value stands
+        // until the user actively picks someone else.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [empCode])
+
+  return (
+    <EmployeePicker
+      id={id}
+      className={className}
+      value={empCode ? resolvedId : null}
+      excludeIds={excludeId != null ? [excludeId] : undefined}
+      onChange={(v) => {
+        setResolvedId(v)
+        if (v == null) {
+          resolvedForRef.current = ""
+          onChange("")
+        }
+      }}
+      onSelect={(e) => {
+        if (e) {
+          resolvedForRef.current = e.emp_code
+          onChange(e.emp_code)
+        }
+      }}
+      placeholder="No reporting manager"
+      searchPlaceholder="Search by name or emp code…"
+      emptyMessage="No employees match"
+      clearLabel="No reporting manager"
+      invalid={invalid}
+    />
   )
 }
 

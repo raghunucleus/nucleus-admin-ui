@@ -23,7 +23,6 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -41,7 +40,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
-import { listEmployees, type Employee } from "@/lib/employees"
+import { EmployeePicker } from "@/components/employee-picker"
+import { useEmployeeNames } from "@/lib/employee-search"
+import { type Employee } from "@/lib/employees"
 import {
   listProgrammeSemesterSubjects,
   type ProgrammeSemesterSubject,
@@ -219,7 +220,6 @@ export function TimetableEditorPage() {
   const [semesterSubjects, setSemesterSubjects] = React.useState<
     ProgrammeSemesterSubject[]
   >([])
-  const [employees, setEmployees] = React.useState<Employee[]>([])
   const [loading, setLoading] = React.useState(true)
   const [failed, setFailed] = React.useState(false)
 
@@ -271,23 +271,6 @@ export function TimetableEditorPage() {
   React.useEffect(() => {
     void load()
   }, [load])
-
-  React.useEffect(() => {
-    let cancelled = false
-    listEmployees({
-      status: "active",
-      pageSize: 100,
-      sortBy: "emp_display_name",
-      sortOrder: "asc",
-    })
-      .then((r) => !cancelled && setEmployees(r.rows))
-      .catch(() => {
-        /* faculty pickers degrade gracefully */
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const palette = React.useMemo(
     () => buildPalette(semesterSubjects, timetable?.courses ?? []),
@@ -550,7 +533,6 @@ export function TimetableEditorPage() {
       <WorkloadPanel
         palette={palette}
         entries={timetable.entries}
-        employees={employees}
       />
 
       {/* Cell editor ---------------------------------------------------- */}
@@ -592,7 +574,6 @@ export function TimetableEditorPage() {
         open={addCourseOpen}
         onOpenChange={setAddCourseOpen}
         timetableId={timetable.id}
-        employees={employees}
         onSaved={(tt) => {
           setTimetable(tt)
           setAddCourseOpen(false)
@@ -605,7 +586,6 @@ export function TimetableEditorPage() {
           open
           onOpenChange={(o) => !o && setManageCourse(null)}
           course={manageCourse}
-          employees={employees}
           onSaved={(tt) => {
             setTimetable(tt)
             setManageCourse(null)
@@ -1338,11 +1318,9 @@ function PeriodStructurePanel({
 function WorkloadPanel({
   palette,
   entries,
-  employees,
 }: {
   palette: PaletteItem[]
   entries: TimetableEntry[]
-  employees: Employee[]
 }) {
   const perSubject = React.useMemo(() => {
     return palette
@@ -1364,18 +1342,14 @@ function WorkloadPanel({
       if (e.employee_id !== null)
         counts.set(e.employee_id, (counts.get(e.employee_id) ?? 0) + 1)
     }
-    const nameById = new Map(employees.map((e) => [e.id, e]))
     return [...counts.entries()]
       .map(([id, count]) => ({
         id,
         count,
-        employee:
-          nameById.get(id) ??
-          entries.find((e) => e.employee_id === id)?.employee ??
-          null,
+        employee: entries.find((e) => e.employee_id === id)?.employee ?? null,
       }))
       .sort((a, b) => b.count - a.count)
-  }, [entries, employees])
+  }, [entries])
 
   const placed = entries.length
 
@@ -2109,42 +2083,27 @@ function EditDetailsSheet({
 // --- faculty multi-picker (shared by add/manage course) ---------------------
 
 function FacultyPicker({
-  employees,
   selectedIds,
   onChange,
   disabled,
 }: {
-  employees: Employee[]
   selectedIds: number[]
   onChange: (ids: number[]) => void
   disabled?: boolean
 }) {
-  const byId = React.useMemo(() => {
-    const m = new Map<number, Employee>()
-    for (const e of employees) m.set(e.id, e)
-    return m
-  }, [employees])
-
-  const options: ComboboxOption[] = employees
-    .filter((e) => !selectedIds.includes(e.id))
-    .map((e) => ({
-      value: e.id,
-      label: e.emp_display_name,
-      sublabel: e.emp_code,
-    }))
+  // Chips are rendered from ids alone, so resolve them for their names.
+  const byId = useEmployeeNames(selectedIds)
 
   return (
     <div className="space-y-2">
-      <Combobox
+      <EmployeePicker
         value={null}
-        options={options}
+        excludeIds={selectedIds}
         onChange={(v) => v != null && onChange([...selectedIds, v])}
-        placeholder={
-          options.length === 0 ? "All faculty added" : "Add faculty…"
-        }
+        placeholder="Add faculty…"
         searchPlaceholder="Search faculty…"
         emptyMessage="No matches"
-        disabled={disabled || options.length === 0}
+        disabled={disabled}
       />
       {selectedIds.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -2184,13 +2143,11 @@ function AddCourseSheet({
   open,
   onOpenChange,
   timetableId,
-  employees,
   onSaved,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   timetableId: number
-  employees: Employee[]
   onSaved: (tt: Timetable) => void
 }) {
   const [name, setName] = React.useState("")
@@ -2252,7 +2209,6 @@ function AddCourseSheet({
           <div className="space-y-1.5">
             <Label>Faculty</Label>
             <FacultyPicker
-              employees={employees}
               selectedIds={facultyIds}
               onChange={setFacultyIds}
               disabled={busy}
@@ -2293,13 +2249,11 @@ function ManageCourseSheet({
   open,
   onOpenChange,
   course,
-  employees,
   onSaved,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   course: TimetableCourse
-  employees: Employee[]
   onSaved: (tt: Timetable) => void
 }) {
   const isCustom = course.subject_id === null
@@ -2374,7 +2328,6 @@ function ManageCourseSheet({
             <div className="space-y-1.5">
               <Label>Faculty</Label>
               <FacultyPicker
-                employees={employees}
                 selectedIds={facultyIds}
                 onChange={setFacultyIds}
                 disabled={busy}

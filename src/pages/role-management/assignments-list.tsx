@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
-import { listEmployees, type Employee } from "@/lib/employees"
+import { EmployeePicker } from "@/components/employee-picker"
 import {
   listAssignments,
   listRoles,
@@ -79,7 +79,6 @@ export function AssignmentsListPage() {
   }
 
   const [assignments, setAssignments] = React.useState<AssignmentDetail[]>([])
-  const [employees, setEmployees] = React.useState<Employee[]>([])
   const [roles, setRoles] = React.useState<RoleDetail[]>([])
   const [total, setTotal] = React.useState(0)
   const [pageCount, setPageCount] = React.useState(0)
@@ -117,18 +116,15 @@ export function AssignmentsListPage() {
     return () => window.clearTimeout(t)
   }, [query])
 
-  // Fetch the employee/role pickers once — they only feed the filter combos
-  // and don't need to refresh on every page change.
+  // Fetch the role picker once — it only feeds the filter combo and doesn't
+  // need to refresh on every page change. (The employee filter searches the
+  // server as you type, so it loads itself.)
   React.useEffect(() => {
     let alive = true
     void (async () => {
       try {
-        const [empRes, roleRes] = await Promise.all([
-          listEmployees({ page: 1, pageSize: 100, status: "active" }),
-          listRoles({ page: 1, pageSize: 100 }),
-        ])
+        const roleRes = await listRoles({ page: 1, pageSize: 100 })
         if (!alive) return
-        setEmployees(empRes.rows)
         setRoles(roleRes.rows)
       } catch {
         // Picker failures aren't fatal — the table can still render and the
@@ -177,16 +173,6 @@ export function AssignmentsListPage() {
   React.useEffect(() => {
     void load()
   }, [load])
-
-  const employeeOptions: ComboboxOption[] = React.useMemo(
-    () =>
-      employees.map((e) => ({
-        value: e.id,
-        label: e.emp_display_name,
-        sublabel: e.emp_code,
-      })),
-    [employees],
-  )
 
   const roleOptions: ComboboxOption[] = React.useMemo(
     () =>
@@ -329,9 +315,8 @@ export function AssignmentsListPage() {
         <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
           <div className="space-y-1.5">
             <Label>Filter by employee</Label>
-            <Combobox
+            <EmployeePicker
               value={employeeId ?? null}
-              options={employeeOptions}
               onChange={(v) =>
                 setFilter({
                   employee_id: v ?? undefined,

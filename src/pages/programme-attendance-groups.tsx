@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { EmployeePicker } from "@/components/employee-picker"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
@@ -67,7 +68,7 @@ import {
   listAdmissionYears,
   type AdmissionYear,
 } from "@/lib/admission-years"
-import { listEmployees, type Employee } from "@/lib/employees"
+import { type Employee } from "@/lib/employees"
 import {
   BLOOD_GROUPS,
   GENDERS,
@@ -112,7 +113,6 @@ export function ProgrammeAttendanceGroupsPage() {
 
   const [students, setStudents] = React.useState<Student[]>([])
   const [groups, setGroups] = React.useState<AttendanceGroup[]>([])
-  const [employees, setEmployees] = React.useState<Employee[]>([])
   const [listLoading, setListLoading] = React.useState(true)
 
   const [busyGroupIds, setBusyGroupIds] = React.useState<Set<number>>(new Set())
@@ -210,28 +210,6 @@ export function ProgrammeAttendanceGroupsPage() {
   React.useEffect(() => {
     void loadList()
   }, [loadList])
-
-  // Active employees for the group-incharge dropdown. Non-fatal if it fails —
-  // the form just shows an empty dropdown, and the user gets a toast on submit.
-  React.useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const result = await listEmployees({
-          status: "active",
-          pageSize: 100,
-          sortBy: "emp_display_name",
-          sortOrder: "asc",
-        })
-        if (!cancelled) setEmployees(result.rows)
-      } catch {
-        // Ignore — dropdown stays empty.
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const refreshGroups = React.useCallback(async () => {
     if (programmeId === undefined || admissionYearId === undefined) return
@@ -711,7 +689,6 @@ export function ProgrammeAttendanceGroupsPage() {
                   ? (formMode.group.description ?? "")
                   : ""
               }
-              employees={employees}
               submitting={formBusy}
               onSubmit={handleSubmitForm}
               onCancel={() => setFormMode({ kind: "closed" })}
@@ -1295,7 +1272,6 @@ function GroupForm({
   initialInchargeEmployeeIds,
   initialInchargeEmployees,
   initialDescription,
-  employees,
   submitting,
   onSubmit,
   onCancel,
@@ -1309,7 +1285,6 @@ function GroupForm({
     "id" | "emp_code" | "emp_display_name"
   >[]
   initialDescription: string
-  employees: Employee[]
   submitting: boolean
   onSubmit: (
     name: string,
@@ -1328,38 +1303,16 @@ function GroupForm({
   const valid =
     name.trim().length > 0 && code.trim().length > 0 && inchargeIds.length > 0
 
-  // Build the picker options. If editing and a current in-charge isn't in the
-  // active-employee list (e.g. they've been deactivated since), surface them as
-  // a synthetic option so they stay selectable/visible. Already-selected
-  // in-charges are filtered out of the add-picker.
-  const inchargeOptions = React.useMemo<ComboboxOption[]>(() => {
-    const base: ComboboxOption[] = employees.map((e) => ({
-      value: e.id,
-      label: e.emp_display_name,
-      sublabel: e.emp_code,
-    }))
-    for (const cur of initialInchargeEmployees) {
-      if (!employees.some((e) => e.id === cur.id)) {
-        base.unshift({
-          value: cur.id,
-          label: cur.emp_display_name,
-          sublabel: `${cur.emp_code} · current`,
-        })
-      }
-    }
-    return base
-  }, [employees, initialInchargeEmployees])
-
-  // Resolve an employee id to a display label for the selected-chip list.
-  const labelForId = React.useCallback(
-    (id: number) =>
-      inchargeOptions.find((o) => o.value === id)?.label ?? `#${id}`,
-    [inchargeOptions],
+  // id → display name for the selected-chip list. Seeded from the current
+  // in-charges so anyone deactivated since assignment still renders a name (the
+  // picker only searches active employees), then extended as the user picks.
+  const [labels, setLabels] = React.useState<Map<number, string>>(
+    () => new Map(initialInchargeEmployees.map((e) => [e.id, e.emp_display_name])),
   )
 
-  const addPickerOptions = React.useMemo(
-    () => inchargeOptions.filter((o) => !inchargeIds.includes(o.value)),
-    [inchargeOptions, inchargeIds],
+  const labelForId = React.useCallback(
+    (id: number) => labels.get(id) ?? `#${id}`,
+    [labels],
   )
 
   return (
@@ -1436,28 +1389,26 @@ function GroupForm({
               ))}
             </div>
           )}
-          <Combobox
+          <EmployeePicker
             id="grp-incharge"
             value={null}
-            options={addPickerOptions}
+            excludeIds={inchargeIds}
             onChange={(v) =>
               v != null &&
               setInchargeIds((ids) =>
                 ids.includes(v) ? ids : [...ids, v],
               )
             }
-            placeholder={
-              inchargeOptions.length === 0
-                ? "Loading employees…"
-                : addPickerOptions.length === 0
-                  ? "All employees added"
-                  : "Add an in-charge…"
-            }
+            onSelect={(e) => {
+              if (e) {
+                setLabels((prev) =>
+                  new Map(prev).set(e.id, e.emp_display_name),
+                )
+              }
+            }}
+            placeholder="Add an in-charge…"
             searchPlaceholder="Search by name or emp code…"
             emptyMessage="No employees match"
-            disabled={
-              inchargeOptions.length === 0 || addPickerOptions.length === 0
-            }
           />
           <p className="text-xs text-muted-foreground">
             The employees responsible for this group. Add at least one.

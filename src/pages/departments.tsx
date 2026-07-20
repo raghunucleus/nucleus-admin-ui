@@ -33,8 +33,8 @@ import {
   X,
 } from "lucide-react"
 
+import { EmployeePicker } from "@/components/employee-picker"
 import { Button } from "@/components/ui/button"
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
@@ -71,7 +71,6 @@ import {
   type DepartmentsSortOrder,
   type ListDepartmentsParams,
 } from "@/lib/departments"
-import { listEmployees, type Employee } from "@/lib/employees"
 
 declare module "@tanstack/react-table" {
   // Allow columns to declare per-column horizontal alignment.
@@ -118,29 +117,6 @@ export function DepartmentsPage() {
     pageIndex: 0,
     pageSize: 10,
   })
-
-  const [employees, setEmployees] = React.useState<Employee[]>([])
-
-  React.useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const result = await listEmployees({
-          status: "active",
-          pageSize: 100,
-          sortBy: "emp_display_name",
-          sortOrder: "asc",
-        })
-        if (cancelled) return
-        setEmployees(result.rows)
-      } catch {
-        // Non-fatal: HOD dropdown will just be empty.
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const [filterPanelOpen, setFilterPanelOpen] = React.useState(false)
   const [searchRowOpen, setSearchRowOpen] = React.useState(false)
@@ -375,7 +351,6 @@ export function DepartmentsPage() {
           {mode.kind === "create" && (
             <DepartmentForm
               mode="create"
-              employees={employees}
               onCancel={() => setMode({ kind: "list" })}
               onSaved={(d) => handleSaved(d, "create")}
             />
@@ -385,7 +360,6 @@ export function DepartmentsPage() {
             <DepartmentForm
               mode="edit"
               department={mode.department}
-              employees={employees}
               onCancel={() => setMode({ kind: "list" })}
               onSaved={(d) => handleSaved(d, "edit")}
             />
@@ -1203,14 +1177,12 @@ function DepartmentForm(
   props:
     | {
         mode: "create"
-        employees: Employee[]
         onCancel: () => void
         onSaved: (d: Department) => void
       }
     | {
         mode: "edit"
         department: Department
-        employees: Employee[]
         onCancel: () => void
         onSaved: (d: Department) => void
       },
@@ -1240,27 +1212,6 @@ function DepartmentForm(
     defaultValues: defaults,
     values: defaults,
   })
-
-  // If editing and the current HOD isn't in the active-employee list (e.g.
-  // they've been deactivated since), surface them as a synthetic option so
-  // the value stays visible until the user picks someone else.
-  const initialHod =
-    props.mode === "edit" ? (props.department.hod ?? null) : null
-  const hodOptions: ComboboxOption[] = React.useMemo(() => {
-    const base = props.employees.map((e) => ({
-      value: e.id,
-      label: e.emp_display_name,
-      sublabel: e.emp_code,
-    }))
-    if (initialHod && !props.employees.some((e) => e.id === initialHod.id)) {
-      base.unshift({
-        value: initialHod.id,
-        label: initialHod.emp_display_name,
-        sublabel: `${initialHod.emp_code} · current`,
-      })
-    }
-    return base
-  }, [props.employees, initialHod])
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -1345,16 +1296,14 @@ function DepartmentForm(
               control={control}
               name="hod_employee_id"
               render={({ field, fieldState }) => (
-                <Combobox
+                <EmployeePicker
                   id="dept-hod"
                   value={field.value}
-                  options={hodOptions}
                   onChange={(v) => field.onChange(v)}
                   placeholder="No HOD"
                   searchPlaceholder="Search by name or emp code…"
                   emptyMessage="No employees match"
                   clearLabel="No HOD"
-                  disabled={hodOptions.length === 0}
                   invalid={!!fieldState.error}
                 />
               )}

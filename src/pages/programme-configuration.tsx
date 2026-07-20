@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react"
 
+import { EmployeePicker } from "@/components/employee-picker"
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -68,7 +69,6 @@ import {
   listAttendanceGroups,
   type AttendanceGroup,
 } from "@/lib/attendance-groups"
-import { listEmployees, type Employee } from "@/lib/employees"
 
 type ManageSheetMode =
   | { kind: "closed" }
@@ -1242,30 +1242,34 @@ function AttendanceGroupsCard({
 // --------------------------------------------------------------------- card 4
 
 function ProfileVerifiersCard({ payId }: { payId: number | null }) {
-  const [employees, setEmployees] = React.useState<Employee[]>([])
-  // Current verifiers persisted server-side — kept to seed synthetic options
-  // for any who have since been deactivated, and to compute dirtiness.
+  // Current verifiers persisted server-side — kept to compute dirtiness and to
+  // label the chips of anyone deactivated since they were assigned (the picker
+  // only searches active employees, so it can't resolve them).
   const [current, setCurrent] = React.useState<ProfileVerifier[]>([])
   const [selectedIds, setSelectedIds] = React.useState<number[]>([])
+  // id → display name for every verifier shown as a chip.
+  const [labels, setLabels] = React.useState<Map<number, string>>(
+    () => new Map(),
+  )
   const [loading, setLoading] = React.useState(true)
   const [busy, setBusy] = React.useState(false)
+
+  const rememberVerifiers = React.useCallback((vs: ProfileVerifier[]) => {
+    setLabels((prev) => {
+      const next = new Map(prev)
+      for (const v of vs) next.set(v.id, v.emp_display_name)
+      return next
+    })
+  }, [])
 
   const load = React.useCallback(async () => {
     if (payId == null) return
     setLoading(true)
     try {
-      const [emps, verifiers] = await Promise.all([
-        listEmployees({
-          status: "active",
-          pageSize: 100,
-          sortBy: "emp_display_name",
-          sortOrder: "asc",
-        }),
-        getProfileVerifiers(payId),
-      ])
-      setEmployees(emps.rows)
+      const verifiers = await getProfileVerifiers(payId)
       setCurrent(verifiers)
       setSelectedIds(verifiers.map((v) => v.id))
+      rememberVerifiers(verifiers)
     } catch (err) {
       toast.error("Couldn't load profile verifiers", {
         description:
@@ -1274,41 +1278,15 @@ function ProfileVerifiersCard({ payId }: { payId: number | null }) {
     } finally {
       setLoading(false)
     }
-  }, [payId])
+  }, [payId, rememberVerifiers])
 
   React.useEffect(() => {
     void load()
   }, [load])
 
-  // Build the picker options. Any current verifier missing from the active
-  // list (e.g. deactivated since) is surfaced as a synthetic option so they
-  // stay visible/selectable.
-  const options = React.useMemo<ComboboxOption[]>(() => {
-    const base: ComboboxOption[] = employees.map((e) => ({
-      value: e.id,
-      label: e.emp_display_name,
-      sublabel: e.emp_code,
-    }))
-    for (const cur of current) {
-      if (!employees.some((e) => e.id === cur.id)) {
-        base.unshift({
-          value: cur.id,
-          label: cur.emp_display_name,
-          sublabel: `${cur.emp_code} · current`,
-        })
-      }
-    }
-    return base
-  }, [employees, current])
-
   const labelForId = React.useCallback(
-    (id: number) => options.find((o) => o.value === id)?.label ?? `#${id}`,
-    [options],
-  )
-
-  const addPickerOptions = React.useMemo(
-    () => options.filter((o) => !selectedIds.includes(o.value)),
-    [options, selectedIds],
+    (id: number) => labels.get(id) ?? `#${id}`,
+    [labels],
   )
 
   const isDirty = React.useMemo(() => {
@@ -1324,6 +1302,7 @@ function ProfileVerifiersCard({ payId }: { payId: number | null }) {
       const saved = await setProfileVerifiers(payId, selectedIds)
       setCurrent(saved)
       setSelectedIds(saved.map((v) => v.id))
+      rememberVerifiers(saved)
       toast.success("Profile verifiers updated.")
     } catch (err) {
       toast.error("Couldn't save profile verifiers", {
@@ -1378,24 +1357,25 @@ function ProfileVerifiersCard({ payId }: { payId: number | null }) {
               ))}
             </div>
           )}
-          <Combobox
+          <EmployeePicker
             id="cfg-verifiers"
             value={null}
-            options={addPickerOptions}
+            excludeIds={selectedIds}
             onChange={(v) =>
               v != null &&
               setSelectedIds((ids) => (ids.includes(v) ? ids : [...ids, v]))
             }
-            placeholder={
-              options.length === 0
-                ? "Loading employees…"
-                : addPickerOptions.length === 0
-                  ? "All employees added"
-                  : "Add a verifier…"
-            }
+            onSelect={(e) => {
+              if (e) {
+                setLabels((prev) =>
+                  new Map(prev).set(e.id, e.emp_display_name),
+                )
+              }
+            }}
+            placeholder="Add a verifier…"
             searchPlaceholder="Search by name or emp code…"
             emptyMessage="No employees match"
-            disabled={busy || options.length === 0 || addPickerOptions.length === 0}
+            disabled={busy}
           />
           <div className="flex items-center justify-between gap-2 pt-1">
             <p className="text-xs text-muted-foreground">

@@ -23,6 +23,20 @@ export interface ComboboxProps {
   invalid?: boolean
   id?: string
   className?: string
+  /**
+   * Opt into server-driven search. When set, `options` are treated as already
+   * filtered — the internal client-side filter is skipped and every query
+   * change (including the reset to "" on close) is emitted here instead.
+   */
+  onQueryChange?: (query: string) => void
+  /** Server-driven mode only: shows a pending row while a fetch is in flight. */
+  loading?: boolean
+  /**
+   * Server-driven mode only: the currently selected option, for when it isn't
+   * in `options` (a narrowed search, or a value set before the first fetch).
+   * Without it the trigger would fall back to the placeholder.
+   */
+  selectedOption?: ComboboxOption
 }
 
 export function Combobox({
@@ -37,7 +51,11 @@ export function Combobox({
   invalid,
   id,
   className,
+  onQueryChange,
+  loading,
+  selectedOption,
 }: ComboboxProps) {
+  const serverDriven = onQueryChange != null
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState("")
   const [activeIndex, setActiveIndex] = React.useState(0)
@@ -53,7 +71,22 @@ export function Combobox({
   const panelRef = React.useRef<HTMLDivElement>(null)
   const labelRef = React.useRef<HTMLSpanElement>(null)
 
+  // Keep the callback in a ref so the open/close effect can notify without
+  // taking a caller-supplied function identity as a dependency.
+  const onQueryChangeRef = React.useRef(onQueryChange)
+  React.useEffect(() => {
+    onQueryChangeRef.current = onQueryChange
+  })
+
+  const changeQuery = React.useCallback((next: string) => {
+    setQuery(next)
+    onQueryChangeRef.current?.(next)
+  }, [])
+
   const filtered = React.useMemo(() => {
+    // Server-driven: `options` already reflect the query, filtering again would
+    // drop rows the server matched on a field we don't render (e.g. email).
+    if (serverDriven) return options
     const q = query.trim().toLowerCase()
     if (!q) return options
     return options.filter(
@@ -61,7 +94,7 @@ export function Combobox({
         o.label.toLowerCase().includes(q) ||
         (o.sublabel ?? "").toLowerCase().includes(q),
     )
-  }, [options, query])
+  }, [options, query, serverDriven])
 
   // List of "rows": the optional clear sentinel + filtered options. Indexing
   // here is what keyboard nav and aria-activedescendant track.
@@ -75,13 +108,15 @@ export function Combobox({
     return out
   }, [clearLabel, filtered])
 
-  const selected = options.find((o) => o.value === value) ?? null
+  const selected =
+    options.find((o) => o.value === value) ??
+    (selectedOption?.value === value ? selectedOption : null)
 
   // Open: reset query, focus the search input, set active row to the selected
   // option (or row 0). Close: clear query.
   React.useEffect(() => {
     if (open) {
-      setQuery("")
+      changeQuery("")
       const idx = selected
         ? rows.findIndex(
             (r) => r.kind === "option" && r.option.value === selected.value,
@@ -90,7 +125,7 @@ export function Combobox({
       setActiveIndex(idx >= 0 ? idx : 0)
       requestAnimationFrame(() => inputRef.current?.focus())
     } else {
-      setQuery("")
+      changeQuery("")
     }
     // We intentionally watch only `open` here — re-running on every rows
     // change would steal focus and reset the highlighted row mid-type.
@@ -249,7 +284,7 @@ export function Combobox({
               ref={inputRef}
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => changeQuery(e.target.value)}
               onKeyDown={onKeyDown}
               placeholder={searchPlaceholder}
               className="h-7 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
@@ -265,7 +300,7 @@ export function Combobox({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
-                  setQuery("")
+                  changeQuery("")
                   inputRef.current?.focus()
                 }}
                 className="text-muted-foreground hover:text-foreground"
@@ -284,7 +319,7 @@ export function Combobox({
           >
             {rows.length === 0 ? (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                {emptyMessage}
+                {loading ? "Searching…" : emptyMessage}
               </div>
             ) : (
               rows.map((row, idx) => {

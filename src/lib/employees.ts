@@ -76,6 +76,8 @@ export type ListEmployeesParams = {
   pageSize?: number
   sortBy?: EmployeesSortField
   sortOrder?: EmployeesSortOrder
+  /** Single-box typeahead — OR-matched on emp_code, display name, and email. */
+  q?: string
   empCodeSearch?: string
   displayNameSearch?: string
   emailSearch?: string
@@ -103,6 +105,7 @@ export async function listEmployees(
   if (params.pageSize !== undefined) qs.set("pageSize", String(params.pageSize))
   if (params.sortBy) qs.set("sortBy", params.sortBy)
   if (params.sortOrder) qs.set("sortOrder", params.sortOrder)
+  if (params.q) qs.set("q", params.q)
   if (params.empCodeSearch) qs.set("empCodeSearch", params.empCodeSearch)
   if (params.displayNameSearch)
     qs.set("displayNameSearch", params.displayNameSearch)
@@ -117,6 +120,10 @@ export async function listEmployees(
     qs.set("designationId", String(params.designationId))
   const suffix = qs.toString() ? `?${qs.toString()}` : ""
   return api<ListEmployeesResult>(`/admin/employees${suffix}`, { method: "GET" })
+}
+
+export async function getEmployee(id: number): Promise<Employee> {
+  return api<Employee>(`/admin/employees/${id}`, { method: "GET" })
 }
 
 export async function createEmployee(

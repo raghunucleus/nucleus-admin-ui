@@ -27,8 +27,8 @@ import {
   X,
 } from "lucide-react"
 
+import { EmployeePicker } from "@/components/employee-picker"
 import { Button } from "@/components/ui/button"
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
@@ -59,7 +59,6 @@ import {
   type ClassSessionStatus,
   type RosterStudent,
 } from "@/lib/class-sessions"
-import { listEmployees, type Employee } from "@/lib/employees"
 import {
   getTimetable,
   getTimetableWeekSummaries,
@@ -2389,36 +2388,11 @@ function SlotBulkActionForm({
   const [subReason, setSubReason] = React.useState("")
   const [busy, setBusy] = React.useState(false)
   const [confirmCancel, setConfirmCancel] = React.useState(false)
-  const [employees, setEmployees] = React.useState<Employee[]>([])
-  const [employeesLoading, setEmployeesLoading] = React.useState(false)
 
   // Only "scheduled" cohorts are actionable in bulk. Cancelled / completed
   // are skipped server-side anyway; surface that here so the count is honest.
   const actionable = slot.cohorts.filter((c) => c.status === "scheduled")
   const lockedCount = slot.cohorts.length - actionable.length
-
-  React.useEffect(() => {
-    if (mode !== "substitute") return
-    setEmployeesLoading(true)
-    let cancelled = false
-    void (async () => {
-      try {
-        const res = await listEmployees({
-          page: 1,
-          pageSize: 1000,
-          status: "active",
-        })
-        if (!cancelled) setEmployees(res.rows)
-      } catch {
-        if (!cancelled) setEmployees([])
-      } finally {
-        if (!cancelled) setEmployeesLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [mode])
 
   const reportResult = (
     res: BulkMutationResult,
@@ -2583,16 +2557,10 @@ function SlotBulkActionForm({
         ) : (
           <section className="space-y-2">
             <Label className="text-xs">Proctor (one teacher for all cohorts)</Label>
-            <Combobox
+            <EmployeePicker
               value={subEmployeeId}
-              options={employees.map<ComboboxOption>((e) => ({
-                value: e.id,
-                label: e.emp_display_name,
-                sublabel: e.emp_code,
-              }))}
               onChange={(v) => setSubEmployeeId(v)}
-              placeholder={employeesLoading ? "Loading…" : "Pick a teacher…"}
-              disabled={employeesLoading}
+              placeholder="Pick a teacher…"
             />
             <Input
               value={subReason}
@@ -2874,35 +2842,11 @@ function SubstituteSessionForm({
     session.effective_employee_id,
   )
   const [subReason, setSubReason] = React.useState("")
-  const [employees, setEmployees] = React.useState<Employee[]>([])
-  const [employeesLoading, setEmployeesLoading] = React.useState(false)
 
   const isCancelled = session.status === "cancelled"
   const isCompleted = session.status === "completed"
   const { isElective, slotName, cohortSubject, subtitleLine } =
     describeSession(session)
-
-  React.useEffect(() => {
-    setEmployeesLoading(true)
-    let cancelled = false
-    void (async () => {
-      try {
-        const res = await listEmployees({
-          page: 1,
-          pageSize: 1000,
-          status: "active",
-        })
-        if (!cancelled) setEmployees(res.rows)
-      } catch {
-        if (!cancelled) setEmployees([])
-      } finally {
-        if (!cancelled) setEmployeesLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const doSubstitute = async () => {
     if (!subEmployeeId) return
@@ -2979,16 +2923,11 @@ function SubstituteSessionForm({
               ? `Effective teacher for ${cohortSubject ?? "this cohort"}`
               : "Effective teacher"}
           </Label>
-          <Combobox
+          <EmployeePicker
             value={subEmployeeId}
-            options={employees.map<ComboboxOption>((e) => ({
-              value: e.id,
-              label: e.emp_display_name,
-              sublabel: e.emp_code,
-            }))}
             onChange={(v) => setSubEmployeeId(v)}
-            placeholder={employeesLoading ? "Loading…" : "Pick a teacher…"}
-            disabled={employeesLoading || isCancelled || isCompleted}
+            placeholder="Pick a teacher…"
+            disabled={isCancelled || isCompleted}
           />
           <p className="text-xs text-muted-foreground">
             Scheduled:{" "}
