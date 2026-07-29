@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  UserCheck,
   Users,
   X,
   type LucideIcon,
@@ -44,6 +45,12 @@ const nav: NavItem[] = [
   { type: "leaf", to: "/", label: "Welcome", icon: Home, exact: true },
   { type: "leaf", to: "/migrations", label: "Migrations", icon: Database },
   { type: "leaf", to: "/admin-users", label: "Admin users", icon: Users },
+  {
+    type: "leaf",
+    to: "/approval-approvers",
+    label: "Assign approvers",
+    icon: UserCheck,
+  },
   {
     type: "leaf",
     to: "/academic-holidays",

@@ -7,6 +7,7 @@ import {
 
 import { AcademicHolidaysPage } from "@/pages/academic-holidays"
 import { AdminUsersPage } from "@/pages/admin-users"
+import { ApprovalApproversPage } from "@/pages/approval-approvers"
 import { AppLayout } from "@/layouts/app-layout"
 import { AuthLayout } from "@/layouts/auth-layout"
 import { LoginPage } from "@/pages/login"
@@ -115,6 +116,12 @@ const adminUsersRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
   path: "/admin-users",
   component: AdminUsersPage,
+})
+
+const approvalApproversRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/approval-approvers",
+  component: ApprovalApproversPage,
 })
 
 const academicHolidaysRoute = createRoute({
@@ -473,6 +480,7 @@ const routeTree = rootRoute.addChildren([
     welcomeRoute,
     migrationsRoute,
     adminUsersRoute,
+    approvalApproversRoute,
     academicHolidaysRoute,
     mastersDegreesRoute,
     mastersDepartmentsRoute,
