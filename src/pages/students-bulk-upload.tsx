@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -1215,15 +1216,22 @@ const CellEditor = React.memo(function CellEditor({
 
   if (column === "dob") {
     return (
-      <div className="space-y-0.5">
-        <Input
-          ref={registerRef as React.Ref<HTMLInputElement>}
-          type="date"
+      // The app's calendar, not `<input type="date">` — Chromium dismisses
+      // the native popup on month navigation inside this grid. The error-jump
+      // focuses the picker's trigger button, so that is what gets registered.
+      <div
+        ref={(el) =>
+          registerCell(rowId, column, el?.querySelector("button") ?? null)
+        }
+        className="space-y-0.5"
+        title={error}
+      >
+        <DatePicker
           value={value}
-          onChange={(e) => handleChange(e.target.value)}
-          aria-invalid={invalid || undefined}
-          className={cn("h-8 text-xs", invalid && invalidClass)}
-          title={error}
+          onChange={handleChange}
+          invalid={invalid}
+          placeholder="—"
+          className="[&>div>button]:h-8 [&>div>button]:px-2 [&>div>button]:text-xs"
         />
         {error && (
           <p className="text-[10px] leading-tight text-destructive">{error}</p>
