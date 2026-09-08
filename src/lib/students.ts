@@ -1,4 +1,5 @@
 import { api } from "@/lib/api"
+import type { AccountStatusView } from "@/lib/account-invites"
 import type { Country, District, State } from "@/lib/address-attributes"
 import type { AdmissionYear } from "@/lib/admission-years"
 import type { DiplomaBoard } from "@/lib/diploma-boards"
@@ -239,6 +240,8 @@ export type ListStudentsResult = {
   page: number
   pageSize: number
   pageCount: number
+  /** Account/invite state keyed by student id — a sibling map, not a row field. */
+  account_status: Record<number, AccountStatusView>
 }
 
 export async function listStudents(

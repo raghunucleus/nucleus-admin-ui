@@ -52,6 +52,13 @@ import {
 } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import {
+  SKIP_REASON_LABELS,
+  listAccountInvites,
+  revokeAccountInvite,
+  sendAccountInvites,
+  type InviteHistoryRow,
+} from "@/lib/account-invites"
 import { ApiError } from "@/lib/api"
 import {
   listCountries,
@@ -327,11 +334,181 @@ function LoginSection({ student }: { student: Student }) {
         Manage how this student signs in to the Nucleus student portal.
       </p>
       <div className="mt-4 space-y-3">
+        <InvitePanel student={student} />
         <SetPasswordPanel student={student} />
         <ResetByEmailPanel student={student} />
       </div>
     </div>
   )
+}
+
+/**
+ * Account invitation for one student, plus the history of every invitation
+ * sent to them.
+ *
+ * The bulk equivalents live on the students list; this is the per-person view
+ * an admin lands on when someone says "I never got my link".
+ */
+function InvitePanel({ student }: { student: Student }) {
+  // `fetchedAt` is captured when the rows arrive rather than read during
+  // render: expiry is a comparison against "now", and calling Date.now() in
+  // the render body is an impure read that stops the component memoizing.
+  // Every mutation here refetches, so the stamp is never meaningfully stale.
+  const [history, setHistory] = React.useState<{
+    rows: InviteHistoryRow[]
+    fetchedAt: number
+  } | null>(null)
+  const [busy, setBusy] = React.useState(false)
+
+  const load = React.useCallback(async () => {
+    try {
+      const rows = await listAccountInvites("student", student.id)
+      setHistory({ rows, fetchedAt: Date.now() })
+    } catch {
+      // Non-fatal: the panel still offers to send.
+      setHistory({ rows: [], fetchedAt: Date.now() })
+    }
+  }, [student.id])
+
+  React.useEffect(() => {
+    void load()
+  }, [load])
+
+  const latest = history?.rows[0]
+  const outstanding =
+    !!history &&
+    !!latest &&
+    !latest.accepted_at &&
+    !latest.revoked_at &&
+    new Date(latest.expires_at).getTime() > history.fetchedAt
+
+  const handleSend = async () => {
+    setBusy(true)
+    try {
+      const res = await sendAccountInvites({
+        subject_type: "student",
+        subject_ids: [student.id],
+        only_uninvited: false,
+        // Explicit per-person action: the admin is looking at this one row and
+        // asking for a link, so an outstanding invite should be replaced
+        // rather than reported as a skip.
+        resend: true,
+      })
+      if (res.sent === 1) {
+        toast.success("Invitation sent", {
+          description: `${student.display_name} can now set their own password. The link expires in a few days.`,
+        })
+      } else if (res.skipped.length > 0) {
+        toast.info("Nothing sent", {
+          description: SKIP_REASON_LABELS[res.skipped[0].reason],
+        })
+      } else {
+        toast.error("Couldn't send the invitation", {
+          description: res.failed[0]?.message ?? "Please try again.",
+        })
+      }
+      await load()
+    } catch (err) {
+      toast.error("Couldn't send the invitation", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRevoke = async () => {
+    setBusy(true)
+    try {
+      await revokeAccountInvite("student", student.id)
+      toast.success("Invitation revoked", {
+        description: "The link in that email no longer works.",
+      })
+      await load()
+    } catch (err) {
+      toast.error("Couldn't revoke the invitation", {
+        description:
+          err instanceof ApiError ? err.message : "Please try again.",
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="rounded-md border bg-muted/30 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Send an account invitation</p>
+          <p className="text-xs text-muted-foreground">
+            Emails a single-use link to{" "}
+            <span className="font-medium text-foreground">{student.email}</span>{" "}
+            so the student chooses their own password. No password is sent by
+            email, and any earlier invitation stops working.
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          {outstanding && (
+            <Button
+              variant="ghost"
+              onClick={() => void handleRevoke()}
+              disabled={busy}
+            >
+              Revoke
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => void handleSend()}
+            disabled={busy || !student.email}
+          >
+            <Mail />
+            {outstanding ? "Resend invitation" : "Send invitation"}
+          </Button>
+        </div>
+      </div>
+
+      {history && history.rows.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+            Invitation history ({history.rows.length})
+          </summary>
+          <ul className="mt-2 space-y-1.5">
+            {history.rows.map((h) => (
+              <li key={h.id} className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {formatDateTime(h.created_at)}
+                </span>{" "}
+                → {h.email}
+                {h.invited_by && ` · by ${h.invited_by.display_name}`}
+                {" · "}
+                {h.accepted_at
+                  ? `accepted ${formatDateTime(h.accepted_at)}`
+                  : h.revoked_at
+                    ? "revoked"
+                    : new Date(h.expires_at).getTime() <= history.fetchedAt
+                      ? "expired"
+                      : `expires ${formatDateTime(h.expires_at)}`}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  )
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return "—"
+  return d.toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
 }
 
 function SetPasswordPanel({ student }: { student: Student }) {

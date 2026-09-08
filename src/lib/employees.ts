@@ -1,4 +1,5 @@
 import { api } from "@/lib/api"
+import type { AccountStatusView } from "@/lib/account-invites"
 import type { Department } from "@/lib/departments"
 import type { Designation } from "@/lib/designations"
 
@@ -95,6 +96,8 @@ export type ListEmployeesResult = {
   page: number
   pageSize: number
   pageCount: number
+  /** Account/invite state keyed by employee id — a sibling map, not a row field. */
+  account_status: Record<number, AccountStatusView>
 }
 
 export async function listEmployees(

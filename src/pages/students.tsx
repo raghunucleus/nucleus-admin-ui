@@ -25,6 +25,7 @@ import {
   Eye,
   Filter,
   GraduationCap,
+  Mail,
   MoreVertical,
   Pencil,
   Plus,
@@ -33,10 +34,17 @@ import {
   RefreshCw,
   Search,
   SearchX,
+  Users,
   X,
 } from "lucide-react"
 
+import { AccountStatusBadge } from "@/components/account-status-badge"
+import {
+  SendInvitesDialog,
+  type SendInvitesTarget,
+} from "@/components/send-invites-dialog"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -68,6 +76,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import type { AccountStatusView } from "@/lib/account-invites"
 import { ApiError } from "@/lib/api"
 import { listAdmissionYears, type AdmissionYear } from "@/lib/admission-years"
 import { listProgrammes, type Programme } from "@/lib/programmes"
@@ -112,6 +121,9 @@ type Mode =
 
 export function StudentsPage() {
   const [students, setStudents] = React.useState<Student[]>([])
+  const [accountStatus, setAccountStatus] = React.useState<
+    Record<number, AccountStatusView>
+  >({})
   const [total, setTotal] = React.useState(0)
   const [pageCount, setPageCount] = React.useState(0)
   const [loading, setLoading] = React.useState(true)
@@ -132,6 +144,12 @@ export function StudentsPage() {
 
   const [filterPanelOpen, setFilterPanelOpen] = React.useState(false)
   const [searchRowOpen, setSearchRowOpen] = React.useState(false)
+
+  // Row selection lives here rather than in the table so the toolbar can show
+  // the count. Reset on every reload — see the note in load().
+  const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set())
+  const [inviteTarget, setInviteTarget] =
+    React.useState<SendInvitesTarget | null>(null)
 
   const [pendingStatus, setPendingStatus] = React.useState<
     StudentStatusFilter | undefined
@@ -352,6 +370,13 @@ export function StudentsPage() {
       const result = await listStudents(queryParams)
       if (!isLatest()) return
       setStudents(result.rows)
+      setAccountStatus(result.account_status ?? {})
+      // Selection is dropped on every reload — a filter, sort or page change.
+      // Carrying it across would mean the admin can send to rows they can no
+      // longer see, and the header checkbox only ever covers the visible page,
+      // so the count would stop matching what is on screen. "Invite whole
+      // batch" is the deliberate path for anything larger than one page.
+      setSelectedIds(new Set())
       setTotal(result.total)
       setPageCount(result.pageCount)
       setLoadFailed(false)
@@ -442,6 +467,38 @@ export function StudentsPage() {
     }
   }
 
+  const toggleRow = React.useCallback((id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+
+  const toggleAllOnPage = React.useCallback(
+    (ids: number[], checked: boolean) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        for (const id of ids) {
+          if (checked) next.add(id)
+          else next.delete(id)
+        }
+        return next
+      })
+    },
+    [],
+  )
+
+  // A whole-batch send needs both filters applied; the server keys the batch on
+  // exactly this pair.
+  const batchReady = programmeId !== undefined && admissionYearId !== undefined
+  const batchLabel = React.useMemo(() => {
+    const p = programmes.find((x) => x.id === programmeId)
+    const y = admissionYears.find((x) => x.id === admissionYearId)
+    return [p?.code ?? p?.name, y?.display_year].filter(Boolean).join(" · ")
+  }, [programmes, admissionYears, programmeId, admissionYearId])
+
   const handleSaved = async (updated: Student, kind: "create" | "edit") => {
     setMode({ kind: "list" })
     toast.success(
@@ -465,6 +522,65 @@ export function StudentsPage() {
             <Plus />
             New student
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline">
+                <Mail />
+                Invites
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                disabled={selectedIds.size === 0}
+                onSelect={() =>
+                  setInviteTarget({
+                    kind: "ids",
+                    ids: [...selectedIds],
+                    resend: false,
+                  })
+                }
+              >
+                <Mail />
+                Send invites ({selectedIds.size})
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={selectedIds.size === 0}
+                onSelect={() =>
+                  setInviteTarget({
+                    kind: "ids",
+                    ids: [...selectedIds],
+                    resend: true,
+                  })
+                }
+              >
+                <RefreshCw />
+                Resend to selected ({selectedIds.size})
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!batchReady}
+                title={
+                  batchReady
+                    ? undefined
+                    : "Pick a programme and admission year in Filters first"
+                }
+                onSelect={() => {
+                  if (programmeId === undefined) return
+                  if (admissionYearId === undefined) return
+                  setInviteTarget({
+                    kind: "batch",
+                    filter: {
+                      programme_id: programmeId,
+                      admission_year_id: admissionYearId,
+                    },
+                    label: batchLabel,
+                  })
+                }}
+              >
+                <Users />
+                Invite whole batch…
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <div className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
           <ToolbarIconToggle
             label="Filters"
@@ -555,6 +671,10 @@ export function StudentsPage() {
         <div className="min-w-0 flex-1 rounded-lg border bg-card text-card-foreground">
           <StudentsTable
             students={students}
+            accountStatus={accountStatus}
+            selectedIds={selectedIds}
+            onToggleRow={toggleRow}
+            onToggleAllOnPage={toggleAllOnPage}
             total={total}
             pageCount={pageCount}
             busyId={busyId}
@@ -595,6 +715,16 @@ export function StudentsPage() {
           />
         </div>
       </div>
+
+      <SendInvitesDialog
+        open={!!inviteTarget}
+        onOpenChange={(open) => {
+          if (!open) setInviteTarget(null)
+        }}
+        subjectType="student"
+        target={inviteTarget}
+        onSent={() => void load()}
+      />
 
       <ConfirmDialog
         open={!!confirmTarget}
@@ -729,6 +859,44 @@ function FilterPanel({
         </Button>
       </div>
       <div className="flex-1 space-y-5 px-4 py-4">
+        {/* Programme and admission year lead: together they identify a cohort,
+            which is how admins actually narrow this list. */}
+        <div className="space-y-1.5">
+          <Label htmlFor="filter-programme">Programme</Label>
+          <Combobox
+            id="filter-programme"
+            value={pendingProgrammeId ?? null}
+            options={programmes.map((p) => ({
+              value: p.id,
+              label: p.name,
+              sublabel: p.code,
+            }))}
+            onChange={(v) => onPendingProgrammeIdChange(v ?? undefined)}
+            placeholder="All programmes"
+            searchPlaceholder="Search programmes…"
+            emptyMessage="No programmes match"
+            clearLabel="All programmes"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="filter-admission-year">Admission year</Label>
+          <Combobox
+            id="filter-admission-year"
+            value={pendingAdmissionYearId ?? null}
+            options={admissionYears.map((y) => ({
+              value: y.id,
+              label: y.display_year,
+              sublabel: String(y.year),
+            }))}
+            onChange={(v) => onPendingAdmissionYearIdChange(v ?? undefined)}
+            placeholder="All admission years"
+            searchPlaceholder="Search years…"
+            emptyMessage="No years match"
+            clearLabel="All admission years"
+          />
+        </div>
+
         <div className="space-y-1.5">
           <Label htmlFor="filter-status">Status</Label>
           <select
@@ -815,42 +983,6 @@ function FilterPanel({
             ))}
           </select>
         </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="filter-programme">Programme</Label>
-          <Combobox
-            id="filter-programme"
-            value={pendingProgrammeId ?? null}
-            options={programmes.map((p) => ({
-              value: p.id,
-              label: p.name,
-              sublabel: p.code,
-            }))}
-            onChange={(v) => onPendingProgrammeIdChange(v ?? undefined)}
-            placeholder="All programmes"
-            searchPlaceholder="Search programmes…"
-            emptyMessage="No programmes match"
-            clearLabel="All programmes"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="filter-admission-year">Admission year</Label>
-          <Combobox
-            id="filter-admission-year"
-            value={pendingAdmissionYearId ?? null}
-            options={admissionYears.map((y) => ({
-              value: y.id,
-              label: y.display_year,
-              sublabel: String(y.year),
-            }))}
-            onChange={(v) => onPendingAdmissionYearIdChange(v ?? undefined)}
-            placeholder="All admission years"
-            searchPlaceholder="Search years…"
-            emptyMessage="No years match"
-            clearLabel="All admission years"
-          />
-        </div>
       </div>
       <div className="flex items-center justify-end gap-2 border-t px-4 py-3">
         <Button
@@ -879,6 +1011,10 @@ type ColumnSearchValues = {
 
 function StudentsTable({
   students,
+  accountStatus,
+  selectedIds,
+  onToggleRow,
+  onToggleAllOnPage,
   total,
   pageCount,
   busyId,
@@ -906,6 +1042,10 @@ function StudentsTable({
   onViewDetails,
 }: {
   students: Student[]
+  accountStatus: Record<number, AccountStatusView>
+  selectedIds: Set<number>
+  onToggleRow: (id: number, checked: boolean) => void
+  onToggleAllOnPage: (ids: number[], checked: boolean) => void
   total: number
   pageCount: number
   busyId: number | null
@@ -932,13 +1072,41 @@ function StudentsTable({
   onToggleActive: (s: Student) => void
   onViewDetails: (s: Student) => void
 }) {
+  const pageIds = React.useMemo(() => students.map((s) => s.id), [students])
+  const selectedOnPage = pageIds.filter((id) => selectedIds.has(id)).length
+
   const columns = React.useMemo<ColumnDef<Student>[]>(
     () => [
+      {
+        id: "select",
+        enableSorting: false,
+        // The only sticky-left column: STICKY_LEFT_CELL pins with a bare
+        // `left-0`, so a second one would sit on top of this. The checkbox is
+        // the better thing to keep in view while scrolling sideways.
+        meta: { sticky: "left" as const },
+        header: () => (
+          <Checkbox
+            aria-label="Select all rows on this page"
+            checked={pageIds.length > 0 && selectedOnPage === pageIds.length}
+            indeterminate={
+              selectedOnPage > 0 && selectedOnPage < pageIds.length
+            }
+            disabled={pageIds.length === 0}
+            onChange={(e) => onToggleAllOnPage(pageIds, e.target.checked)}
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            aria-label={`Select ${row.original.display_name}`}
+            checked={selectedIds.has(row.original.id)}
+            onChange={(e) => onToggleRow(row.original.id, e.target.checked)}
+          />
+        ),
+      },
       {
         id: "student_id",
         header: "Student ID",
         accessorKey: "student_id",
-        meta: { sticky: "left" as const },
         cell: ({ getValue }) => (
           <span className="font-mono text-xs text-muted-foreground">
             {String(getValue() ?? "")}
@@ -1041,6 +1209,16 @@ function StudentsTable({
         },
       },
       {
+        id: "account_status",
+        header: "Account",
+        // Sorting would need the server to ORDER BY across the invite join —
+        // out of scope for the column.
+        enableSorting: false,
+        cell: ({ row }) => (
+          <AccountStatusBadge status={accountStatus[row.original.id]} />
+        ),
+      },
+      {
         id: "status",
         header: "Status",
         accessorFn: (s) => (s.is_active ? "active" : "inactive"),
@@ -1125,7 +1303,19 @@ function StudentsTable({
         },
       },
     ],
-    [busyId, formOpen, onEdit, onToggleActive, onViewDetails],
+    [
+      busyId,
+      formOpen,
+      onEdit,
+      onToggleActive,
+      onViewDetails,
+      accountStatus,
+      selectedIds,
+      pageIds,
+      selectedOnPage,
+      onToggleRow,
+      onToggleAllOnPage,
+    ],
   )
 
   const table = useReactTable({

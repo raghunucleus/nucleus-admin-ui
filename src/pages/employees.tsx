@@ -23,6 +23,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Filter,
+  Mail,
   Pencil,
   ShieldCheck,
   Plus,
@@ -35,7 +36,13 @@ import {
   X,
 } from "lucide-react"
 
+import { AccountStatusBadge } from "@/components/account-status-badge"
+import {
+  SendInvitesDialog,
+  type SendInvitesTarget,
+} from "@/components/send-invites-dialog"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { EmployeePicker } from "@/components/employee-picker"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -62,6 +69,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import type { AccountStatusView } from "@/lib/account-invites"
 import { ApiError } from "@/lib/api"
 import { listDepartments, type Department } from "@/lib/departments"
 import { listDesignations, type Designation } from "@/lib/designations"
@@ -115,6 +123,9 @@ function formatDob(dob: string | null): string {
 
 export function EmployeesPage() {
   const [employees, setEmployees] = React.useState<Employee[]>([])
+  const [accountStatus, setAccountStatus] = React.useState<
+    Record<number, AccountStatusView>
+  >({})
   const [total, setTotal] = React.useState(0)
   const [pageCount, setPageCount] = React.useState(0)
   const [loading, setLoading] = React.useState(true)
@@ -131,6 +142,12 @@ export function EmployeesPage() {
     pageIndex: 0,
     pageSize: 10,
   })
+
+  // Row selection lives here rather than in the table so the toolbar can show
+  // the count. Reset on every reload — see the note in load().
+  const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set())
+  const [inviteTarget, setInviteTarget] =
+    React.useState<SendInvitesTarget | null>(null)
 
   const [filterPanelOpen, setFilterPanelOpen] = React.useState(false)
   const [searchRowOpen, setSearchRowOpen] = React.useState(false)
@@ -317,6 +334,13 @@ export function EmployeesPage() {
       const result = await listEmployees(queryParams)
       if (!isLatest()) return
       setEmployees(result.rows)
+      setAccountStatus(result.account_status ?? {})
+      // Selection is dropped on every reload — a filter, sort or page change.
+      // Carrying it across would mean the admin can send to rows they can no
+      // longer see, and the header checkbox only ever covers the visible page,
+      // so the count would stop matching what is on screen. "Invite whole
+      // batch" is the deliberate path for anything larger than one page.
+      setSelectedIds(new Set())
       setTotal(result.total)
       setPageCount(result.pageCount)
       setLoadFailed(false)
@@ -399,6 +423,35 @@ export function EmployeesPage() {
     }
   }
 
+  const toggleRow = React.useCallback((id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+
+  const toggleAllOnPage = React.useCallback(
+    (ids: number[], checked: boolean) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        for (const id of ids) {
+          if (checked) next.add(id)
+          else next.delete(id)
+        }
+        return next
+      })
+    },
+    [],
+  )
+
+  // A whole-batch send is keyed on the department filter alone.
+  const batchLabel = React.useMemo(() => {
+    const d = departments.find((x) => x.id === departmentId)
+    return d?.name ?? d?.code ?? "this department"
+  }, [departments, departmentId])
+
   const handleSaved = async (updated: Employee, kind: "create" | "edit") => {
     setMode({ kind: "list" })
     toast.success(
@@ -422,6 +475,61 @@ export function EmployeesPage() {
             <Plus />
             New employee
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline">
+                <Mail />
+                Invites
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                disabled={selectedIds.size === 0}
+                onSelect={() =>
+                  setInviteTarget({
+                    kind: "ids",
+                    ids: [...selectedIds],
+                    resend: false,
+                  })
+                }
+              >
+                <Mail />
+                Send invites ({selectedIds.size})
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={selectedIds.size === 0}
+                onSelect={() =>
+                  setInviteTarget({
+                    kind: "ids",
+                    ids: [...selectedIds],
+                    resend: true,
+                  })
+                }
+              >
+                <RefreshCw />
+                Resend to selected ({selectedIds.size})
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={departmentId === undefined}
+                title={
+                  departmentId === undefined
+                    ? "Pick a department in Filters first"
+                    : undefined
+                }
+                onSelect={() => {
+                  if (departmentId === undefined) return
+                  setInviteTarget({
+                    kind: "batch",
+                    filter: { department_id: departmentId },
+                    label: batchLabel,
+                  })
+                }}
+              >
+                <Users />
+                Invite whole department…
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <div className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
           <ToolbarIconToggle
             label="Filters"
@@ -504,6 +612,10 @@ export function EmployeesPage() {
         <div className="min-w-0 flex-1 rounded-lg border bg-card text-card-foreground">
           <EmployeesTable
             employees={employees}
+            accountStatus={accountStatus}
+            selectedIds={selectedIds}
+            onToggleRow={toggleRow}
+            onToggleAllOnPage={toggleAllOnPage}
             total={total}
             pageCount={pageCount}
             busyId={busyId}
@@ -538,6 +650,16 @@ export function EmployeesPage() {
           />
         </div>
       </div>
+
+      <SendInvitesDialog
+        open={!!inviteTarget}
+        onOpenChange={(open) => {
+          if (!open) setInviteTarget(null)
+        }}
+        subjectType="employee"
+        target={inviteTarget}
+        onSent={() => void load()}
+      />
 
       <ConfirmDialog
         open={!!confirmTarget}
@@ -768,6 +890,10 @@ type ColumnSearchValues = {
 
 function EmployeesTable({
   employees,
+  accountStatus,
+  selectedIds,
+  onToggleRow,
+  onToggleAllOnPage,
   total,
   pageCount,
   busyId,
@@ -794,6 +920,10 @@ function EmployeesTable({
   onToggleActive,
 }: {
   employees: Employee[]
+  accountStatus: Record<number, AccountStatusView>
+  selectedIds: Set<number>
+  onToggleRow: (id: number, checked: boolean) => void
+  onToggleAllOnPage: (ids: number[], checked: boolean) => void
   total: number
   pageCount: number
   busyId: number | null
@@ -819,13 +949,41 @@ function EmployeesTable({
   onEdit: (e: Employee) => void
   onToggleActive: (e: Employee) => void
 }) {
+  const pageIds = React.useMemo(() => employees.map((e) => e.id), [employees])
+  const selectedOnPage = pageIds.filter((id) => selectedIds.has(id)).length
+
   const columns = React.useMemo<ColumnDef<Employee>[]>(
     () => [
+      {
+        id: "select",
+        enableSorting: false,
+        // The only sticky-left column: STICKY_LEFT_CELL pins with a bare
+        // `left-0`, so a second one would sit on top of this. The checkbox is
+        // the better thing to keep in view while scrolling sideways.
+        meta: { sticky: "left" as const },
+        header: () => (
+          <Checkbox
+            aria-label="Select all rows on this page"
+            checked={pageIds.length > 0 && selectedOnPage === pageIds.length}
+            indeterminate={
+              selectedOnPage > 0 && selectedOnPage < pageIds.length
+            }
+            disabled={pageIds.length === 0}
+            onChange={(e) => onToggleAllOnPage(pageIds, e.target.checked)}
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            aria-label={`Select ${row.original.emp_display_name}`}
+            checked={selectedIds.has(row.original.id)}
+            onChange={(e) => onToggleRow(row.original.id, e.target.checked)}
+          />
+        ),
+      },
       {
         id: "emp_code",
         header: "Emp code",
         accessorKey: "emp_code",
-        meta: { sticky: "left" as const },
         cell: ({ getValue }) => (
           <span className="font-mono text-xs text-muted-foreground">
             {String(getValue() ?? "")}
@@ -914,6 +1072,16 @@ function EmployeesTable({
         },
       },
       {
+        id: "account_status",
+        header: "Account",
+        // Sorting would need the server to ORDER BY across the invite join —
+        // out of scope for the column.
+        enableSorting: false,
+        cell: ({ row }) => (
+          <AccountStatusBadge status={accountStatus[row.original.id]} />
+        ),
+      },
+      {
         id: "status",
         header: "Status",
         accessorFn: (e) => (e.is_active ? "active" : "inactive"),
@@ -998,7 +1166,18 @@ function EmployeesTable({
         },
       },
     ],
-    [busyId, formOpen, onEdit, onToggleActive],
+    [
+      busyId,
+      formOpen,
+      onEdit,
+      onToggleActive,
+      accountStatus,
+      selectedIds,
+      pageIds,
+      selectedOnPage,
+      onToggleRow,
+      onToggleAllOnPage,
+    ],
   )
 
   const table = useReactTable({
