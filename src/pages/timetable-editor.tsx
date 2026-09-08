@@ -5,11 +5,9 @@ import {
   AlertTriangle,
   ArrowLeft,
   BookMarked,
-  CalendarRange,
   Check,
   ChevronDown,
   Clock,
-  Copy,
   GripVertical,
   MapPin,
   Pencil,
@@ -24,7 +22,6 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -113,17 +110,6 @@ type PaletteItem = {
 
 function fmtTime(t: string): string {
   return t.slice(0, 5)
-}
-
-function fmtDate(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`)
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString(undefined, {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
 }
 
 function initials(name: string): string {

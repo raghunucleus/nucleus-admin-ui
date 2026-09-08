@@ -1,8 +1,11 @@
 import { useAuthStore, type AuthTokens } from "@/store/auth-store"
 import { useConnectivityStore } from "@/store/connectivity-store"
 
-const API_BASE =
+// Trailing slashes stripped: every path below starts with "/", so a configured
+// value of "https://api.example.com/" would otherwise produce "//admin/refresh".
+const API_BASE = (
   (import.meta.env.VITE_API_URL as string | undefined)?.trim() || "/api"
+).replace(/\/+$/, "")
 
 /** Unauthenticated liveness probe (NestJS Terminus) used for recovery checks. */
 const HEALTH_PATH = "/health/live"

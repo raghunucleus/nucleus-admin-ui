@@ -8,13 +8,11 @@ import {
   FileSpreadsheet,
   Trash2,
   Upload,
-  X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -284,6 +282,7 @@ export function EmployeesBulkUploadPage() {
           emp_code: "",
           emp_display_name: "",
           gender: "",
+          dob: "",
           department_code: "",
           designation_code: "",
           mobile_number: "",
@@ -757,7 +756,7 @@ function recomputeErrors(
     }
   })
 
-  return rows.map((r, i) => {
+  return rows.map((r) => {
     const errs: Partial<Record<ColumnKey, string>> = {}
 
     const empCode = r.values.emp_code.trim()

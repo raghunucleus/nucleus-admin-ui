@@ -99,20 +99,6 @@ type Mode =
   | { kind: "create" }
   | { kind: "edit"; employee: Employee }
 
-const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-})
-
-function formatDateTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return "—"
-  return dateTimeFormatter.format(d)
-}
-
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
   month: "short",

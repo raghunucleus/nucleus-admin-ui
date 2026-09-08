@@ -1612,7 +1612,15 @@ const studentSchema = z.object({
     ),
 })
 
-type StudentFormValues = z.infer<typeof studentSchema>
+// `entry_type` is registered on a <select>, so the form holds the string the DOM
+// gives it and the schema coerces. That makes the schema's INPUT type (what the
+// form fields hold) genuinely different from its OUTPUT type (what a validated
+// submit produces) — `z.coerce.number()` accepts unknown and yields number — so
+// the two are named separately and handed to useForm's input/output generics.
+// Collapsing them with a single `z.infer` is what broke the production build:
+// zodResolver is typed on the input, useForm was typed on the output.
+type StudentFormInput = z.input<typeof studentSchema>
+type StudentFormValues = z.output<typeof studentSchema>
 
 function StudentForm(
   props: (
@@ -1659,7 +1667,7 @@ function StudentForm(
     handleSubmit,
     control,
     formState: { errors, isSubmitting, isDirty },
-  } = useForm<StudentFormValues>({
+  } = useForm<StudentFormInput, unknown, StudentFormValues>({
     resolver: zodResolver(studentSchema),
     defaultValues: defaults,
     values: defaults,
