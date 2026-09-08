@@ -32,7 +32,7 @@ function assertApiUrl(env: Record<string, string>): void {
       'every API call fails — you get confusing per-page errors instead of the offline screen.',
       '',
       'Set it in .env.production (see .env.production.example) or in the build environment:',
-      '  VITE_API_URL=https://api-nucleus.raghuenggcollege.com',
+      '  VITE_API_URL=https://api-nucleus.raghuenggcollege.in',
       '',
       'If the API genuinely is same-origin behind a proxy that strips the /api prefix',
       '(mirroring the dev proxy rewrite), say so explicitly:',

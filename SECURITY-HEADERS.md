@@ -31,7 +31,7 @@ upgrade-insecure-requests
 
 | Placeholder | Value | Source |
 | --- | --- | --- |
-| `API_ORIGIN` | `https://api-nucleus.raghuenggcollege.com` | `VITE_API_URL` |
+| `API_ORIGIN` | `https://api-nucleus.raghuenggcollege.in` | `VITE_API_URL` |
 | `S3_ORIGIN` | `https://raghu-nucleus.s3.ap-south-1.amazonaws.com` | `VITE_STORAGE_ORIGIN` |
 | `<INLINE_SCRIPT_HASH>` | computed at build time | the inline script in `index.html` |
 

@@ -2,7 +2,7 @@
 
 The app is a **static bundle**. `npm run build` produces `dist/`; whatever serves
 those files is the "host". It is a **single-audience app on a single hostname** —
-`nucleusadmin.raghuenggcollege.com` — and a **separate artifact** from
+`nucleusadmin.raghuenggcollege.in` — and a **separate artifact** from
 nucleus-ui. There is no hostname sniffing here.
 
 Admin sessions are deliberately per-tab: the auth store persists to
@@ -22,7 +22,7 @@ npm run build                                # tsc -b && vite build && postbuild
 automatically. Shell values win over the file, which is what CI should use:
 
 ```bash
-VITE_API_URL=https://api-nucleus.raghuenggcollege.com npm run build
+VITE_API_URL=https://api-nucleus.raghuenggcollege.in npm run build
 ```
 
 ### Environment
@@ -82,7 +82,7 @@ the catch-all rewrite, and it must strip the `/api` prefix.
 ## Deploying to S3 + CloudFront
 
 ```bash
-VITE_API_URL=https://api-nucleus.raghuenggcollege.com \
+VITE_API_URL=https://api-nucleus.raghuenggcollege.in \
 VITE_STORAGE_ORIGIN=https://raghu-nucleus.s3.ap-south-1.amazonaws.com \
 VITE_GOOGLE_OIDC_CLIENT_ID=<client-id> \
   npm run build
@@ -101,7 +101,7 @@ upload screen, rather than at load time.
 
 | Server var | Value |
 | --- | --- |
-| `CORS_ORIGINS` | Must include `https://nucleusadmin.raghuenggcollege.com`. **This is easy to miss**: the server's default allowlist contains only the port-5000 portal origins, and admin has never needed CORS because dev uses the same-origin proxy. The moment admin is deployed statically, every request fails without this. |
+| `CORS_ORIGINS` | Must include `https://nucleusadmin.raghuenggcollege.in`. **This is easy to miss**: the server's default allowlist contains only the port-5000 portal origins, and admin has never needed CORS because dev uses the same-origin proxy. The moment admin is deployed statically, every request fails without this. |
 | `GOOGLE_ADMIN_OIDC_CLIENT_ID` | Must equal this app's `VITE_GOOGLE_OIDC_CLIENT_ID`. |
 
 Add the admin origin to the **Google Cloud Console** OAuth client's authorized
