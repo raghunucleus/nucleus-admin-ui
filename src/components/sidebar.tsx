@@ -70,6 +70,7 @@ const nav: NavItem[] = [
       { to: "/masters/regulations", label: "Regulation" },
       { to: "/masters/subjects", label: "Subject" },
       { to: "/masters/subject-types", label: "Subject Types" },
+      { to: "/masters/leave-types", label: "Leave Types" },
       { to: "/masters/programmes", label: "Programme" },
       { to: "/masters/programme-configuration", label: "Programme Configuration" },
     ],

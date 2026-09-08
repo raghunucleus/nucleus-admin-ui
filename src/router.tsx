@@ -41,6 +41,7 @@ import { AddressAttributesPage } from "@/pages/address-attributes/address-attrib
 import { StudentAttributesPage } from "@/pages/student-attributes/student-attributes"
 import { SubjectsPage } from "@/pages/subjects"
 import { SubjectTypesPage } from "@/pages/subject-types"
+import { LeaveTypesPage } from "@/pages/leave-types"
 import { TimetableEditorPage } from "@/pages/timetable-editor"
 import { TimetableSchedulePage } from "@/pages/timetable-schedule"
 import { MigrationsPage } from "@/pages/migrations"
@@ -206,6 +207,12 @@ const mastersSubjectTypesRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
   path: "/masters/subject-types",
   component: SubjectTypesPage,
+})
+
+const mastersLeaveTypesRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/leave-types",
+  component: LeaveTypesPage,
 })
 
 const mastersProgrammeAdmissionYearsRoute = createRoute({
@@ -493,6 +500,7 @@ const routeTree = rootRoute.addChildren([
     mastersMarkStructureEditorRoute,
     mastersSubjectsRoute,
     mastersSubjectTypesRoute,
+    mastersLeaveTypesRoute,
     mastersProgrammeAdmissionYearsRoute,
     mastersProgrammeConfigurationRoute,
     mastersSemesterSettingsRoute,
