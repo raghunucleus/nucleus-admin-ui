@@ -1,5 +1,6 @@
-import { CloudOff, RefreshCw, Sparkles } from "lucide-react"
+import { CloudOff, RefreshCw } from "lucide-react"
 
+import { NucleusLogo } from "@/components/brand"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -45,16 +46,8 @@ export function ServerUnreachable({
         aria-live="assertive"
         className="relative w-full max-w-lg text-center"
       >
-        <div className="mb-8 inline-flex items-center gap-2.5">
-          <div className="grid size-9 place-items-center rounded-lg bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-sm ring-1 ring-primary/20">
-            <Sparkles className="size-4" />
-          </div>
-          <div className="flex flex-col text-left leading-tight">
-            <span className="text-sm font-semibold">Nucleus</span>
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Admin Console
-            </span>
-          </div>
+        <div className="mb-8 inline-flex items-center">
+          <NucleusLogo eyebrow="Admin Console" className="text-left" />
         </div>
 
         {/* Radar/sonar: concentric rings pulse outward around the icon,

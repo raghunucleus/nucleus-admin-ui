@@ -14,13 +14,13 @@ import {
   Search,
   ShieldCheck,
   SlidersHorizontal,
-  Sparkles,
   UserCheck,
   Users,
   X,
   type LucideIcon,
 } from "lucide-react"
 
+import { NucleusLogo, NucleusMark } from "@/components/brand"
 import { cn } from "@/lib/utils"
 import { useUiStore } from "@/store/ui-store"
 
@@ -209,17 +209,16 @@ export function Sidebar() {
         collapsed ? "w-16" : "w-64",
       )}
     >
-      <div className="flex h-14 items-center gap-2.5 border-b border-sidebar-border/70 px-3">
-        <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-sm ring-1 ring-primary/20">
-          <Sparkles className="size-4" />
-        </div>
-        {!collapsed && (
-          <div className="flex min-w-0 flex-col">
-            <span className="truncate text-sm font-semibold leading-tight">Nucleus</span>
-            <span className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
-              Admin Console
-            </span>
-          </div>
+      <div
+        className={cn(
+          "flex h-14 items-center border-b border-sidebar-border/70",
+          collapsed ? "justify-center px-0" : "px-3",
+        )}
+      >
+        {collapsed ? (
+          <NucleusMark size={36} />
+        ) : (
+          <NucleusLogo eyebrow="Admin Console" />
         )}
       </div>
 

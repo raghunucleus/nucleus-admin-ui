@@ -20,6 +20,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import { NucleusLogo, NucleusMark, NucleusWordmark } from "@/components/brand"
 import { cn } from "@/lib/utils"
 import type { ModuleDef, RolePlatform, ScreenDef } from "@/lib/rbac"
 
@@ -260,16 +261,15 @@ function WebPreviewChrome({
     <div className="flex h-[460px] bg-background">
       {/* Sidebar */}
       <aside className="flex w-44 shrink-0 flex-col border-r bg-card/40">
-        <div className="flex h-10 items-center gap-2 border-b px-3">
-          <div className="grid size-6 place-items-center rounded-md bg-gradient-to-br from-primary to-secondary text-primary-foreground">
-            <Briefcase className="size-3.5" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-[11px] font-semibold">Nucleus</div>
-            <div className="text-[8px] uppercase tracking-wider text-muted-foreground">
-              Staff portal
-            </div>
-          </div>
+        <div className="flex h-10 items-center border-b px-3">
+          {/* Mirrors the real employee sidebar brand (nucleus-ui). */}
+          <NucleusLogo
+            markSize={24}
+            wordmarkHeight={10}
+            eyebrow="Staff portal"
+            className="gap-1.5"
+            eyebrowClassName="text-[8px]"
+          />
         </div>
         <div className="border-b p-2">
           <div className="flex h-7 items-center gap-1.5 rounded-md border bg-background px-2 text-[10px] text-muted-foreground">
@@ -584,9 +584,9 @@ function MobilePreviewChrome({
           <span className="size-1 rounded-full bg-muted-foreground/40" />
         </div>
         {/* App header */}
-        <div className="flex h-9 shrink-0 items-center gap-2 border-b bg-card/40 px-3">
-          <Briefcase className="size-3.5 text-primary" />
-          <span className="text-[10px] font-semibold">Nucleus</span>
+        <div className="flex h-9 shrink-0 items-center gap-1.5 border-b bg-card/40 px-3">
+          <NucleusMark size={16} />
+          <NucleusWordmark height={9} />
           <span className="ml-auto text-[8px] text-muted-foreground">
             {activeGroup?.module.label ?? "Menu"}
           </span>
