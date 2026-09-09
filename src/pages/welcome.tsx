@@ -1,6 +1,7 @@
 import * as React from "react"
-import { CalendarDays, Clock, Hourglass, Sparkles, Sun } from "lucide-react"
+import { CalendarDays, Clock, Hourglass, Sun } from "lucide-react"
 
+import { NucleusMark } from "@/components/brand"
 import { useAuthStore } from "@/store/auth-store"
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
@@ -85,7 +86,7 @@ export function WelcomePage() {
     <div className="mx-auto max-w-3xl space-y-8 py-6">
       <div className="rounded-lg border bg-card p-8 text-card-foreground">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Sparkles className="size-4" /> Nucleus Admin
+          <NucleusMark size={16} /> Nucleus Admin
         </div>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight">
           {greeting}

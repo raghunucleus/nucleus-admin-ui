@@ -22,6 +22,18 @@
   --brand-secondary: #0ea5e9;   /* sky-500 — gradient partner for primary */
   --brand-accent: #38bdf8;      /* sky-400 — lighter highlight in same family */
 
+  /* Logo mark — the fixed colours of the Nucleus atom, independent of the UI
+     theme. Sampled from the artwork; consumed by components/brand/. The .dark
+     set lifts the deep purple so the mark stays legible on dark surfaces. */
+  --nucleus-p1: #3e0db5;        /* ring purple */
+  --nucleus-p2: #7a35d0;        /* ring violet (gradient end) */
+  --nucleus-o1: #ff9e08;        /* electron orange */
+  --nucleus-o2: #ff8a1c;        /* deep orange (gradient start) */
+  --nucleus-c1: #8b47d3;        /* core highlight */
+  --nucleus-c2: #4b249b;        /* core mid */
+  --nucleus-c3: #1a1560;        /* core shadow */
+  --nucleus-wordmark: #041d55;  /* "nucleus" navy */
+
   /* Radius — single source of truth */
   --radius: 0.5rem;
 
@@ -76,6 +88,16 @@
   --brand-primary: #60a5fa;     /* blue-400 */
   --brand-secondary: #38bdf8;   /* sky-400 */
   --brand-accent: #7dd3fc;      /* sky-300 */
+
+  /* Logo mark — lifted purples for dark surfaces; orange barely changes. */
+  --nucleus-p1: #7b58f5;
+  --nucleus-p2: #a98cff;
+  --nucleus-o1: #ffa826;
+  --nucleus-o2: #ff8f2e;
+  --nucleus-c1: #c9b0ff;
+  --nucleus-c2: #7b58f5;
+  --nucleus-c3: #3a2190;
+  --nucleus-wordmark: #f4f4f5;
 
   /* Surfaces — cards/popover lift off the page; both stay near-neutral so the
      brand-blue accents read against them. Muted/border/input color-mix from
@@ -182,6 +204,53 @@
     rgba(255, 255, 255, 0.12) 50%,
     rgba(255, 255, 255, 0) 100%
   );
+}
+
+/* Logo loader — the core holds still while each ring revolves together with its
+   own electrons as one rigid group: the outer ring plus all four electrons
+   clockwise, the inner ring bare and anticlockwise. Because a ring's gaps travel
+   with its electrons, none is ever stranded in a gap and the first frame is the
+   static logo exactly. Applied by <MarkSvg animated> (components/brand) through
+   the `nucleus-animated` class; the component tags the groups with data-part.
+   Each orbit group holds an invisible full-canvas rect, so `transform-box:
+   fill-box` centres the pivot on the nucleus (never `view-box`: Chromium
+   measures it from the viewport corner, not the viewBox origin, and the rings
+   fly off centre). Periods and directions mirror NUCLEUS_ORBIT_PERIODS_MS and
+   NUCLEUS_ORBIT_DIRECTIONS in the generated geometry module. */
+.nucleus-animated [data-part^="orbit"] {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.nucleus-animated [data-part="orbit-outer"] {
+  animation: nucleus-orbit 4s linear infinite;
+}
+.nucleus-animated [data-part="orbit-inner"] {
+  animation: nucleus-orbit 1.8s linear infinite reverse;
+}
+@keyframes nucleus-orbit {
+  to { transform: rotate(360deg); }
+}
+/* Reduced motion: <NucleusLoader> renders the static logo with this soft fade
+   instead of orbiting electrons. */
+.nucleus-breathe {
+  animation: nucleus-breathe 2.4s ease-in-out infinite;
+}
+@keyframes nucleus-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nucleus-animated [data-part^="orbit"] {
+    animation: none;
+  }
+}
+
+/* Wordmark default colour (brand navy, white in dark mode). Lives in the
+   components layer so any `text-*` utility on the element overrides it. */
+@layer components {
+  .nucleus-wordmark {
+    color: var(--nucleus-wordmark);
+  }
 }
 
 /* Slim, theme-aware scrollbar. Standard properties for Firefox + modern
