@@ -2,58 +2,209 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   redirect,
 } from "@tanstack/react-router"
 
-import { AcademicHolidaysPage } from "@/pages/academic-holidays"
-import { AdminUsersPage } from "@/pages/admin-users"
-import { ApprovalApproversPage } from "@/pages/approval-approvers"
-import { AppLayout } from "@/layouts/app-layout"
+import { RoutePending } from "@/components/route-pending"
 import { AuthLayout } from "@/layouts/auth-layout"
 import { LoginPage } from "@/pages/login"
-import { AdmissionYearsPage } from "@/pages/admission-years"
-import { DegreesPage } from "@/pages/degrees"
-import { DepartmentsPage } from "@/pages/departments"
-import { DesignationsPage } from "@/pages/designations"
-import { EmployeesPage } from "@/pages/employees"
-import { EmployeesBulkUploadPage } from "@/pages/employees-bulk-upload"
-import { ProgrammeConfigurationPage } from "@/pages/programme-configuration"
-import { ProgrammeAdmissionYearsPage } from "@/pages/programme-admission-years"
-import { ProgrammeSemestersPage } from "@/pages/programme-semesters"
-import { ProgrammesPage } from "@/pages/programmes"
-import { RegulationsPage } from "@/pages/regulations"
-import { RegulationMarkStructuresPage } from "@/pages/regulation-mark-structures"
-import { MarkStructureEditorPage } from "@/pages/mark-structure-editor"
-import { ProgrammeAttendanceGroupsPage } from "@/pages/programme-attendance-groups"
-import { SemesterFacultyPage } from "@/pages/semester-faculty"
-import { SemesterSettingsPage } from "@/pages/semester-settings"
-import { SemesterStudentAllocationPage } from "@/pages/semester-student-allocation"
-import { SemesterSubjectsPage } from "@/pages/semester-subjects"
-import { SlotEnrollmentsPage } from "@/pages/slot-enrollments"
-import { SemesterTimetablesPage } from "@/pages/semester-timetables"
-import { SemestersPage } from "@/pages/semesters"
-import { StudentsPage } from "@/pages/students"
-import { StudentsBulkUploadPage } from "@/pages/students-bulk-upload"
-import { GuardiansPage } from "@/pages/guardians"
-import { GuardiansBulkUploadPage } from "@/pages/guardians-bulk-upload"
-import { StudentDetailsPage } from "@/pages/student-details"
-import { AddressAttributesPage } from "@/pages/address-attributes/address-attributes"
-import { StudentAttributesPage } from "@/pages/student-attributes/student-attributes"
-import { SubjectsPage } from "@/pages/subjects"
-import { SubjectTypesPage } from "@/pages/subject-types"
-import { LeaveTypesPage } from "@/pages/leave-types"
-import { TimetableEditorPage } from "@/pages/timetable-editor"
-import { TimetableSchedulePage } from "@/pages/timetable-schedule"
-import { MigrationsPage } from "@/pages/migrations"
 import { NotFoundPage } from "@/pages/not-found"
-import { ProfilePage } from "@/pages/profile"
-import { AssignmentEditorPage } from "@/pages/role-management/assignment-editor"
-import { AssignmentsListPage } from "@/pages/role-management/assignments-list"
-import { RoleBuilderPage } from "@/pages/role-management/role-builder"
-import { RolesListPage } from "@/pages/role-management/roles-list"
 import { SetupTwoFactorPage } from "@/pages/setup-2fa"
-import { WelcomePage } from "@/pages/welcome"
 import { useAuthStore } from "@/store/auth-store"
+
+// The signed-in chrome (sidebar, header, its dropdown menu) is only reachable
+// once `beforeLoad` has let the admin through, so it loads with them rather
+// than with the login form — that keeps Radix's dropdown/dialog/floating-ui
+// and the sidebar's icon set out of the entry chunk.
+const AppLayout = lazyRouteComponent(
+  () => import("@/layouts/app-layout"),
+  "AppLayout",
+)
+
+// Every screen behind the auth guard is its own chunk, fetched on first
+// navigation (or on link hover — see `defaultPreload`). Only the auth layout,
+// the 404, and the pre-app screens (login, setup-2FA) are static, because they
+// render before any of this is reachable.
+//
+// Never `import { XPage } from "@/pages/..."` here — one static import drags
+// that page, and everything it pulls in, into the entry chunk that the login
+// screen downloads. Pages export named components, so each wrapper passes the
+// export name as the second argument. Type-only imports are fine: they are
+// erased, which is why the three pages that import their search-param type back
+// from this module create no runtime cycle.
+const AcademicHolidaysPage = lazyRouteComponent(
+  () => import("@/pages/academic-holidays"),
+  "AcademicHolidaysPage",
+)
+const AdminUsersPage = lazyRouteComponent(
+  () => import("@/pages/admin-users"),
+  "AdminUsersPage",
+)
+const ApprovalApproversPage = lazyRouteComponent(
+  () => import("@/pages/approval-approvers"),
+  "ApprovalApproversPage",
+)
+const AdmissionYearsPage = lazyRouteComponent(
+  () => import("@/pages/admission-years"),
+  "AdmissionYearsPage",
+)
+const DegreesPage = lazyRouteComponent(
+  () => import("@/pages/degrees"),
+  "DegreesPage",
+)
+const DepartmentsPage = lazyRouteComponent(
+  () => import("@/pages/departments"),
+  "DepartmentsPage",
+)
+const DesignationsPage = lazyRouteComponent(
+  () => import("@/pages/designations"),
+  "DesignationsPage",
+)
+const EmployeesPage = lazyRouteComponent(
+  () => import("@/pages/employees"),
+  "EmployeesPage",
+)
+const EmployeesBulkUploadPage = lazyRouteComponent(
+  () => import("@/pages/employees-bulk-upload"),
+  "EmployeesBulkUploadPage",
+)
+const ProgrammeConfigurationPage = lazyRouteComponent(
+  () => import("@/pages/programme-configuration"),
+  "ProgrammeConfigurationPage",
+)
+const ProgrammeAdmissionYearsPage = lazyRouteComponent(
+  () => import("@/pages/programme-admission-years"),
+  "ProgrammeAdmissionYearsPage",
+)
+const ProgrammeSemestersPage = lazyRouteComponent(
+  () => import("@/pages/programme-semesters"),
+  "ProgrammeSemestersPage",
+)
+const ProgrammesPage = lazyRouteComponent(
+  () => import("@/pages/programmes"),
+  "ProgrammesPage",
+)
+const RegulationsPage = lazyRouteComponent(
+  () => import("@/pages/regulations"),
+  "RegulationsPage",
+)
+const RegulationMarkStructuresPage = lazyRouteComponent(
+  () => import("@/pages/regulation-mark-structures"),
+  "RegulationMarkStructuresPage",
+)
+const MarkStructureEditorPage = lazyRouteComponent(
+  () => import("@/pages/mark-structure-editor"),
+  "MarkStructureEditorPage",
+)
+const ProgrammeAttendanceGroupsPage = lazyRouteComponent(
+  () => import("@/pages/programme-attendance-groups"),
+  "ProgrammeAttendanceGroupsPage",
+)
+const SemesterFacultyPage = lazyRouteComponent(
+  () => import("@/pages/semester-faculty"),
+  "SemesterFacultyPage",
+)
+const SemesterSettingsPage = lazyRouteComponent(
+  () => import("@/pages/semester-settings"),
+  "SemesterSettingsPage",
+)
+const SemesterStudentAllocationPage = lazyRouteComponent(
+  () => import("@/pages/semester-student-allocation"),
+  "SemesterStudentAllocationPage",
+)
+const SemesterSubjectsPage = lazyRouteComponent(
+  () => import("@/pages/semester-subjects"),
+  "SemesterSubjectsPage",
+)
+const SlotEnrollmentsPage = lazyRouteComponent(
+  () => import("@/pages/slot-enrollments"),
+  "SlotEnrollmentsPage",
+)
+const SemesterTimetablesPage = lazyRouteComponent(
+  () => import("@/pages/semester-timetables"),
+  "SemesterTimetablesPage",
+)
+const SemestersPage = lazyRouteComponent(
+  () => import("@/pages/semesters"),
+  "SemestersPage",
+)
+const StudentsPage = lazyRouteComponent(
+  () => import("@/pages/students"),
+  "StudentsPage",
+)
+const StudentsBulkUploadPage = lazyRouteComponent(
+  () => import("@/pages/students-bulk-upload"),
+  "StudentsBulkUploadPage",
+)
+const GuardiansPage = lazyRouteComponent(
+  () => import("@/pages/guardians"),
+  "GuardiansPage",
+)
+const GuardiansBulkUploadPage = lazyRouteComponent(
+  () => import("@/pages/guardians-bulk-upload"),
+  "GuardiansBulkUploadPage",
+)
+const StudentDetailsPage = lazyRouteComponent(
+  () => import("@/pages/student-details"),
+  "StudentDetailsPage",
+)
+const AddressAttributesPage = lazyRouteComponent(
+  () => import("@/pages/address-attributes/address-attributes"),
+  "AddressAttributesPage",
+)
+const StudentAttributesPage = lazyRouteComponent(
+  () => import("@/pages/student-attributes/student-attributes"),
+  "StudentAttributesPage",
+)
+const SubjectsPage = lazyRouteComponent(
+  () => import("@/pages/subjects"),
+  "SubjectsPage",
+)
+const SubjectTypesPage = lazyRouteComponent(
+  () => import("@/pages/subject-types"),
+  "SubjectTypesPage",
+)
+const LeaveTypesPage = lazyRouteComponent(
+  () => import("@/pages/leave-types"),
+  "LeaveTypesPage",
+)
+const TimetableEditorPage = lazyRouteComponent(
+  () => import("@/pages/timetable-editor"),
+  "TimetableEditorPage",
+)
+const TimetableSchedulePage = lazyRouteComponent(
+  () => import("@/pages/timetable-schedule"),
+  "TimetableSchedulePage",
+)
+const MigrationsPage = lazyRouteComponent(
+  () => import("@/pages/migrations"),
+  "MigrationsPage",
+)
+const ProfilePage = lazyRouteComponent(
+  () => import("@/pages/profile"),
+  "ProfilePage",
+)
+const AssignmentEditorPage = lazyRouteComponent(
+  () => import("@/pages/role-management/assignment-editor"),
+  "AssignmentEditorPage",
+)
+const AssignmentsListPage = lazyRouteComponent(
+  () => import("@/pages/role-management/assignments-list"),
+  "AssignmentsListPage",
+)
+const RoleBuilderPage = lazyRouteComponent(
+  () => import("@/pages/role-management/role-builder"),
+  "RoleBuilderPage",
+)
+const RolesListPage = lazyRouteComponent(
+  () => import("@/pages/role-management/roles-list"),
+  "RolesListPage",
+)
+const WelcomePage = lazyRouteComponent(
+  () => import("@/pages/welcome"),
+  "WelcomePage",
+)
 
 const rootRoute = createRootRoute({
   notFoundComponent: NotFoundPage,
@@ -530,7 +681,14 @@ const routeTree = rootRoute.addChildren([
   ]),
 ])
 
-export const router = createRouter({ routeTree })
+export const router = createRouter({
+  routeTree,
+  // Suspense fallback while a page chunk downloads. The router gives each match
+  // its own boundary, so this renders inside AppLayout's <Outlet> and the
+  // sidebar never unmounts. Hovering or focusing a <Link> prefetches its chunk.
+  defaultPendingComponent: RoutePending,
+  defaultPreload: "intent",
+})
 
 declare module "@tanstack/react-router" {
   interface Register {

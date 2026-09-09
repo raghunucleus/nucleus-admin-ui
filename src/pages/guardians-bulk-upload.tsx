@@ -1,6 +1,6 @@
 import * as React from "react"
 import { toast } from "sonner"
-import * as XLSX from "xlsx"
+import { loadXlsx } from "@/lib/xlsx"
 import {
   AlertCircle,
   CheckCircle2,
@@ -163,7 +163,8 @@ export function GuardiansBulkUploadPage() {
     [rows],
   )
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
+    const XLSX = await loadXlsx()
     const ws = XLSX.utils.aoa_to_sheet([COLUMNS.map((c) => c.label)])
     ws["!cols"] = COLUMNS.map((c) => ({
       wch: Math.max(c.label.length + 2, 14),
@@ -182,7 +183,7 @@ export function GuardiansBulkUploadPage() {
     setWarnings([])
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
     try {
-      const buf = await readFileBytes(file)
+      const [XLSX, buf] = await Promise.all([loadXlsx(), readFileBytes(file)])
       const wb = XLSX.read(buf, { type: "array" })
       const sheetName = wb.SheetNames[0]
       if (!sheetName) {

@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Link, useParams, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
-import * as XLSX from "xlsx"
+import { loadXlsx } from "@/lib/xlsx"
 import {
   AlertTriangle,
   ArrowLeft,
@@ -532,7 +532,7 @@ export function SlotEnrollmentsPage() {
     setParsing(true)
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
     try {
-      const buf = await file.arrayBuffer()
+      const [XLSX, buf] = await Promise.all([loadXlsx(), file.arrayBuffer()])
       const wb = XLSX.read(buf, { type: "array" })
       const sheetName = wb.SheetNames[0]
       if (!sheetName) {

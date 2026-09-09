@@ -168,19 +168,21 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, './src'),
       },
     },
+    // Code splitting is driven by `import()` boundaries in src — every route is
+    // a `lazyRouteComponent`, and xlsx/exceljs load inside the handlers that
+    // use them — rather than by manual chunk groups. Naming a chunk does not
+    // make it lazy: the previous `manualChunks` rule gave xlsx its own file but
+    // the entry still imported it statically, so `index.html` modulepreloaded
+    // all 411 KB of it on the login screen.
     build: {
       chunkSizeWarningLimit: 1000,
-      rollupOptions: {
-        output: {
-          // Both are used only by the bulk-upload and enrollment screens, which
-          // already import them dynamically — keep them out of the entry chunk.
-          manualChunks: (id: string) => {
-            if (id.includes('node_modules/exceljs')) return 'exceljs'
-            if (id.includes('node_modules/xlsx')) return 'xlsx'
-            return undefined
-          },
-        },
-      },
+    },
+    optimizeDeps: {
+      // Only reached through `import()`, so the dev pre-bundler can miss them at
+      // startup, discover them mid-session and answer the first request with a
+      // 504 "Outdated Optimize Dep" — which surfaces in the browser as "Failed
+      // to fetch dynamically imported module". Pre-bundle them up front.
+      include: ['xlsx', 'exceljs'],
     },
     server: {
       port: 5001,
