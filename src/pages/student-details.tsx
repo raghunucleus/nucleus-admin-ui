@@ -28,6 +28,10 @@ import {
 
 import { Detail, StatusBadge } from "@/components/detail-item"
 import { LoginSecurityCard } from "@/components/login-security-card"
+import {
+  SignedInDevicesCard,
+  type SignedInDevicesResult,
+} from "@/components/signed-in-devices-card"
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -89,6 +93,7 @@ import {
   type GuardianRelationship,
   type StudentGuardianRow,
 } from "@/lib/guardians"
+import { listStudentSessions, revokeStudentSession } from "@/lib/sessions"
 
 const MOBILE_REGEX = /^[6-9]\d{9}$/
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -155,6 +160,18 @@ export function StudentDetailsPage() {
       /* keep showing the last good copy */
     }
   }, [id])
+
+  // Stable per student id — the devices card re-fetches when these change.
+  const loadSessions = React.useCallback(
+    async (): Promise<SignedInDevicesResult> => ({
+      sessions: await listStudentSessions(id),
+    }),
+    [id],
+  )
+  const revokeSession = React.useCallback(
+    (sessionId: string) => revokeStudentSession(id, sessionId),
+    [id],
+  )
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 py-2">
@@ -232,17 +249,25 @@ export function StudentDetailsPage() {
 
           {section === "overview" && <OverviewSection student={student} />}
           {section === "login" && (
-            <LoginSecurityCard
-              subject={{
-                type: "student",
-                id: student.id,
-                displayName: student.display_name,
-                code: student.student_id,
-                email: student.email,
-              }}
-              setPassword={setStudentLoginPassword}
-              resetPassword={resetStudentLoginPassword}
-            />
+            <div className="space-y-4">
+              <LoginSecurityCard
+                subject={{
+                  type: "student",
+                  id: student.id,
+                  displayName: student.display_name,
+                  code: student.student_id,
+                  email: student.email,
+                }}
+                setPassword={setStudentLoginPassword}
+                resetPassword={resetStudentLoginPassword}
+              />
+              <SignedInDevicesCard
+                load={loadSessions}
+                revoke={revokeSession}
+                noun="student"
+                subjectName={student.display_name}
+              />
+            </div>
           )}
           {section === "parent" && (
             <ParentDetailsSection student={student} onSaved={refresh} />

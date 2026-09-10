@@ -96,6 +96,11 @@ import {
   type Gender,
   type ListEmployeesParams,
 } from "@/lib/employees"
+import {
+  DEFAULT_DEVICE_LIMIT,
+  DEVICE_LIMIT_MAX,
+  DEVICE_LIMIT_MIN,
+} from "@/lib/sessions"
 
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -696,7 +701,7 @@ export function EmployeesPage() {
           confirmTarget ? (
             <>
               {confirmTarget.is_active
-                ? "Deactivated employees won't be selectable in dependent records."
+                ? "Deactivated employees won't be selectable in dependent records, and they're signed out of every device."
                 : "Reactivated employees become available again."}
               <div className="mt-2 font-medium text-foreground">
                 {confirmTarget.emp_display_name}{" "}
@@ -1685,6 +1690,19 @@ const employeeSchema = z.object({
       (v) => v === "" || /^[A-Z0-9._-]+$/.test(v),
       "Use letters, numbers, dot, underscore, or dash",
     ),
+  // Kept as text so garbage is rejected rather than read as blank (a
+  // type="number" input reports "" for unparseable input). Blank = default.
+  device_limit: z
+    .string()
+    .trim()
+    .refine(
+      (v) =>
+        v === "" ||
+        (/^\d+$/.test(v) &&
+          Number(v) >= DEVICE_LIMIT_MIN &&
+          Number(v) <= DEVICE_LIMIT_MAX),
+      `Whole number from ${DEVICE_LIMIT_MIN} to ${DEVICE_LIMIT_MAX}, or blank for the default`,
+    ),
 })
 
 type EmployeeFormValues = z.infer<typeof employeeSchema>
@@ -1713,6 +1731,10 @@ function EmployeeForm(
           country_code: props.employee.country_code,
           email: props.employee.email,
           rm_emp_code: props.employee.rm_emp_code ?? "",
+          device_limit:
+            props.employee.device_limit != null
+              ? String(props.employee.device_limit)
+              : "",
         }
       : {
           emp_code: "",
@@ -1725,6 +1747,7 @@ function EmployeeForm(
           country_code: "91",
           email: "",
           rm_emp_code: "",
+          device_limit: "",
         }
 
   const {
@@ -1772,6 +1795,9 @@ function EmployeeForm(
       country_code: values.country_code,
       email: values.email,
       rm_emp_code: values.rm_emp_code === "" ? null : values.rm_emp_code,
+      // null resets to the default limit; the schema already bounded it.
+      device_limit:
+        values.device_limit === "" ? null : Number(values.device_limit),
     }
 
     try {
@@ -1989,6 +2015,21 @@ function EmployeeForm(
                   </Button>
                 </div>
               )}
+            />
+          </Field>
+
+          <Field
+            label="Device limit"
+            error={errors.device_limit?.message}
+            htmlFor="e-device-limit"
+            hint={`How many devices they can be signed in on at once. Leave blank for the default (${DEFAULT_DEVICE_LIMIT}). Lowering it doesn't sign anyone out — it applies at their next sign-in.`}
+          >
+            <Input
+              id="e-device-limit"
+              autoComplete="off"
+              inputMode="numeric"
+              className="font-mono"
+              {...register("device_limit")}
             />
           </Field>
         </div>

@@ -740,7 +740,7 @@ export function StudentsPage() {
           confirmTarget ? (
             <>
               {confirmTarget.is_active
-                ? "Deactivated students won't be selectable in dependent records."
+                ? "Deactivated students won't be selectable in dependent records, and they're signed out of every device."
                 : "Reactivated students become available again."}
               <div className="mt-2 font-medium text-foreground">
                 {confirmTarget.display_name}{" "}

@@ -26,6 +26,8 @@ export type Employee = {
   country_code: string
   email: string
   rm_emp_code: string | null
+  /** Max simultaneous signed-in devices; null = the default (2). */
+  device_limit: number | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -42,6 +44,8 @@ export type CreateEmployeeInput = {
   country_code: string
   email: string
   rm_emp_code: string | null
+  /** Integer 1–20, or null for the default (2). */
+  device_limit?: number | null
 }
 
 export type UpdateEmployeeInput = {
@@ -55,6 +59,8 @@ export type UpdateEmployeeInput = {
   country_code?: string
   email?: string
   rm_emp_code?: string | null
+  /** Integer 1–20; null resets to the default (2); omitted = unchanged. */
+  device_limit?: number | null
 }
 
 export type EmployeesSortField =

@@ -14,6 +14,10 @@ import {
 
 import { Detail, StatusBadge } from "@/components/detail-item"
 import { LoginSecurityCard } from "@/components/login-security-card"
+import {
+  SignedInDevicesCard,
+  type SignedInDevicesResult,
+} from "@/components/signed-in-devices-card"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -26,6 +30,11 @@ import {
   type Employee,
 } from "@/lib/employees"
 import { listAssignments, type AssignmentDetail } from "@/lib/rbac"
+import {
+  DEFAULT_DEVICE_LIMIT,
+  listEmployeeSessions,
+  revokeEmployeeSession,
+} from "@/lib/sessions"
 
 // Sections of the employee detail screen — same shell as the student one.
 const SECTIONS = [
@@ -76,6 +85,19 @@ export function EmployeeDetailsPage() {
     setFailed(false)
     setReloadKey((k) => k + 1)
   }
+
+  // Stable per employee id — the devices card re-fetches when these change.
+  const loadSessions = React.useCallback(async (): Promise<SignedInDevicesResult> => {
+    const view = await listEmployeeSessions(id)
+    return {
+      sessions: view.sessions,
+      limit: { value: view.limit, isDefault: view.is_default_limit },
+    }
+  }, [id])
+  const revokeSession = React.useCallback(
+    (sessionId: string) => revokeEmployeeSession(id, sessionId),
+    [id],
+  )
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 py-2">
@@ -153,17 +175,25 @@ export function EmployeeDetailsPage() {
 
           {section === "overview" && <OverviewSection employee={employee} />}
           {section === "login" && (
-            <LoginSecurityCard
-              subject={{
-                type: "employee",
-                id: employee.id,
-                displayName: employee.emp_display_name,
-                code: employee.emp_code,
-                email: employee.email,
-              }}
-              setPassword={setEmployeeLoginPassword}
-              resetPassword={resetEmployeeLoginPassword}
-            />
+            <div className="space-y-4">
+              <LoginSecurityCard
+                subject={{
+                  type: "employee",
+                  id: employee.id,
+                  displayName: employee.emp_display_name,
+                  code: employee.emp_code,
+                  email: employee.email,
+                }}
+                setPassword={setEmployeeLoginPassword}
+                resetPassword={resetEmployeeLoginPassword}
+              />
+              <SignedInDevicesCard
+                load={loadSessions}
+                revoke={revokeSession}
+                noun="employee"
+                subjectName={employee.emp_display_name}
+              />
+            </div>
           )}
           {section === "roles" && <RolesSection employee={employee} />}
         </>
@@ -204,6 +234,14 @@ function OverviewSection({ employee }: { employee: Employee }) {
         />
         <Detail label="Email" value={employee.email} />
         <Detail label="Reports to" value={employee.rm_emp_code ?? "—"} mono />
+        <Detail
+          label="Device limit"
+          value={
+            employee.device_limit != null
+              ? String(employee.device_limit)
+              : `${DEFAULT_DEVICE_LIMIT} (default)`
+          }
+        />
         <Detail label="Created on" value={formatDate(employee.created_at)} />
       </dl>
     </div>
