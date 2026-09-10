@@ -150,6 +150,35 @@ export async function deactivateEmployee(id: number): Promise<Employee> {
   return api<Employee>(`/admin/employees/${id}/deactivate`, { method: "POST" })
 }
 
+/**
+ * Provision (or reset) the employee's login. The server generates a random
+ * temporary password, emails it to the employee's registered address, forces a
+ * change on first sign-in, and revokes any active sessions. Returns the
+ * address the email was sent to.
+ */
+export async function resetEmployeeLoginPassword(
+  id: number,
+): Promise<{ email: string }> {
+  return api<{ email: string }>(`/admin/employees/${id}/reset-password`, {
+    method: "POST",
+  })
+}
+
+/**
+ * Directly set the employee's login password to an admin-chosen value. No
+ * email is sent; the employee is still forced to change it on first sign-in,
+ * and any active sessions are revoked.
+ */
+export async function setEmployeeLoginPassword(
+  id: number,
+  password: string,
+): Promise<void> {
+  return api<void>(`/admin/employees/${id}/set-password`, {
+    method: "POST",
+    body: { password },
+  })
+}
+
 export type BulkCreateEmployeeRow = {
   emp_code: string
   emp_display_name: string

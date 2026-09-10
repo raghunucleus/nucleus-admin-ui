@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Link } from "@tanstack/react-router"
+import { useNavigate } from "@tanstack/react-router"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -22,8 +22,10 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Eye,
   Filter,
   Mail,
+  MoreVertical,
   Pencil,
   ShieldCheck,
   Plus,
@@ -128,6 +130,7 @@ function formatDob(dob: string | null): string {
 }
 
 export function EmployeesPage() {
+  const navigate = useNavigate()
   const [employees, setEmployees] = React.useState<Employee[]>([])
   const [accountStatus, setAccountStatus] = React.useState<
     Record<number, AccountStatusView>
@@ -652,6 +655,18 @@ export function EmployeesPage() {
             loadFailed={loadFailed}
             onRetry={() => void load()}
             onEdit={(e) => setMode({ kind: "edit", employee: e })}
+            onViewDetails={(e) =>
+              navigate({
+                to: "/employees/$employeeId",
+                params: { employeeId: String(e.id) },
+              })
+            }
+            onManageRoles={(e) =>
+              navigate({
+                to: "/role-management/assignments",
+                search: { employee_id: e.id, role_id: undefined },
+              })
+            }
             onToggleActive={requestToggleActive}
           />
         </div>
@@ -923,6 +938,8 @@ function EmployeesTable({
   loadFailed,
   onRetry,
   onEdit,
+  onViewDetails,
+  onManageRoles,
   onToggleActive,
 }: {
   employees: Employee[]
@@ -953,6 +970,8 @@ function EmployeesTable({
   loadFailed: boolean
   onRetry: () => void
   onEdit: (e: Employee) => void
+  onViewDetails: (e: Employee) => void
+  onManageRoles: (e: Employee) => void
   onToggleActive: (e: Employee) => void
 }) {
   const pageIds = React.useMemo(() => employees.map((e) => e.id), [employees])
@@ -1125,21 +1144,6 @@ function EmployeesTable({
           const toggleLabel = e.is_active ? "Deactivate" : "Activate"
           return (
             <div className="flex items-center justify-end gap-0.5">
-              <Link
-                to="/role-management/assignments"
-                search={{ employee_id: e.id, role_id: undefined }}
-              >
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 text-muted-foreground hover:text-foreground"
-                  disabled={formOpen || isBusy}
-                  title="Roles"
-                  aria-label="Manage roles"
-                >
-                  <ShieldCheck />
-                </Button>
-              </Link>
               <Button
                 variant="ghost"
                 size="icon"
@@ -1151,22 +1155,41 @@ function EmployeesTable({
               >
                 <Pencil />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "size-8",
-                  e.is_active
-                    ? "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                    : "text-muted-foreground hover:bg-success/10 hover:text-success",
-                )}
-                onClick={() => onToggleActive(e)}
-                disabled={isBusy || formOpen}
-                title={toggleLabel}
-                aria-label={toggleLabel}
-              >
-                {e.is_active ? <PowerOff /> : <Power />}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:text-foreground"
+                    disabled={formOpen || isBusy}
+                    title="More actions"
+                    aria-label="More actions"
+                  >
+                    <MoreVertical />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onSelect={() => onViewDetails(e)}>
+                    <Eye />
+                    View details
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onManageRoles(e)}>
+                    <ShieldCheck />
+                    Roles
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => onToggleActive(e)}
+                    className={cn(
+                      e.is_active
+                        ? "text-destructive data-[highlighted]:text-destructive"
+                        : "text-success data-[highlighted]:text-success",
+                    )}
+                  >
+                    {e.is_active ? <PowerOff /> : <Power />}
+                    {toggleLabel}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )
         },
@@ -1176,6 +1199,8 @@ function EmployeesTable({
       busyId,
       formOpen,
       onEdit,
+      onViewDetails,
+      onManageRoles,
       onToggleActive,
       accountStatus,
       selectedIds,
