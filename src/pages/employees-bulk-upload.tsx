@@ -1,6 +1,6 @@
 import * as React from "react"
 import { toast } from "sonner"
-import * as XLSX from "xlsx"
+import { loadXlsx } from "@/lib/xlsx"
 import {
   AlertCircle,
   CheckCircle2,
@@ -261,7 +261,7 @@ export function EmployeesBulkUploadPage() {
 
   const handleFile = async (file: File) => {
     try {
-      const buf = await readFileBytes(file)
+      const [XLSX, buf] = await Promise.all([loadXlsx(), readFileBytes(file)])
       const wb = XLSX.read(buf, { type: "array" })
       const sheetName = wb.SheetNames[0]
       if (!sheetName) {

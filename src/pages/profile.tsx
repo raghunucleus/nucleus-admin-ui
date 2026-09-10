@@ -60,7 +60,7 @@ export function ProfilePage() {
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <User className="size-4" /> Account
         </div>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Profile</h1>
+        <h1 className="mt-2 text-xl font-semibold tracking-tight">Profile</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Manage your admin account and security preferences.
         </p>

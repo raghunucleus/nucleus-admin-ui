@@ -1,9 +1,25 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* Inter, self-hosted. Never load a font from a CDN — the CSP is `font-src
+   'self' data:`, so a Google Fonts link would be blocked in production and
+   silently fall back to the system font. */
+@import "@fontsource-variable/inter";
 
 /* Register the `dark:` variant for Tailwind v4 (class-based, keyed off a
  * `.dark` ancestor). Without this every `dark:` utility is a no-op. */
 @custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+ * TYPE — one family across the whole product (see nucleus-ui's CLAUDE.md,
+ * "Typography, density & spacing standards"). Previously this app ran on the
+ * system stack, which on Windows is Segoe UI: a larger x-height than Inter at
+ * the same px, and a different voice from the portals and the mobile apps.
+ * ------------------------------------------------------------------------- */
+@theme {
+  --font-sans:
+    'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
 
 /* ---------------------------------------------------------------------------
  * Theme is defined in a single place. To rebrand the whole app, change the
@@ -302,27 +318,24 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family:
-      ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-      sans-serif;
+    font-family: var(--font-sans);
+    font-synthesis-weight: none;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
-  /* Density tuned for 720p; bumps slightly on 1080p+. */
+  /* ---------------------------------------------------------------------------
+     Density via root font-size — ONE value at every width.
+
+     This used to step up (15px ≥1600, 16px ≥1920), which rendered the console
+     14% larger on a 1080p monitor than on a 1366 laptop and read as "zoomed in".
+     A bigger screen should show more content, not bigger content. Do not
+     re-introduce per-breakpoint root sizes; Tailwind breakpoints are in px and
+     do not move with this, so a step here only rescales content inside a track.
+     ------------------------------------------------------------------------- */
   html {
     font-size: 14px;
-  }
-  @media (min-width: 1600px) {
-    html {
-      font-size: 15px;
-    }
-  }
-  @media (min-width: 1920px) {
-    html {
-      font-size: 16px;
-    }
   }
 
   /* ---------------------------------------------------------------------------
@@ -335,14 +348,17 @@
 
      A `max-w-*` block already stretches to fill its parent up to the cap, so
      raising the wide-tier caps below = "fill on laptops, gutter only on large
-     monitors" (the rem density knob above scales the cap up on big screens
-     automatically). This lifts every max-w-6xl / max-w-7xl page at once with no
-     page edits. Form tiers (3xl/4xl/5xl) and dialog sizes (sm/md/lg/xl) are
+     monitors". This lifts every max-w-6xl / max-w-7xl page at once with no page
+     edits. Form tiers (3xl/4xl/5xl) and dialog sizes (sm/md/lg/xl) are
      untouched, so forms stay readable and modals don't change.
+
+     These are in REM, so they moved when the root font-size stopped stepping up
+     (above). Scaled by the same 16/14 so a wide table is exactly as wide in
+     pixels on a 1080p monitor as it used to be — denser content, same page.
      ------------------------------------------------------------------------- */
   :root {
-    --container-6xl: 80rem; /* was 72rem */
-    --container-7xl: 90rem; /* was 80rem */
+    --container-6xl: 90rem; /* 1260px — was 80rem at a 16px root */
+    --container-7xl: 102rem; /* 1428px — was 90rem at a 16px root */
   }
 }
 

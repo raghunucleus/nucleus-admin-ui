@@ -129,7 +129,7 @@ export function AppLayout() {
             </DropdownMenu>
           </div>
         </header>
-        <main className="flex-1 overflow-auto px-6 py-8">
+        <main className="flex-1 overflow-auto px-6 py-6">
           {/* Keyed on the reconnect nonce: on recovery the active page remounts
               and its data-loading effects re-run, clearing stale empty states. */}
           <Outlet key={reconnectNonce} />
