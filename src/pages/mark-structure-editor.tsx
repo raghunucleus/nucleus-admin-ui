@@ -946,15 +946,6 @@ function RuleEditor({
                         })
                       }
                       className="h-8 w-24 text-xs"
-                      placeholder={
-                        rule.kind === "rank_weighted"
-                          ? i === 0
-                            ? "best"
-                            : i === 1
-                              ? "2nd best"
-                              : `${i + 1}th best`
-                          : ""
-                      }
                     />
                     {errByPath.get(`${basePath}.inputs.${i}.weight`) && (
                       <p className="mt-0.5 text-xs text-destructive">

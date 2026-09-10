@@ -1041,7 +1041,6 @@ function CountryForm(
           <Input
             id="co-dial"
             autoComplete="off"
-            placeholder="+91"
             {...register("dial_code")}
           />
         </Field>

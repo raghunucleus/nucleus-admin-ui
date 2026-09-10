@@ -302,7 +302,6 @@ function ChallengeStep({
           inputMode="text"
           autoComplete="one-time-code"
           aria-invalid={!!errors.code}
-          placeholder="XXXXXX"
           {...register("code")}
         />
         {errors.code && <p className="text-xs text-destructive">{errors.code.message}</p>}

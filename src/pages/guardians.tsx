@@ -578,7 +578,6 @@ function GuardianFormSheet({
               <Input
                 value={mobile}
                 onChange={(e) => setMobile(e.target.value)}
-                placeholder="9876543210"
                 inputMode="numeric"
               />
             </Field>
@@ -587,7 +586,6 @@ function GuardianFormSheet({
               <Input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="parent@example.com"
               />
             </Field>
           </SheetBody>

@@ -1552,7 +1552,6 @@ function MobileInput({
         type="tel"
         inputMode="numeric"
         autoComplete="tel-national"
-        placeholder="9876543210"
         maxLength={10}
         aria-invalid={invalid}
         className="w-full rounded-r-md bg-transparent px-3 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"

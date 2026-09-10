@@ -222,7 +222,6 @@ function ScanAndVerify({
           inputMode="numeric"
           autoComplete="one-time-code"
           maxLength={6}
-          placeholder="123456"
           aria-invalid={!!errors.code}
           {...register("code")}
         />

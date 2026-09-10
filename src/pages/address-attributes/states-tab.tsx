@@ -1141,7 +1141,6 @@ function StateForm(
               id="st-iso"
               autoComplete="off"
               className="uppercase"
-              placeholder="IN-AP"
               {...register("iso_code", {
                 onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
                   const upper = e.target.value.toUpperCase()

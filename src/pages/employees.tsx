@@ -1912,7 +1912,6 @@ function EmployeeForm(
                 <Input
                   aria-label="Country code"
                   className="font-mono"
-                  placeholder="91"
                   {...register("country_code")}
                 />
               </div>

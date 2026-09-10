@@ -560,7 +560,6 @@ function SetPasswordPanel({ student }: { student: Student }) {
                 setPassword(e.target.value)
                 if (error) setError(null)
               }}
-              placeholder="New password"
               autoComplete="new-password"
               className="pr-10"
               aria-invalid={!!error}
@@ -1439,7 +1438,6 @@ function ResumeCard({ student, onSaved }: SectionProps) {
                     setExternalDraft(e.target.value)
                     if (externalError) setExternalError(null)
                   }}
-                  placeholder="https://example.com/resume"
                   maxLength={RESUME_EXTERNAL_URL_MAX}
                   aria-invalid={!!externalError}
                   className="sm:flex-1"
@@ -2049,7 +2047,6 @@ function AddressForm({
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             rows={3}
-            placeholder="House / street / village…"
             invalid={!!errors.home_address}
           />
         </Field>
@@ -2365,9 +2362,6 @@ function EntranceGapForm({
                 rows={2}
                 className="min-h-9"
                 disabled={gapIsZero}
-                placeholder={
-                  gapIsZero ? "No gap years" : "Why the student took a gap…"
-                }
                 invalid={!!errors.reason_of_gap}
               />
             </Field>

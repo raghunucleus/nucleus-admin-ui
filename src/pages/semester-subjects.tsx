@@ -773,13 +773,6 @@ function SubjectEntryForm({
                 autoComplete="off"
                 value={placeholder}
                 onChange={(e) => setPlaceholder(e.target.value)}
-                placeholder={
-                  kind === "honors"
-                    ? "e.g. Honors 1"
-                    : kind === "minors"
-                      ? "e.g. Minors 1"
-                      : "e.g. Open Elective 1"
-                }
               />
               <p className="text-xs text-muted-foreground">
                 Label shown to students when they pick what fills this slot.

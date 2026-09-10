@@ -508,7 +508,6 @@ function MarkInput({
         onChange={(e) => onChange(e.target.value)}
         inputMode="decimal"
         className="h-9 w-20 border-primary/40 text-right text-sm font-medium tabular-nums focus-visible:border-primary"
-        placeholder={`0–${max}`}
         aria-label={label}
       />
       <span className="text-xs text-muted-foreground tabular-nums">

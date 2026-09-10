@@ -1320,7 +1320,6 @@ function IndustryCertificationForm(
               type="url"
               inputMode="url"
               autoComplete="off"
-              placeholder="https://…"
               {...register("website")}
             />
           </Field>
