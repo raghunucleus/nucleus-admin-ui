@@ -53,6 +53,10 @@ const DegreesPage = lazyRouteComponent(
   () => import("@/pages/degrees"),
   "DegreesPage",
 )
+const DeploymentPage = lazyRouteComponent(
+  () => import("@/pages/deployment"),
+  "DeploymentPage",
+)
 const DepartmentsPage = lazyRouteComponent(
   () => import("@/pages/departments"),
   "DepartmentsPage",
@@ -631,6 +635,14 @@ const profileRoute = createRoute({
   },
 })
 
+// Reached by URL only — deliberately absent from the sidebar's `nav` array,
+// like /profile. Shows the hand-maintained deploy stamp and nothing else.
+const deploymentRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/deployment",
+  component: DeploymentPage,
+})
+
 const routeTree = rootRoute.addChildren([
   authLayoutRoute.addChildren([loginRoute]),
   setup2faRoute,
@@ -678,6 +690,7 @@ const routeTree = rootRoute.addChildren([
     roleManagementAssignmentsRoute,
     roleManagementAssignmentEditorRoute,
     profileRoute,
+    deploymentRoute,
   ]),
 ])
 
