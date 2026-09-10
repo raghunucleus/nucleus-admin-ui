@@ -36,6 +36,16 @@ Every screen that waits on an API request must render shimmer placeholders (the 
 
 That rule is about waiting for **data**. Waiting for **code** is the router's job: [`RoutePending`](src/components/route-pending.tsx) is the shared fallback while a page chunk downloads, and it is the one place a bare loader is correct.
 
+## Typography & density
+
+Mirrors the portals — see "Typography, density & spacing standards" in `nucleus-ui/CLAUDE.md` for the full rules and the reasoning. In short:
+
+- The family is **Inter Variable**, self-hosted via `@fontsource-variable/inter` and declared once as `--font-sans` in [src/index.css](src/index.css). No `font-family` in components, no CDN fonts (the CSP is `font-src 'self'`).
+- Root font-size is a **flat 14px at every width**. It used to step up to 15px ≥1600 and 16px ≥1920, which made the console 14% larger on a 1080p monitor than on a laptop and read as zoomed in. **Do not re-introduce per-breakpoint root sizes** — a wide page that needs room should raise its `max-w-*` tier instead.
+- Scale: body and table cells `text-sm` · meta and labels `text-xs` · section title `text-base font-semibold` · page title `text-xl font-semibold tracking-tight` (`text-lg` is also fine and is what most list pages use — pick one per page and stay with it) · flow, empty-state and hero headings `text-2xl font-semibold tracking-tight`. Nothing larger inside the console. Numbers are `font-semibold tabular-nums`, never `font-bold`.
+- Controls are `h-9` (`Input`, `Button size="default"`). Radius: `rounded-md` controls, `rounded-lg` cards in this app, `rounded-xl` dialogs.
+- Layout: header `h-14`, page padding `px-6 py-6`, `space-y-6` between sections and `space-y-4` within one.
+
 ## Native scrollbars & `color-scheme`
 
 Native browser UI (scrollbars, native `<select>` popups, form controls) is painted from the CSS `color-scheme` property. This app is light-only, so it is pinned in [src/index.css](src/index.css) as `color-scheme: light` in `:root`.

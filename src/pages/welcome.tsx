@@ -88,7 +88,7 @@ export function WelcomePage() {
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <NucleusMark size={16} /> Nucleus Admin
         </div>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight">
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">
           {greeting}
           {user?.username ? <>, <span className="text-primary">{user.username}</span></> : null}.
         </h1>

@@ -65,7 +65,7 @@ export function NotFoundPage() {
         <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           Error 404 · Page not found
         </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">
           You've wandered off the map
         </h1>
         <p className="mx-auto mt-3 max-w-sm text-sm text-muted-foreground">
