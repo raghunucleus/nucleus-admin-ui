@@ -296,7 +296,7 @@ function ProfileDetails() {
             <Label htmlFor="mobile_local">Mobile number</Label>
             <div
               className={cn(
-                "flex h-9 w-full items-stretch rounded-md border border-input bg-background text-sm shadow-xs transition-[color,box-shadow] focus-within:ring-2 focus-within:ring-ring/60 focus-within:ring-offset-2 focus-within:ring-offset-background",
+                "flex h-9 w-full items-stretch rounded-md border border-input bg-background text-sm shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30",
                 errors.mobile_local && "border-destructive",
               )}
             >

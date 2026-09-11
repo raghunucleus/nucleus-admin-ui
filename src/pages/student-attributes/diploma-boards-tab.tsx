@@ -534,7 +534,7 @@ function FilterPanel({
                   : (e.target.value as DiplomaBoardStatusFilter),
               )
             }
-            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30"
           >
             <option value="">All statuses</option>
             <option value="active">Active</option>
@@ -985,7 +985,7 @@ function DiplomaBoardsTable({
               id="rows-per-page"
               value={pageSize}
               onChange={(e) => table.setPageSize(Number(e.target.value))}
-              className="h-8 rounded-md border border-input bg-background px-2 pr-7 text-xs font-medium shadow-xs outline-none transition focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="h-8 rounded-md border border-input bg-background px-2 pr-7 text-xs font-medium shadow-xs outline-none transition focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30"
             >
               {[10, 25, 50, 100].map((size) => (
                 <option key={size} value={size}>
@@ -1269,7 +1269,7 @@ function DiplomaBoardForm(
             className={cn(
               "min-h-[5.5rem] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none transition",
               "placeholder:text-muted-foreground",
-              "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+              "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30",
               "disabled:cursor-not-allowed disabled:opacity-50",
               errors.description && "border-destructive",
             )}

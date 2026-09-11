@@ -198,7 +198,7 @@ export function DatePicker({
           onClick={() => !disabled && setOpen((o) => !o)}
           className={cn(
             "flex h-9 flex-1 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition",
-            "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+            "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30",
             "hover:bg-accent/40 hover:text-accent-foreground",
             "disabled:cursor-not-allowed disabled:opacity-50",
             invalid && "border-destructive",
