@@ -206,7 +206,7 @@ export function SignedInDevicesCard({
           <>
             {subjectName} will be signed out of this device immediately and
             will need to sign in again to use it.
-            <div className="mt-2 font-medium text-foreground">
+            <div className="mt-2 font-medium text-foreground wrap-anywhere">
               {target.device_name}
             </div>
             <div className="font-mono text-muted-foreground">
