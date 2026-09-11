@@ -169,6 +169,10 @@ const SubjectsPage = lazyRouteComponent(
   () => import("@/pages/subjects"),
   "SubjectsPage",
 )
+const SubjectsBulkUploadPage = lazyRouteComponent(
+  () => import("@/pages/subjects-bulk-upload"),
+  "SubjectsBulkUploadPage",
+)
 const SubjectTypesPage = lazyRouteComponent(
   () => import("@/pages/subject-types"),
   "SubjectTypesPage",
@@ -356,10 +360,35 @@ const mastersMarkStructureEditorRoute = createRoute({
   component: MarkStructureEditorPage,
 })
 
+// `?regulationId=` carries the selected regulation between the list and the
+// bulk upload page, so each opens on the other's choice.
+function validateRegulationSearch(search: Record<string, unknown>): {
+  regulationId?: number
+} {
+  const raw = search.regulationId
+  const coerced =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string"
+        ? Number(raw)
+        : Number.NaN
+  return Number.isInteger(coerced) && coerced > 0
+    ? { regulationId: coerced }
+    : {}
+}
+
 const mastersSubjectsRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
   path: "/masters/subjects",
   component: SubjectsPage,
+  validateSearch: validateRegulationSearch,
+})
+
+const mastersSubjectsBulkUploadRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/masters/subjects/bulk-upload",
+  component: SubjectsBulkUploadPage,
+  validateSearch: validateRegulationSearch,
 })
 
 const mastersSubjectTypesRoute = createRoute({
@@ -674,6 +703,7 @@ const routeTree = rootRoute.addChildren([
     mastersRegulationMarkStructuresRoute,
     mastersMarkStructureEditorRoute,
     mastersSubjectsRoute,
+    mastersSubjectsBulkUploadRoute,
     mastersSubjectTypesRoute,
     mastersLeaveTypesRoute,
     mastersProgrammeAdmissionYearsRoute,

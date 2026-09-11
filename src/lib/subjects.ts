@@ -91,6 +91,34 @@ export async function updateSubject(
   return api<Subject>(`/admin/subjects/${id}`, { method: "PATCH", body: patch })
 }
 
+// Bulk upload — one regulation per batch. `subject_type` is the type's code
+// (or name); the server resolves it.
+export type BulkCreateSubjectRow = {
+  subject_type: string
+  code: string
+  name: string
+}
+
+export type SubjectRowError = {
+  rowIndex: number
+  field?: "subject_type" | "code" | "name"
+  message: string
+}
+
+export type BulkCreateSubjectsResult = {
+  created: number
+}
+
+export async function bulkCreateSubjects(
+  regulationId: number,
+  rows: BulkCreateSubjectRow[],
+): Promise<BulkCreateSubjectsResult> {
+  return api<BulkCreateSubjectsResult>("/admin/subjects/bulk", {
+    method: "POST",
+    body: { regulation_id: regulationId, rows },
+  })
+}
+
 export async function activateSubject(id: number): Promise<Subject> {
   return api<Subject>(`/admin/subjects/${id}/activate`, { method: "POST" })
 }

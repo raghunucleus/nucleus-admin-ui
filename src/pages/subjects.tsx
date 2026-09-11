@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useNavigate, useSearch } from "@tanstack/react-router"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -30,6 +31,7 @@ import {
   RefreshCw,
   Search,
   SearchX,
+  Upload,
   X,
 } from "lucide-react"
 
@@ -115,6 +117,11 @@ const STICKY_ACTIONS_SKELETON_CELL = cn(
 )
 
 export function SubjectsPage() {
+  const navigate = useNavigate()
+  // Set when returning from the bulk upload page.
+  const search = useSearch({ strict: false }) as { regulationId?: number }
+  const urlRegulationId = search.regulationId
+
   const [subjects, setSubjects] = React.useState<Subject[]>([])
   const [total, setTotal] = React.useState(0)
   const [pageCount, setPageCount] = React.useState(0)
@@ -176,12 +183,14 @@ export function SubjectsPage() {
     undefined,
   )
 
-  // Auto-pick the latest regulation year once options arrive.
+  // Once options arrive, pick the regulation from the URL if it's still
+  // active, otherwise the latest regulation year.
   React.useEffect(() => {
     if (regulationId === undefined && regulationOptions.length > 0) {
-      setRegulationId(regulationOptions[0].id)
+      const fromUrl = regulationOptions.find((r) => r.id === urlRegulationId)
+      setRegulationId((fromUrl ?? regulationOptions[0]).id)
     }
-  }, [regulationId, regulationOptions])
+  }, [regulationId, regulationOptions, urlRegulationId])
 
   const selectedRegulation = regulationOptions.find((r) => r.id === regulationId)
 
@@ -410,6 +419,32 @@ export function SubjectsPage() {
             </div>
           </div>
           <div className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              void navigate({
+                to: "/masters/subjects/bulk-upload",
+                search: { regulationId },
+              })
+            }
+            disabled={
+              mode.kind !== "list" ||
+              optionsLoading ||
+              regulationId === undefined ||
+              subjectTypeOptions.length === 0
+            }
+            title={
+              optionsLoading
+                ? "Loading options…"
+                : subjectTypeOptions.length === 0
+                  ? "Create an active subject type first"
+                  : undefined
+            }
+          >
+            <Upload />
+            Bulk upload
+          </Button>
           <Button
             size="sm"
             onClick={() => setMode({ kind: "create" })}
@@ -1268,9 +1303,8 @@ function getPageRange(current: number, totalPages: number): (number | "ellipsis"
   return items
 }
 
-// On edit we don't ask for subject_type_id again (it's fixed at creation),
-// so the schema is shared but the field uses `valueAsNumber: true` and is
-// validated separately on create.
+// Shared by create and edit — subject type is editable on both (only the
+// regulation is fixed at creation). The type select uses `valueAsNumber`.
 const subjectSchema = z.object({
   subject_type_id: z
     .number({ message: "Select a subject type" })
