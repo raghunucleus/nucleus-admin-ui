@@ -1207,7 +1207,6 @@ function PeriodStructurePanel({
                       onChange={(e) =>
                         mutate(r._key, { label: e.target.value })
                       }
-                      placeholder="Label"
                       className="h-8 w-40"
                       maxLength={48}
                     />
@@ -1895,7 +1894,6 @@ function CellEditorModal({
                 id="cell-room"
                 value={room}
                 onChange={(e) => setRoom(e.target.value)}
-                placeholder="e.g. A-204"
                 maxLength={48}
                 className="h-9"
               />
@@ -1906,7 +1904,6 @@ function CellEditorModal({
                 id="cell-note"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="e.g. Lab session"
                 maxLength={160}
                 className="h-9"
               />
@@ -2187,7 +2184,6 @@ function AddCourseSheet({
               id="course-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Library, Sports, Mentoring"
               maxLength={96}
             />
           </div>

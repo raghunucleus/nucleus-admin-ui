@@ -1346,7 +1346,6 @@ function GroupForm({
               maxLength={64}
               autoComplete="off"
               autoFocus
-              placeholder="e.g. Group A"
             />
           </div>
           <div className="space-y-1.5 sm:w-32">
@@ -1357,7 +1356,6 @@ function GroupForm({
               onChange={(e) => setCode(e.target.value)}
               maxLength={32}
               autoComplete="off"
-              placeholder="e.g. A"
               className="font-mono uppercase"
             />
           </div>
@@ -1427,7 +1425,6 @@ function GroupForm({
             onChange={(e) => setDescription(e.target.value)}
             maxLength={256}
             autoComplete="off"
-            placeholder="e.g. Morning lab batch"
           />
           <p className="text-xs text-muted-foreground">
             A short note to tell groups apart.

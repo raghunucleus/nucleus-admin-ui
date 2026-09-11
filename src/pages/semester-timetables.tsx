@@ -646,7 +646,6 @@ function CreateTimetableSheet({
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Regular week"
               maxLength={96}
               aria-invalid={duplicate}
             />
@@ -911,7 +910,6 @@ function CloneTimetableSheet({
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={96}
-              placeholder="e.g. Exam week"
               aria-invalid={duplicate}
             />
             {duplicate && (

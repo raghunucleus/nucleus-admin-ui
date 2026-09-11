@@ -73,6 +73,10 @@ const EmployeesBulkUploadPage = lazyRouteComponent(
   () => import("@/pages/employees-bulk-upload"),
   "EmployeesBulkUploadPage",
 )
+const EmployeeDetailsPage = lazyRouteComponent(
+  () => import("@/pages/employee-details"),
+  "EmployeeDetailsPage",
+)
 const ProgrammeConfigurationPage = lazyRouteComponent(
   () => import("@/pages/programme-configuration"),
   "ProgrammeConfigurationPage",
@@ -492,6 +496,14 @@ const employeesBulkUploadRoute = createRoute({
   component: EmployeesBulkUploadPage,
 })
 
+// Static siblings (/employees/all, /employees/bulk-upload, …) outrank this
+// dynamic segment, so they keep resolving to their own pages.
+const employeeDetailsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: "/employees/$employeeId",
+  component: EmployeeDetailsPage,
+})
+
 const studentsAllRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
   path: "/students/all",
@@ -683,6 +695,7 @@ const routeTree = rootRoute.addChildren([
     guardiansAllRoute,
     guardiansBulkUploadRoute,
     studentDetailsRoute,
+    employeeDetailsRoute,
     additionalAttributesStudentRoute,
     additionalAttributesAddressRoute,
     roleManagementRolesRoute,

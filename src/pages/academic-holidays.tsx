@@ -663,7 +663,6 @@ function HolidayForm({
           </Label>
           <Input
             id="name"
-            placeholder="e.g. Independence Day, Cyclone closure"
             {...register("name")}
             aria-invalid={!!errors.name}
           />

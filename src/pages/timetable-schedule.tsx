@@ -2538,7 +2538,6 @@ function SlotBulkActionForm({
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
               maxLength={256}
-              placeholder="e.g. Auditorium booking — slot relocated"
             />
             <Button
               variant="destructive"
@@ -2566,7 +2565,6 @@ function SlotBulkActionForm({
               value={subReason}
               onChange={(e) => setSubReason(e.target.value)}
               maxLength={256}
-              placeholder="Reason (optional) — e.g. Mid-sem exam proctor"
             />
             <Button
               onClick={doSubstituteAll}
@@ -2776,7 +2774,6 @@ function CancelSessionForm({
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
               maxLength={256}
-              placeholder="e.g. Faculty unavailable"
               disabled={isCompleted}
               autoFocus
             />
@@ -2939,7 +2936,6 @@ function SubstituteSessionForm({
             value={subReason}
             onChange={(e) => setSubReason(e.target.value)}
             maxLength={256}
-            placeholder="Reason (optional) — e.g. Original faculty on leave"
             disabled={isCancelled || isCompleted}
           />
           <Button

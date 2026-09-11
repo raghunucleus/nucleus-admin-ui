@@ -26,6 +26,8 @@ export type Employee = {
   country_code: string
   email: string
   rm_emp_code: string | null
+  /** Max simultaneous signed-in devices; null = the default (2). */
+  device_limit: number | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -42,6 +44,8 @@ export type CreateEmployeeInput = {
   country_code: string
   email: string
   rm_emp_code: string | null
+  /** Integer 1–20, or null for the default (2). */
+  device_limit?: number | null
 }
 
 export type UpdateEmployeeInput = {
@@ -55,6 +59,8 @@ export type UpdateEmployeeInput = {
   country_code?: string
   email?: string
   rm_emp_code?: string | null
+  /** Integer 1–20; null resets to the default (2); omitted = unchanged. */
+  device_limit?: number | null
 }
 
 export type EmployeesSortField =
@@ -148,6 +154,35 @@ export async function activateEmployee(id: number): Promise<Employee> {
 
 export async function deactivateEmployee(id: number): Promise<Employee> {
   return api<Employee>(`/admin/employees/${id}/deactivate`, { method: "POST" })
+}
+
+/**
+ * Provision (or reset) the employee's login. The server generates a random
+ * temporary password, emails it to the employee's registered address, forces a
+ * change on first sign-in, and revokes any active sessions. Returns the
+ * address the email was sent to.
+ */
+export async function resetEmployeeLoginPassword(
+  id: number,
+): Promise<{ email: string }> {
+  return api<{ email: string }>(`/admin/employees/${id}/reset-password`, {
+    method: "POST",
+  })
+}
+
+/**
+ * Directly set the employee's login password to an admin-chosen value. No
+ * email is sent; the employee is still forced to change it on first sign-in,
+ * and any active sessions are revoked.
+ */
+export async function setEmployeeLoginPassword(
+  id: number,
+  password: string,
+): Promise<void> {
+  return api<void>(`/admin/employees/${id}/set-password`, {
+    method: "POST",
+    body: { password },
+  })
 }
 
 export type BulkCreateEmployeeRow = {

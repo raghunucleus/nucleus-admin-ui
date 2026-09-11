@@ -558,7 +558,6 @@ export function RoleBuilderPage() {
                   // Auto-suggest code from the name until the user hand-edits it.
                   if (!codeTouchedRef.current) setCode(suggestCode(next))
                 }}
-                placeholder="e.g. CSE HOD"
                 autoComplete="off"
               />
             </div>
@@ -573,7 +572,6 @@ export function RoleBuilderPage() {
                   codeTouchedRef.current = true
                   setCode(e.target.value)
                 }}
-                placeholder="e.g. CSE_HOD"
                 autoComplete="off"
                 maxLength={32}
                 className="font-mono uppercase"
@@ -588,7 +586,6 @@ export function RoleBuilderPage() {
                 id="role-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Optional"
                 autoComplete="off"
               />
             </div>

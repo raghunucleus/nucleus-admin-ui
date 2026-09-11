@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   KeyRound,
+  MonitorSmartphone,
   MoreVertical,
   Pencil,
   Plus,
@@ -16,6 +17,10 @@ import {
   Users,
 } from "lucide-react"
 
+import {
+  SignedInDevicesCard,
+  type SignedInDevicesResult,
+} from "@/components/signed-in-devices-card"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
@@ -60,6 +65,7 @@ import {
   type GuardianContact,
   type GuardianRelationship,
 } from "@/lib/guardians"
+import { listGuardianSessions, revokeGuardianSession } from "@/lib/sessions"
 
 const MOBILE_REGEX = /^[6-9]\d{9}$/
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -83,6 +89,8 @@ export function GuardiansPage() {
   const [passwordTarget, setPasswordTarget] =
     React.useState<GuardianContact | null>(null)
   const [deleteTarget, setDeleteTarget] =
+    React.useState<GuardianContact | null>(null)
+  const [devicesTarget, setDevicesTarget] =
     React.useState<GuardianContact | null>(null)
 
   const filtersRef = React.useRef({ nameSearch, studentSearch })
@@ -285,6 +293,9 @@ export function GuardiansPage() {
                         >
                           <Send /> Send login OTP
                         </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setDevicesTarget(r)}>
+                          <MonitorSmartphone /> Signed-in devices
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onSelect={() => setDeleteTarget(r)}
                           className="text-destructive data-[highlighted]:text-destructive"
@@ -342,6 +353,13 @@ export function GuardiansPage() {
         <SetPasswordSheet
           contact={passwordTarget}
           onClose={() => setPasswordTarget(null)}
+        />
+      )}
+
+      {devicesTarget && (
+        <SignedInDevicesSheet
+          contact={devicesTarget}
+          onClose={() => setDevicesTarget(null)}
         />
       )}
 
@@ -578,7 +596,6 @@ function GuardianFormSheet({
               <Input
                 value={mobile}
                 onChange={(e) => setMobile(e.target.value)}
-                placeholder="9876543210"
                 inputMode="numeric"
               />
             </Field>
@@ -587,7 +604,6 @@ function GuardianFormSheet({
               <Input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="parent@example.com"
               />
             </Field>
           </SheetBody>
@@ -671,6 +687,61 @@ function SetPasswordSheet({
             </Button>
           </SheetFooter>
         </form>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+// ---------- Signed-in devices ----------
+
+/**
+ * Parent logins are keyed by mobile number, not by contact row — so this lists
+ * every device signed in with that number, whichever student(s) it covers.
+ */
+function SignedInDevicesSheet({
+  contact,
+  onClose,
+}: {
+  contact: GuardianContact
+  onClose: () => void
+}) {
+  const mobile = contact.mobile_number
+  const loadSessions = React.useCallback(
+    async (): Promise<SignedInDevicesResult> => ({
+      sessions: await listGuardianSessions(mobile),
+    }),
+    [mobile],
+  )
+  const revokeSession = React.useCallback(
+    (sessionId: string) => revokeGuardianSession(mobile, sessionId),
+    [mobile],
+  )
+
+  return (
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Signed-in devices</SheetTitle>
+          <SheetDescription>
+            Devices signed in to the parent app with mobile {mobile} (
+            {contact.name}). The login is shared by every student this number
+            is a contact for. Signing a device out takes effect immediately.
+          </SheetDescription>
+        </SheetHeader>
+        <SheetBody>
+          <SignedInDevicesCard
+            variant="plain"
+            load={loadSessions}
+            revoke={revokeSession}
+            noun="parent"
+            subjectName={contact.name}
+          />
+        </SheetBody>
+        <SheetFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </SheetFooter>
       </SheetContent>
     </Sheet>
   )
