@@ -1,6 +1,7 @@
 import { Link, useSearch } from "@tanstack/react-router"
-import { Globe, Map as MapIcon, MapPin, SlidersHorizontal, type LucideIcon } from "lucide-react"
+import { Globe, Map as MapIcon, MapPin, type LucideIcon } from "lucide-react"
 
+import { PageHeader } from "@/components/page-header"
 import { cn } from "@/lib/utils"
 import type { AddressAttributeTab } from "@/router"
 import { CountriesTab } from "./countries-tab"
@@ -24,15 +25,7 @@ export function AddressAttributesPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
-      <div className="rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <SlidersHorizontal className="size-3.5" />
-          Additional attributes
-        </div>
-        <h1 className="mt-1 text-base font-semibold tracking-tight">
-          Address attributes
-        </h1>
-      </div>
+      <PageHeader title="Address attributes" />
 
       {/* Each tab is a Link carrying ?tab= rather than a button flipping local
           state, so the tab is deep-linkable and survives back/forward. */}

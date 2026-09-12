@@ -4,7 +4,6 @@ import { toast } from "sonner"
 import {
   AlertTriangle,
   ArrowDown,
-  ArrowLeft,
   ArrowUp,
   ArrowUpDown,
   Check,
@@ -17,6 +16,8 @@ import {
   X,
 } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { EmployeePicker } from "@/components/employee-picker"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
@@ -521,18 +522,31 @@ export function ProgrammeAttendanceGroupsPage() {
     }
   }
 
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to programme configuration">
+          <Link
+            to="/masters/programme-configuration"
+            search={{ programmeId, admissionYearId }}
+          />
+        </BackLink>
+      }
+      title="Attendance groups"
+      actions={
+        !shellLoading && !failed && batch ? (
+          <Button size="sm" onClick={() => setFormMode({ kind: "create" })}>
+            <Plus />
+            New group
+          </Button>
+        ) : undefined
+      }
+    />
+  )
+
   return (
     <div className="space-y-3 py-2">
-      <div className="flex items-center gap-1">
-        <Link
-          to="/masters/programme-configuration"
-          search={{ programmeId, admissionYearId }}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Programme configuration
-        </Link>
-      </div>
+      {header}
 
       {shellLoading ? (
         <BoardSkeleton />
@@ -557,36 +571,25 @@ export function ProgrammeAttendanceGroupsPage() {
       ) : (
         <>
           <header className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-5 py-3 text-card-foreground shadow-xs">
-            <div className="min-w-0 space-y-0.5">
-              <h1 className="text-base font-semibold tracking-tight">
-                Attendance groups
-              </h1>
-              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  {batch.programme.code}
-                </span>
-                <span className="opacity-40">·</span>
-                <span className="truncate">{batch.programme.display_name}</span>
-                <span className="opacity-40">·</span>
-                <span className="tabular-nums">
-                  {batch.year.display_year}
+            <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {batch.programme.code}
+              </span>
+              <span className="opacity-40">·</span>
+              <span className="truncate">{batch.programme.display_name}</span>
+              <span className="opacity-40">·</span>
+              <span className="tabular-nums">
+                {batch.year.display_year}
+              </span>
+            </div>
+            {!listLoading && students.length > 0 && (
+              <div className="rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+                Grouped{" "}
+                <span className="font-semibold text-foreground tabular-nums">
+                  {assignedIds.size}/{students.length}
                 </span>
               </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              {!listLoading && students.length > 0 && (
-                <div className="rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-                  Grouped{" "}
-                  <span className="font-semibold text-foreground tabular-nums">
-                    {assignedIds.size}/{students.length}
-                  </span>
-                </div>
-              )}
-              <Button size="sm" onClick={() => setFormMode({ kind: "create" })}>
-                <Plus />
-                New group
-              </Button>
-            </div>
+            )}
           </header>
 
           {listLoading ? (
@@ -1842,11 +1845,8 @@ function BoardSkeleton({ headerless }: { headerless?: boolean }) {
     <>
       {!headerless && (
         <div className="flex items-center justify-between rounded-lg border bg-card px-5 py-3 shadow-xs">
-          <div>
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="mt-2 h-3.5 w-56" />
-          </div>
-          <Skeleton className="h-8 w-28 rounded-md" />
+          <Skeleton className="h-3.5 w-56" />
+          <Skeleton className="h-6 w-24 rounded-md" />
         </div>
       )}
       <div className="flex h-[calc(100vh_-_15rem)] min-h-[26rem] flex-col gap-3">

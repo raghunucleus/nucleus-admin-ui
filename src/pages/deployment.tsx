@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/page-header"
 import { LAST_DEPLOYED_ON } from "@/config/deployment"
 
 /**
@@ -9,7 +10,7 @@ import { LAST_DEPLOYED_ON } from "@/config/deployment"
 export function DeploymentPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4 py-2">
-      <h1 className="text-xl font-semibold tracking-tight">Deployment</h1>
+      <PageHeader title="Deployment" />
       <div className="space-y-1 rounded-lg border bg-card p-6 text-card-foreground">
         <p className="text-sm text-muted-foreground">Last deployed on</p>
         <p className="text-base font-medium">{LAST_DEPLOYED_ON}</p>

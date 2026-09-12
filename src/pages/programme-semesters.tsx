@@ -16,7 +16,6 @@ import {
 import {
   AlertTriangle,
   ArrowDown,
-  ArrowLeft,
   ArrowUp,
   ArrowUpDown,
   CalendarRange,
@@ -35,6 +34,8 @@ import {
   X,
 } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -404,21 +405,18 @@ export function ProgrammeSemestersPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          {urlProgrammeId !== undefined && (
-            <Link
-              to="/masters/programmes"
-              className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="size-3.5" />
-              Back to programmes
-            </Link>
-          )}
-          <h1 className="text-base font-semibold tracking-tight">
-            Programme semesters
-          </h1>
-        </div>
+      <PageHeader
+        leading={
+          urlProgrammeId !== undefined ? (
+            <BackLink label="Back to programmes">
+              <Link to="/masters/programmes" />
+            </BackLink>
+          ) : undefined
+        }
+        title="Programme semesters"
+      />
+
+      <div className="flex flex-wrap items-center justify-end gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="flex items-center gap-2">
             <Label htmlFor="page-year" className="text-xs text-muted-foreground">

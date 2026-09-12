@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 
 import { EmployeePicker } from "@/components/employee-picker"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Label } from "@/components/ui/label"
@@ -124,26 +125,20 @@ export function ApprovalApproversPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight">
-            Assign approvers
-          </h1>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Pick the employees who sign off on each action. Any one of them can
-            approve — there is no order or quorum.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void load()}
-          disabled={loading || refreshing}
-        >
-          <RefreshCw className={cn(refreshing && "animate-spin")} />
-          Refresh
-        </Button>
-      </div>
+      <PageHeader
+        title="Assign approvers"
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void load()}
+            disabled={loading || refreshing}
+          >
+            <RefreshCw className={cn(refreshing && "animate-spin")} />
+            Refresh
+          </Button>
+        }
+      />
 
       <Sheet
         open={mode.kind !== "list"}

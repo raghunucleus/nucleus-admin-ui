@@ -2,6 +2,7 @@ import * as React from "react"
 import { CalendarDays, Clock, Hourglass, Sun } from "lucide-react"
 
 import { NucleusMark } from "@/components/brand"
+import { PageHeader } from "@/components/page-header"
 import { useAuthStore } from "@/store/auth-store"
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
@@ -84,14 +85,15 @@ export function WelcomePage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 py-6">
+      <PageHeader title="Welcome" />
       <div className="rounded-lg border bg-card p-8 text-card-foreground">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <NucleusMark size={16} /> Nucleus Admin
         </div>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight">
+        <h2 className="mt-3 text-2xl font-semibold tracking-tight">
           {greeting}
           {user?.username ? <>, <span className="text-primary">{user.username}</span></> : null}.
-        </h1>
+        </h2>
         <p className="mt-2 text-sm text-muted-foreground">
           You're signed in to the admin console. Here's a quick read of where the day stands.
         </p>

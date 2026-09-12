@@ -1,10 +1,9 @@
 import * as React from "react"
-import { useNavigate, useSearch } from "@tanstack/react-router"
+import { Link, useNavigate, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { loadXlsx } from "@/lib/xlsx"
 import {
   AlertCircle,
-  ArrowLeft,
   CheckCircle2,
   Download,
   FileSpreadsheet,
@@ -13,6 +12,8 @@ import {
   Upload,
 } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Combobox } from "@/components/ui/combobox"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -425,34 +426,18 @@ export function SubjectsBulkUploadPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <div className="flex items-start gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 shrink-0"
-            onClick={() =>
-              void navigate({
-                to: "/masters/subjects",
-                search: regulationId !== undefined ? { regulationId } : {},
-              })
-            }
-            title="Back to subjects"
-            aria-label="Back to subjects"
-          >
-            <ArrowLeft />
-          </Button>
-          <div>
-            <h1 className="text-base font-semibold tracking-tight">
-              Bulk upload subjects
-            </h1>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              One subject per row, all under the selected regulation. Pick the
-              subject type from the template's dropdown. Nothing is saved until
-              every row is valid.
-            </p>
-          </div>
-        </div>
+      <PageHeader
+        leading={
+          <BackLink label="Back to subjects">
+            <Link
+              to="/masters/subjects"
+              search={regulationId !== undefined ? { regulationId } : {}}
+            />
+          </BackLink>
+        }
+        title="Bulk upload subjects"
+      />
+      <div className="flex flex-wrap items-center justify-end gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="flex items-center gap-2">
             <Label htmlFor="bulk-regulation" className="text-xs text-muted-foreground">

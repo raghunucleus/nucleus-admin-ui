@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react"
 
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -258,33 +259,31 @@ export function AcademicHolidaysPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <div className="flex items-center gap-2">
-          <CalendarRange className="size-4 text-muted-foreground" />
-          <h1 className="text-base font-semibold tracking-tight">
-            Academic holidays
-          </h1>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Button
-            size="sm"
-            onClick={() => setFormOpen(true)}
-            disabled={formOpen}
-          >
-            <Plus />
-            Declare holiday
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => void load()}
-            disabled={refreshing || loading}
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Academic holidays"
+        icon={CalendarRange}
+        actions={
+          <>
+            <Button
+              size="sm"
+              onClick={() => setFormOpen(true)}
+              disabled={formOpen}
+            >
+              <Plus />
+              Declare holiday
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void load()}
+              disabled={refreshing || loading}
+              aria-label="Refresh"
+            >
+              <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
+            </Button>
+          </>
+        }
+      />
 
       <div className="space-y-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
         {/* Search + type — instant client-side filters over the loaded window. */}

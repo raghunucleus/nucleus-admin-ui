@@ -1,8 +1,7 @@
 import * as React from "react"
 import { Outlet, useNavigate } from "@tanstack/react-router"
-import { ChevronDown, LogOut, Menu, Settings } from "lucide-react"
+import { ChevronDown, LogOut, Settings } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,19 +12,21 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Sidebar } from "@/components/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { HeaderSlotContext } from "@/hooks/use-header-slot"
 import { useIdleLogout } from "@/hooks/use-idle-logout"
 import { logout } from "@/lib/auth"
 import { useAuthStore } from "@/store/auth-store"
 import { useConnectivityStore } from "@/store/connectivity-store"
-import { useUiStore } from "@/store/ui-store"
 
 export function AppLayout() {
   const user = useAuthStore((s) => s.user)
   const reconnectNonce = useConnectivityStore((s) => s.reconnectNonce)
-  const sidebarLocked = useUiStore((s) => s.sidebarLocked)
-  const toggleSidebarLock = useUiStore((s) => s.toggleSidebarLock)
   const navigate = useNavigate()
   const [loggingOut, setLoggingOut] = React.useState(false)
+  // The header's title slot. `PageHeader` portals each page's heading into it
+  // (see src/hooks/use-header-slot.ts); a callback ref keeps it in state so the
+  // context re-renders consumers once the node exists.
+  const [headerSlot, setHeaderSlot] = React.useState<HTMLElement | null>(null)
 
   useIdleLogout()
 
@@ -50,23 +51,20 @@ export function AppLayout() {
     .toUpperCase() || "?"
 
   return (
+    <HeaderSlotContext.Provider value={headerSlot}>
     <div className="flex h-screen bg-background text-foreground">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-4">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebarLock}
-              aria-label={sidebarLocked ? "Auto-hide menu" : "Pin menu open"}
-              aria-expanded={sidebarLocked}
-              aria-controls="sidebar"
-            >
-              <Menu />
-            </Button>
-          </div>
-          <div className="flex items-center gap-3">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-card px-4">
+          {/* Page title slot — the active page's `PageHeader` portals its back
+              link, icon and title here. Sidebar pin/auto-hide lives in the
+              sidebar footer. */}
+          <div
+            ref={setHeaderSlot}
+            data-slot="header-title"
+            className="flex min-w-0 flex-1 items-center gap-2"
+          />
+          <div className="flex shrink-0 items-center gap-3">
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -136,5 +134,6 @@ export function AppLayout() {
         </main>
       </div>
     </div>
+    </HeaderSlotContext.Provider>
   )
 }

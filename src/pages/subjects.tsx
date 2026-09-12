@@ -35,6 +35,7 @@ import {
   X,
 } from "lucide-react"
 
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Combobox } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -386,8 +387,8 @@ export function SubjectsPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <h1 className="text-base font-semibold tracking-tight">Subjects</h1>
+      <PageHeader title="Subjects" />
+      <div className="flex flex-wrap items-center justify-end gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="flex items-center gap-2">
             <Label

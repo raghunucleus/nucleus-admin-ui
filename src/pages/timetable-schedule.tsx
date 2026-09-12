@@ -4,7 +4,6 @@ import { Link, useParams, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
   AlertTriangle,
-  ArrowLeft,
   CalendarCheck,
   CalendarRange,
   Check,
@@ -27,7 +26,9 @@ import {
   X,
 } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
 import { EmployeePicker } from "@/components/employee-picker"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -333,19 +334,25 @@ export function TimetableSchedulePage() {
     return false
   }
 
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to templates">
+          <Link
+            to="/masters/programme-configuration/semester/$programmeSemesterId/timetables"
+            params={{ programmeSemesterId: params.programmeSemesterId ?? "" }}
+            search={{ programmeId, admissionYearId }}
+          />
+        </BackLink>
+      }
+      icon={CalendarCheck}
+      title="Schedule"
+    />
+  )
+
   return (
     <div className="mx-auto max-w-6xl space-y-4 py-2">
-      <div className="flex items-center gap-1">
-        <Link
-          to="/masters/programme-configuration/semester/$programmeSemesterId/timetables"
-          params={{ programmeSemesterId: params.programmeSemesterId ?? "" }}
-          search={{ programmeId, admissionYearId }}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Templates
-        </Link>
-      </div>
+      {header}
 
       {shellLoading ? (
         <Skeleton className="h-20 w-full" />
@@ -364,12 +371,12 @@ export function TimetableSchedulePage() {
         <>
           <header className="rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <CalendarCheck className="size-4 text-muted-foreground" />
-                  <h1 className="text-base font-semibold tracking-tight">
-                    Schedule — {anchor.attendance_group?.name ?? "Group"}
-                  </h1>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 text-sm font-medium">
+                  <Users className="size-3.5 text-muted-foreground" />
+                  <span className="truncate">
+                    {anchor.attendance_group?.name ?? "Group"}
+                  </span>
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {templates.length} template{templates.length === 1 ? "" : "s"}{" "}

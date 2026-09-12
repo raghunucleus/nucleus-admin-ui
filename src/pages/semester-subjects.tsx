@@ -1,8 +1,10 @@
 import * as React from "react"
 import { Link, useParams, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
-import { AlertTriangle, ArrowLeft, BookMarked, Pencil, Plus, Power, PowerOff } from "lucide-react"
+import { AlertTriangle, BookMarked, Pencil, Plus, Power, PowerOff } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -249,19 +251,24 @@ export function SemesterSubjectsPage() {
     }
   }
 
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to semester settings">
+          <Link
+            to="/masters/programme-configuration/semester/$programmeSemesterId"
+            params={{ programmeSemesterId: params.programmeSemesterId ?? "" }}
+            search={{ programmeId, admissionYearId }}
+          />
+        </BackLink>
+      }
+      title="Subjects"
+    />
+  )
+
   return (
     <div className="mx-auto max-w-4xl space-y-4 py-2">
-      <div className="flex items-center gap-1">
-        <Link
-          to="/masters/programme-configuration/semester/$programmeSemesterId"
-          params={{ programmeSemesterId: params.programmeSemesterId ?? "" }}
-          search={{ programmeId, admissionYearId }}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Semester settings
-        </Link>
-      </div>
+      {header}
 
       {shellLoading ? (
         <SubjectsSkeleton />
@@ -303,29 +310,24 @@ export function SemesterSubjectsPage() {
         </div>
       ) : (
         <>
-          <header className="rounded-lg border bg-card px-5 py-4 text-card-foreground shadow-xs">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 space-y-1.5">
-                <h1 className="text-lg font-semibold tracking-tight">
-                  Subjects
-                </h1>
-                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    Sem {semester.semester.sem_number}
-                  </span>
-                  <span className="opacity-40">·</span>
-                  <span className="font-medium text-foreground">
-                    {semester.programme.code}
-                  </span>
-                  <span className="opacity-40">·</span>
-                  <span className="tabular-nums">
-                    {semester.admission_year.display_year}
-                  </span>
-                  <span className="opacity-40">·</span>
-                  <span className="font-mono text-foreground">
-                    {semester.semester.code}
-                  </span>
-                </div>
+          <header className="rounded-lg border bg-card px-5 py-3 text-card-foreground shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  Sem {semester.semester.sem_number}
+                </span>
+                <span className="opacity-40">·</span>
+                <span className="font-medium text-foreground">
+                  {semester.programme.code}
+                </span>
+                <span className="opacity-40">·</span>
+                <span className="tabular-nums">
+                  {semester.admission_year.display_year}
+                </span>
+                <span className="opacity-40">·</span>
+                <span className="font-mono text-foreground">
+                  {semester.semester.code}
+                </span>
               </div>
               <div className="flex items-center gap-3">
                 {entries.length > 0 && (
@@ -1012,9 +1014,9 @@ function StatusPill({ active }: { active: boolean }) {
 function SubjectsSkeleton() {
   return (
     <>
-      <div className="rounded-lg border bg-card px-5 py-4 shadow-xs">
-        <Skeleton className="h-6 w-32" />
-        <Skeleton className="mt-2 h-4 w-64" />
+      <div className="flex items-center justify-between rounded-lg border bg-card px-5 py-3 shadow-xs">
+        <Skeleton className="h-4 w-64" />
+        <Skeleton className="h-8 w-28 rounded-md" />
       </div>
       <div className="rounded-lg border bg-card p-4 shadow-xs">
         <div className="space-y-3">

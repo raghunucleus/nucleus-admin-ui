@@ -2,7 +2,6 @@ import * as React from "react"
 import { Link, useNavigate, useParams } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
-  ArrowLeft,
   Check,
   ChevronDown,
   ChevronRight,
@@ -16,6 +15,8 @@ import {
   X,
 } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -464,9 +465,21 @@ export function RoleBuilderPage() {
     }
   }
 
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to roles">
+          <Link to="/role-management/roles" />
+        </BackLink>
+      }
+      title={isCreate ? "New role" : name || "Edit role"}
+    />
+  )
+
   if (loading || !catalog) {
     return (
       <div className="mx-auto max-w-5xl space-y-4 py-2">
+        {header}
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-64 w-full" />
         <Skeleton className="h-96 w-full" />
@@ -481,24 +494,10 @@ export function RoleBuilderPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 py-2">
+      {header}
+
       {/* --- Header --- */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <div className="flex items-center gap-3">
-          <Link to="/role-management/roles">
-            <Button variant="ghost" size="icon" aria-label="Back to roles">
-              <ArrowLeft />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-base font-semibold tracking-tight">
-              {isCreate ? "New role" : `Edit ${name || "role"}`}
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Compose a role by picking role types, then choosing which of
-              their screens it grants and which actions on each.
-            </p>
-          </div>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
         <div className="flex items-center gap-2">
           <Button
             variant="outline"

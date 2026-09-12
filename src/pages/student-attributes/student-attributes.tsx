@@ -5,10 +5,10 @@ import {
   GraduationCap,
   School,
   ScrollText,
-  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react"
 
+import { PageHeader } from "@/components/page-header"
 import { cn } from "@/lib/utils"
 import type { StudentAttributeTab } from "@/router"
 import { DiplomaBoardsTab } from "./diploma-boards-tab"
@@ -56,15 +56,7 @@ export function StudentAttributesPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
-      <div className="rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <SlidersHorizontal className="size-3.5" />
-          Additional attributes
-        </div>
-        <h1 className="mt-1 text-base font-semibold tracking-tight">
-          Student attributes
-        </h1>
-      </div>
+      <PageHeader title="Student attributes" />
 
       {/* Each tab is a Link carrying ?tab= rather than a button flipping local
           state, so the tab is deep-linkable and survives back/forward. */}

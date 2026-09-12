@@ -28,6 +28,7 @@ import {
   Zap,
 } from "lucide-react"
 
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
@@ -280,34 +281,29 @@ export function RolesListPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight">Roles</h1>
-          <p className="text-xs text-muted-foreground">
-            Composed roles assembled from role types and screens. Click a row
-            to inspect its screens; assign roles to employees on the Role
-            assignments page.
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void load()}
-            disabled={loading}
-            title="Refresh"
-            aria-label="Refresh"
-          >
-            <RefreshCw />
-          </Button>
-          <Link to="/role-management/roles/$roleId" params={{ roleId: "new" }}>
-            <Button size="sm">
-              <Plus />
-              New role
+      <PageHeader
+        title="Roles"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void load()}
+              disabled={loading}
+              title="Refresh"
+              aria-label="Refresh"
+            >
+              <RefreshCw />
             </Button>
-          </Link>
-        </div>
-      </div>
+            <Link to="/role-management/roles/$roleId" params={{ roleId: "new" }}>
+              <Button size="sm">
+                <Plus />
+                New role
+              </Button>
+            </Link>
+          </>
+        }
+      />
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-card-foreground shadow-xs">

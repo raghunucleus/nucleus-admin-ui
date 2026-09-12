@@ -8,6 +8,7 @@ import {
   ShieldAlert,
 } from "lucide-react"
 
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ApiError } from "@/lib/api"
@@ -89,35 +90,37 @@ export function MigrationsPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <h1 className="text-base font-semibold tracking-tight">Migrations</h1>
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => load({ silent: true })}
-            disabled={loading || refreshing || running}
-          >
-            <RefreshCw className={refreshing ? "animate-spin" : undefined} />
-            {refreshing ? "Refreshing…" : "Refresh"}
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleRun}
-            disabled={!canRun}
-            title={
-              !runEnabled
-                ? "Running migrations is disabled on the server"
-                : pending.length === 0
-                ? "No pending migrations"
-                : undefined
-            }
-          >
-            {running ? <Loader2 className="animate-spin" /> : <Play />}
-            {running ? "Running…" : "Run pending"}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Migrations"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => load({ silent: true })}
+              disabled={loading || refreshing || running}
+            >
+              <RefreshCw className={refreshing ? "animate-spin" : undefined} />
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleRun}
+              disabled={!canRun}
+              title={
+                !runEnabled
+                  ? "Running migrations is disabled on the server"
+                  : pending.length === 0
+                  ? "No pending migrations"
+                  : undefined
+              }
+            >
+              {running ? <Loader2 className="animate-spin" /> : <Play />}
+              {running ? "Running…" : "Run pending"}
+            </Button>
+          </>
+        }
+      />
 
       {loadError && (
         <Banner tone="destructive" icon={AlertTriangle} title="Couldn't load migrations">

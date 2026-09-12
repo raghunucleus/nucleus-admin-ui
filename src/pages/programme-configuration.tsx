@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 
 import { EmployeePicker } from "@/components/employee-picker"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -189,15 +190,9 @@ export function ProgrammeConfigurationPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 py-2">
-      <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-16 before:bg-background before:content-[''] after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-4 after:bg-background after:content-['']">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight">
-            Programme configuration
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            Settings for a programme × admission year batch.
-          </p>
-        </div>
+      <PageHeader title="Programme configuration" />
+
+      <div className="sticky top-0 z-20 flex flex-wrap items-center justify-start gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-16 before:bg-background before:content-[''] after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-4 after:bg-background after:content-['']">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <Label

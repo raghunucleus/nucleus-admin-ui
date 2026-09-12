@@ -42,9 +42,16 @@ Mirrors the portals — see "Typography, density & spacing standards" in `nucleu
 
 - The family is **Inter Variable**, self-hosted via `@fontsource-variable/inter` and declared once as `--font-sans` in [src/index.css](src/index.css). No `font-family` in components, no CDN fonts (the CSP is `font-src 'self'`).
 - Root font-size is a **flat 14px at every width**. It used to step up to 15px ≥1600 and 16px ≥1920, which made the console 14% larger on a 1080p monitor than on a laptop and read as zoomed in. **Do not re-introduce per-breakpoint root sizes** — a wide page that needs room should raise its `max-w-*` tier instead.
-- Scale: body and table cells `text-sm` · meta and labels `text-xs` · section title `text-base font-semibold` · page title `text-xl font-semibold tracking-tight` (`text-lg` is also fine and is what most list pages use — pick one per page and stay with it) · flow, empty-state and hero headings `text-2xl font-semibold tracking-tight`. Nothing larger inside the console. Numbers are `font-semibold tabular-nums`, never `font-bold`.
+- Scale: body and table cells `text-sm` · meta and labels `text-xs` · section title `text-base font-semibold` · page title `text-lg font-semibold tracking-tight`, always through `PageHeader` (see "Shared page chrome" below), which renders it in the app header — never an `<h1>` in a page · flow, empty-state and hero headings `text-2xl font-semibold tracking-tight`. Nothing larger inside the console. Numbers are `font-semibold tabular-nums`, never `font-bold`.
 - Controls are `h-9` (`Input`, `Button size="default"`). Radius: `rounded-md` controls, `rounded-lg` cards in this app, `rounded-xl` dialogs.
-- Layout: header `h-14`, page padding `px-6 py-6`, `space-y-6` between sections and `space-y-4` within one.
+- Layout: header `h-14` (its left side is the page-title slot), page padding `px-6 py-6`, `space-y-6` between sections and `space-y-4` within one.
+
+## Shared page chrome
+
+- **`PageHeader`** ([src/components/page-header.tsx](src/components/page-header.tsx)) — the one page heading. `AppLayout` provides a title slot in the app header ([src/hooks/use-header-slot.ts](src/hooks/use-header-slot.ts), where the sidebar hamburger used to be) and `PageHeader` portals `leading` + `icon` + `title` into it. What stays on the page is row 1 = `tabs` (flush at the content's left edge) + `actions` (trailing), then `children`; a page with only a title renders nothing in the body. No subtitle/description prop — live data goes in a `text-xs text-muted-foreground` meta row.
+- **Exactly one `PageHeader` per page**, rendered at the top level of the page's return and in every early-return branch (hoist `const header = <PageHeader … />` above the loading/failed/loaded conditional). Pass a static fallback title while data loads (`employee?.emp_display_name ?? "Employee"`). Never mount one inside a dialog, sheet or tab body — two at once both show in the header.
+- **`BackLink`** ([src/components/back-link.tsx](src/components/back-link.tsx)) — the one back control, passed as `leading`: `<BackLink label="Back to employees"><Link to="/employees/all" /></BackLink>`. Slot-based so the call site keeps the router's typed `Link` (`params`, `search`). No hand-rolled back links in the page body.
+- Sidebar pin/auto-hide is the sidebar footer's job (Collapse / Lock); the header has no toggle.
 
 ## Native scrollbars & `color-scheme`
 

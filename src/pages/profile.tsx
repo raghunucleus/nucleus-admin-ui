@@ -11,6 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -56,15 +57,7 @@ export function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 py-2">
-      <div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <User className="size-4" /> Account
-        </div>
-        <h1 className="mt-2 text-xl font-semibold tracking-tight">Profile</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage your admin account and security preferences.
-        </p>
-      </div>
+      <PageHeader title="Profile" />
 
       <div className="grid gap-6 hd:grid-cols-[16rem_1fr]">
         <SideNav activeKey={section} />

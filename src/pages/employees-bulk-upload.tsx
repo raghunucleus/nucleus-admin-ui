@@ -10,6 +10,7 @@ import {
   Upload,
 } from "lucide-react"
 
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
@@ -410,41 +411,35 @@ export function EmployeesBulkUploadPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight">
-            Bulk upload employees
-          </h1>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Download the template, fill it in, and upload to insert in one transaction.
-            Mistakes are flagged in the grid below before anything is saved.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
-            <Download />
-            Download template
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!refsLoaded}
-          >
-            <Upload />
-            Upload .xlsx
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void handleFile(f)
-            }}
-          />
-        </div>
-      </div>
+      <PageHeader
+        title="Bulk upload employees"
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
+              <Download />
+              Download template
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!refsLoaded}
+            >
+              <Upload />
+              Upload .xlsx
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) void handleFile(f)
+              }}
+            />
+          </>
+        }
+      />
 
       {rows.length === 0 ? (
         <div className="rounded-lg border bg-card text-card-foreground">

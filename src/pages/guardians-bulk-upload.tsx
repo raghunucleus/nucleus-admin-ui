@@ -11,6 +11,7 @@ import {
   Upload,
 } from "lucide-react"
 
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
@@ -325,43 +326,35 @@ export function GuardiansBulkUploadPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight">
-            Bulk upload guardians
-          </h1>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            One row per student. Fill in father, mother and/or guardian details
-            — at least one contact per row. Contacts are matched to one login by
-            mobile number, so the same parent of two students becomes a single
-            account linked to both.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
-            <Download />
-            Download template
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={parsing}
-          >
-            {parsing ? <Loader2 className="animate-spin" /> : <Upload />}
-            {parsing ? "Parsing…" : "Upload .xlsx"}
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void handleFile(f)
-            }}
-          />
-        </div>
-      </div>
+      <PageHeader
+        title="Bulk upload guardians"
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
+              <Download />
+              Download template
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={parsing}
+            >
+              {parsing ? <Loader2 className="animate-spin" /> : <Upload />}
+              {parsing ? "Parsing…" : "Upload .xlsx"}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) void handleFile(f)
+              }}
+            />
+          </>
+        }
+      />
 
       {warnings.length > 0 && (
         <div className="rounded-lg border border-amber-400/40 bg-amber-50 px-4 py-3 text-sm text-foreground dark:bg-amber-950/20">

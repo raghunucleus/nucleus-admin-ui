@@ -1,8 +1,10 @@
 import * as React from "react"
 import { Link, useParams, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
-import { AlertTriangle, ArrowLeft, BookMarked, ChevronRight, Users } from "lucide-react"
+import { AlertTriangle, BookMarked, ChevronRight, Users } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -106,19 +108,24 @@ export function SemesterStudentAllocationPage() {
     [entries],
   )
 
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to semester settings">
+          <Link
+            to="/masters/programme-configuration/semester/$programmeSemesterId"
+            params={{ programmeSemesterId: params.programmeSemesterId ?? "" }}
+            search={{ programmeId, admissionYearId }}
+          />
+        </BackLink>
+      }
+      title="Student allocation"
+    />
+  )
+
   return (
     <div className="mx-auto max-w-4xl space-y-4 py-2">
-      <div className="flex items-center gap-1">
-        <Link
-          to="/masters/programme-configuration/semester/$programmeSemesterId"
-          params={{ programmeSemesterId: params.programmeSemesterId ?? "" }}
-          search={{ programmeId, admissionYearId }}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Semester settings
-        </Link>
-      </div>
+      {header}
 
       {loading ? (
         <ListSkeleton />
@@ -142,36 +149,23 @@ export function SemesterStudentAllocationPage() {
         </div>
       ) : (
         <>
-          <header className="rounded-lg border bg-card px-5 py-4 text-card-foreground shadow-xs">
-            <div className="min-w-0 space-y-1.5">
-              <h1 className="text-lg font-semibold tracking-tight">
-                Student allocation
-              </h1>
-              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  Sem {semester.semester.sem_number}
-                </span>
-                <span className="opacity-40">·</span>
-                <span className="font-medium text-foreground">
-                  {semester.programme.code}
-                </span>
-                <span className="opacity-40">·</span>
-                <span className="tabular-nums">
-                  {semester.admission_year.display_year}
-                </span>
-                <span className="opacity-40">·</span>
-                <span className="font-mono text-foreground">
-                  {semester.semester.code}
-                </span>
-              </div>
-              <p className="pt-1 text-xs text-muted-foreground">
-                For each elective / honors / minors slot, assign students to one
-                of the subjects offered + the specific faculty teaching them.
-                Real subjects are taught to the whole batch and don't need
-                per-student allocation.
-              </p>
-            </div>
-          </header>
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">
+              Sem {semester.semester.sem_number}
+            </span>
+            <span className="opacity-40">·</span>
+            <span className="font-medium text-foreground">
+              {semester.programme.code}
+            </span>
+            <span className="opacity-40">·</span>
+            <span className="tabular-nums">
+              {semester.admission_year.display_year}
+            </span>
+            <span className="opacity-40">·</span>
+            <span className="font-mono text-foreground">
+              {semester.semester.code}
+            </span>
+          </div>
 
           {slots.length === 0 ? (
             <div className="rounded-lg border bg-card text-card-foreground">
@@ -274,10 +268,7 @@ export function SemesterStudentAllocationPage() {
 function ListSkeleton() {
   return (
     <>
-      <div className="rounded-lg border bg-card px-5 py-4 shadow-xs">
-        <Skeleton className="h-6 w-44" />
-        <Skeleton className="mt-2 h-4 w-72" />
-      </div>
+      <Skeleton className="h-4 w-72" />
       <div className="rounded-lg border bg-card p-4 shadow-xs">
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (

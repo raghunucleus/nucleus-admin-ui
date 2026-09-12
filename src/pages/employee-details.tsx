@@ -2,7 +2,6 @@ import * as React from "react"
 import { Link, useParams } from "@tanstack/react-router"
 import {
   AlertTriangle,
-  ArrowLeft,
   ExternalLink,
   KeyRound,
   Pencil,
@@ -12,8 +11,10 @@ import {
   UserRound,
 } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
 import { Detail, StatusBadge } from "@/components/detail-item"
 import { LoginSecurityCard } from "@/components/login-security-card"
+import { PageHeader } from "@/components/page-header"
 import {
   SignedInDevicesCard,
   type SignedInDevicesResult,
@@ -99,17 +100,20 @@ export function EmployeeDetailsPage() {
     [id],
   )
 
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to employees">
+          <Link to="/employees/all" />
+        </BackLink>
+      }
+      title={employee?.emp_display_name ?? "Employee"}
+    />
+  )
+
   return (
     <div className="mx-auto max-w-5xl space-y-4 py-2">
-      <div className="flex items-center gap-1">
-        <Link
-          to="/employees/all"
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Employees
-        </Link>
-      </div>
+      {header}
 
       {loading ? (
         <EmployeeDetailsSkeleton />
@@ -133,21 +137,10 @@ export function EmployeeDetailsPage() {
         </div>
       ) : (
         <>
-          <header className="rounded-lg border bg-card px-5 py-4 text-card-foreground shadow-xs">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0 space-y-1">
-                <h1 className="truncate text-lg font-semibold tracking-tight">
-                  {employee.emp_display_name}
-                </h1>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {employee.emp_code}
-                  </span>
-                  <StatusBadge active={employee.is_active} />
-                </div>
-              </div>
-            </div>
-          </header>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-mono">{employee.emp_code}</span>
+            <StatusBadge active={employee.is_active} />
+          </div>
 
           <div className="flex flex-wrap gap-1 border-b">
             {SECTIONS.map((s) => {
@@ -425,10 +418,7 @@ function formatDate(iso: string): string {
 function EmployeeDetailsSkeleton() {
   return (
     <>
-      <div className="rounded-lg border bg-card px-5 py-4 shadow-xs">
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="mt-2 h-4 w-32" />
-      </div>
+      <Skeleton className="h-4 w-32" />
       <div className="flex gap-4 border-b pb-2">
         <Skeleton className="h-7 w-24" />
         <Skeleton className="h-7 w-32" />

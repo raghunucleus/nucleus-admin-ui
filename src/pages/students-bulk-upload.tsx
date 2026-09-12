@@ -13,6 +13,7 @@ import {
   Upload,
 } from "lucide-react"
 
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -563,19 +564,14 @@ export function StudentsBulkUploadPage() {
 
   // ---------- Render: split into Phase 1 (matrix) and Phase 2 (grid) ----------
 
+  // One heading for both phases — hoisted so the header slot never goes blank
+  // while the page flips between the matrix and the grid.
+  const header = <PageHeader title="Bulk upload students" />
+
   if (!selection) {
     return (
       <div className="mx-auto max-w-7xl space-y-4 py-2">
-        <div className="rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-          <h1 className="text-base font-semibold tracking-tight">
-            Bulk upload students
-          </h1>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Pick the programme × admission-year combination you're uploading
-            for. Only the cells configured under <em>Programme admission
-            years</em> are selectable.
-          </p>
-        </div>
+        {header}
 
         <MatrixSelector
           programmes={programmes}
@@ -592,30 +588,26 @@ export function StudentsBulkUploadPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
+      {header}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
         <div className="flex items-center gap-3">
           <Button variant="outline" size="sm" onClick={handleChangeSelection}>
             <ArrowLeft />
             Change
           </Button>
-          <div>
-            <h1 className="text-base font-semibold tracking-tight">
-              Bulk upload students
-            </h1>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Uploading into{" "}
-              <span className="font-medium text-foreground">
-                {selectedProgramme?.name ?? "—"}
-              </span>{" "}
-              <span className="text-muted-foreground">
-                ({selectedProgramme?.code ?? "—"})
-              </span>{" "}
-              ·{" "}
-              <span className="font-medium text-foreground tabular-nums">
-                {selectedYear?.display_year ?? "—"}
-              </span>
-            </p>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Uploading into{" "}
+            <span className="font-medium text-foreground">
+              {selectedProgramme?.name ?? "—"}
+            </span>{" "}
+            <span className="text-muted-foreground">
+              ({selectedProgramme?.code ?? "—"})
+            </span>{" "}
+            ·{" "}
+            <span className="font-medium text-foreground tabular-nums">
+              {selectedYear?.display_year ?? "—"}
+            </span>
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>

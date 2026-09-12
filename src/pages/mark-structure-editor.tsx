@@ -1,8 +1,10 @@
 import * as React from "react"
 import { Link, useNavigate, useParams } from "@tanstack/react-router"
 import { toast } from "sonner"
-import { AlertTriangle, ArrowLeft, Plus, Trash2 } from "lucide-react"
+import { AlertTriangle, Plus, Trash2 } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
@@ -467,18 +469,23 @@ export function MarkStructureEditorPage() {
     draft.components.map((c) => parseInt32(c.max_marks)),
   )
 
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to mark structures">
+          <Link
+            to="/masters/regulations/$regulationId/mark-structures"
+            params={{ regulationId: String(regulationId) }}
+          />
+        </BackLink>
+      }
+      title={subjectType?.name ?? "Mark structure"}
+    />
+  )
+
   return (
     <div className="mx-auto max-w-5xl space-y-4 py-2">
-      <div className="flex items-center gap-1">
-        <Link
-          to="/masters/regulations/$regulationId/mark-structures"
-          params={{ regulationId: String(regulationId) }}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Mark structures
-        </Link>
-      </div>
+      {header}
 
       {loading ? (
         <EditorSkeleton />
@@ -504,9 +511,6 @@ export function MarkStructureEditorPage() {
         <>
           <header className="rounded-lg border bg-card px-5 py-4 text-card-foreground shadow-xs">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg font-semibold tracking-tight">
-                {subjectType.name}
-              </h1>
               <span className="font-mono text-xs text-muted-foreground">
                 {subjectType.code}
               </span>
@@ -516,10 +520,6 @@ export function MarkStructureEditorPage() {
                 ({regulation.code})
               </span>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Define how marks break down across components and items. Sums
-              must match exactly.
-            </p>
             <div className="mt-4 flex flex-wrap items-end gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="total-max">Total max marks</Label>
@@ -1068,8 +1068,7 @@ function EditorSkeleton() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border bg-card p-5">
-        <Skeleton className="h-6 w-72" />
-        <Skeleton className="mt-2 h-3 w-80" />
+        <Skeleton className="h-4 w-72" />
         <div className="mt-4 flex gap-4">
           <Skeleton className="h-9 w-32" />
           <Skeleton className="h-9 w-24" />

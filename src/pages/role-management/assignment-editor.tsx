@@ -1,8 +1,10 @@
 import * as React from "react"
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
-import { ArrowLeft, Check, Loader2, Save, X } from "lucide-react"
+import { Check, Loader2, Save, X } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { ProgrammeYearMatrixPicker } from "@/components/rbac/programme-year-matrix-picker"
 import { Button } from "@/components/ui/button"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
@@ -318,9 +320,21 @@ export function AssignmentEditorPage() {
 
   // --- Render ------------------------------------------------------------
 
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to assignments">
+          <Link to="/role-management/assignments" />
+        </BackLink>
+      }
+      title={isCreate ? "New assignment" : "Edit assignment"}
+    />
+  )
+
   if (loadingShell || !catalog) {
     return (
       <div className="mx-auto max-w-5xl space-y-4 py-2">
+        {header}
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-64 w-full" />
@@ -335,24 +349,10 @@ export function AssignmentEditorPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 py-2">
+      {header}
+
       {/* --- Header --- */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <div className="flex items-center gap-3">
-          <Link to="/role-management/assignments">
-            <Button variant="ghost" size="icon" aria-label="Back to assignments">
-              <ArrowLeft />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-base font-semibold tracking-tight">
-              {isCreate ? "New assignment" : "Edit assignment"}
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Pick an employee and a role, then fill in the per-screen
-              attribute values that scope the role.
-            </p>
-          </div>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
         <div className="flex items-center gap-2">
           <Link to="/role-management/assignments">
             <Button variant="ghost" size="sm" disabled={saving}>

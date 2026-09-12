@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
   AlertTriangle,
-  ArrowLeft,
   BookMarked,
   Check,
   ChevronDown,
@@ -20,6 +19,8 @@ import {
   X,
 } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -351,22 +352,25 @@ export function TimetableEditorPage() {
     }
   }
 
-  const backLink = (
-    <Link
-      to="/masters/programme-configuration/semester/$programmeSemesterId/timetables"
-      params={{ programmeSemesterId: params.programmeSemesterId ?? "" }}
-      search={{ programmeId, admissionYearId }}
-      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-    >
-      <ArrowLeft className="size-4" />
-      Timetables
-    </Link>
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to timetables">
+          <Link
+            to="/masters/programme-configuration/semester/$programmeSemesterId/timetables"
+            params={{ programmeSemesterId: params.programmeSemesterId ?? "" }}
+            search={{ programmeId, admissionYearId }}
+          />
+        </BackLink>
+      }
+      title={timetable?.name ?? "Timetable"}
+    />
   )
 
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl space-y-4 py-2">
-        <div className="flex items-center gap-1">{backLink}</div>
+        {header}
         <Skeleton className="h-24 w-full rounded-lg" />
         <Skeleton className="h-32 w-full rounded-lg" />
         <Skeleton className="h-96 w-full rounded-lg" />
@@ -377,7 +381,7 @@ export function TimetableEditorPage() {
   if (failed || !timetable) {
     return (
       <div className="mx-auto max-w-6xl space-y-4 py-2">
-        <div className="flex items-center gap-1">{backLink}</div>
+        {header}
         <div className="rounded-lg border bg-card text-card-foreground">
           <EmptyState
             icon={AlertTriangle}
@@ -407,25 +411,18 @@ export function TimetableEditorPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 py-2">
-      <div className="flex items-center gap-1">{backLink}</div>
+      {header}
 
       {/* Header --------------------------------------------------------- */}
-      <header className="rounded-lg border bg-card px-5 py-4 text-card-foreground shadow-xs">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg font-semibold tracking-tight">
-                {timetable.name}
-              </h1>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-              <Users className="size-3.5" />
-              <span className="font-medium text-foreground">
-                {timetable.attendance_group?.name ?? "Group"}
-              </span>
-              <span className="opacity-40">·</span>
-              <span>{days.map((d) => d.short).join(", ")}</span>
-            </div>
+      <header className="rounded-lg border bg-card px-5 py-3 text-card-foreground shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+            <Users className="size-3.5" />
+            <span className="font-medium text-foreground">
+              {timetable.attendance_group?.name ?? "Group"}
+            </span>
+            <span className="opacity-40">·</span>
+            <span>{days.map((d) => d.short).join(", ")}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button

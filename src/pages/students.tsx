@@ -43,6 +43,7 @@ import {
   SendInvitesDialog,
   type SendInvitesTarget,
 } from "@/components/send-invites-dialog"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
@@ -511,94 +512,96 @@ export function StudentsPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-        <h1 className="text-base font-semibold tracking-tight">Students</h1>
-        <div className="flex items-center gap-1.5">
-          <Button
-            size="sm"
-            onClick={() => setMode({ kind: "create" })}
-            disabled={mode.kind !== "list"}
-          >
-            <Plus />
-            New student
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline">
-                <Mail />
-                Invites
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                disabled={selectedIds.size === 0}
-                onSelect={() =>
-                  setInviteTarget({
-                    kind: "ids",
-                    ids: [...selectedIds],
-                    resend: false,
-                  })
-                }
-              >
-                <Mail />
-                Send invites ({selectedIds.size})
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={selectedIds.size === 0}
-                onSelect={() =>
-                  setInviteTarget({
-                    kind: "ids",
-                    ids: [...selectedIds],
-                    resend: true,
-                  })
-                }
-              >
-                <RefreshCw />
-                Resend to selected ({selectedIds.size})
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={!batchReady}
-                title={
-                  batchReady
-                    ? undefined
-                    : "Pick a programme and admission year in Filters first"
-                }
-                onSelect={() => {
-                  if (programmeId === undefined) return
-                  if (admissionYearId === undefined) return
-                  setInviteTarget({
-                    kind: "batch",
-                    filter: {
-                      programme_id: programmeId,
-                      admission_year_id: admissionYearId,
-                    },
-                    label: batchLabel,
-                  })
-                }}
-              >
-                <Users />
-                Invite whole batch…
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <div className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
-          <ToolbarIconToggle
-            label="Filters"
-            active={filterPanelOpen}
-            onClick={() => setFilterPanelOpen((v) => !v)}
-            badge={activeFilterCount > 0 ? activeFilterCount : undefined}
-          >
-            <Filter />
-          </ToolbarIconToggle>
-          <ToolbarIconToggle
-            label="Search columns"
-            active={searchRowOpen}
-            onClick={() => setSearchRowOpen((v) => !v)}
-          >
-            <Search />
-          </ToolbarIconToggle>
-        </div>
-      </div>
+      <PageHeader
+        title="Students"
+        actions={
+          <>
+            <Button
+              size="sm"
+              onClick={() => setMode({ kind: "create" })}
+              disabled={mode.kind !== "list"}
+            >
+              <Plus />
+              New student
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline">
+                  <Mail />
+                  Invites
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  disabled={selectedIds.size === 0}
+                  onSelect={() =>
+                    setInviteTarget({
+                      kind: "ids",
+                      ids: [...selectedIds],
+                      resend: false,
+                    })
+                  }
+                >
+                  <Mail />
+                  Send invites ({selectedIds.size})
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={selectedIds.size === 0}
+                  onSelect={() =>
+                    setInviteTarget({
+                      kind: "ids",
+                      ids: [...selectedIds],
+                      resend: true,
+                    })
+                  }
+                >
+                  <RefreshCw />
+                  Resend to selected ({selectedIds.size})
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!batchReady}
+                  title={
+                    batchReady
+                      ? undefined
+                      : "Pick a programme and admission year in Filters first"
+                  }
+                  onSelect={() => {
+                    if (programmeId === undefined) return
+                    if (admissionYearId === undefined) return
+                    setInviteTarget({
+                      kind: "batch",
+                      filter: {
+                        programme_id: programmeId,
+                        admission_year_id: admissionYearId,
+                      },
+                      label: batchLabel,
+                    })
+                  }}
+                >
+                  <Users />
+                  Invite whole batch…
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
+            <ToolbarIconToggle
+              label="Filters"
+              active={filterPanelOpen}
+              onClick={() => setFilterPanelOpen((v) => !v)}
+              badge={activeFilterCount > 0 ? activeFilterCount : undefined}
+            >
+              <Filter />
+            </ToolbarIconToggle>
+            <ToolbarIconToggle
+              label="Search columns"
+              active={searchRowOpen}
+              onClick={() => setSearchRowOpen((v) => !v)}
+            >
+              <Search />
+            </ToolbarIconToggle>
+          </>
+        }
+      />
 
       <Sheet
         open={mode.kind !== "list"}

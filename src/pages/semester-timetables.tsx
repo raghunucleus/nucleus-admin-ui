@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
   AlertTriangle,
-  ArrowLeft,
   CalendarCheck,
   CalendarClock,
   CalendarPlus,
@@ -15,6 +14,8 @@ import {
   Trash2,
 } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -186,19 +187,25 @@ export function SemesterTimetablesPage() {
     })
   }
 
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to semester settings">
+          <Link
+            to="/masters/programme-configuration/semester/$programmeSemesterId"
+            params={{ programmeSemesterId: params.programmeSemesterId ?? "" }}
+            search={{ programmeId, admissionYearId }}
+          />
+        </BackLink>
+      }
+      icon={CalendarClock}
+      title="Timetables"
+    />
+  )
+
   return (
     <div className="mx-auto max-w-5xl space-y-4 py-2">
-      <div className="flex items-center gap-1">
-        <Link
-          to="/masters/programme-configuration/semester/$programmeSemesterId"
-          params={{ programmeSemesterId: params.programmeSemesterId ?? "" }}
-          search={{ programmeId, admissionYearId }}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Semester settings
-        </Link>
-      </div>
+      {header}
 
       {shellLoading ? (
         <ListSkeleton />
@@ -222,21 +229,19 @@ export function SemesterTimetablesPage() {
         </div>
       ) : (
         <>
-          <header className="rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-xs">
-            <div className="flex items-center gap-2">
-              <CalendarClock className="size-4 text-muted-foreground" />
-              <h1 className="text-base font-semibold tracking-tight">
-                Timetables — {semester.programme.code} ·{" "}
-                {semester.semester.code} ·{" "}
-                {semester.admission_year.display_year}
-              </h1>
-            </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Each attendance group can save several templates (regular,
-              exam-week, special-event…). The group incharge picks which
-              template applies when publishing a given week.
-            </p>
-          </header>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {semester.programme.code}
+            </span>
+            <span className="opacity-40">·</span>
+            <span className="font-mono text-foreground">
+              {semester.semester.code}
+            </span>
+            <span className="opacity-40">·</span>
+            <span className="tabular-nums">
+              {semester.admission_year.display_year}
+            </span>
+          </div>
 
           {listLoading ? (
             <ListSkeleton />

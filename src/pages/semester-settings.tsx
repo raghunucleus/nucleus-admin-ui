@@ -2,7 +2,6 @@ import * as React from "react"
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import {
   AlertTriangle,
-  ArrowLeft,
   BookMarked,
   CalendarClock,
   ChevronRight,
@@ -12,6 +11,8 @@ import {
   Users,
 } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -116,18 +117,27 @@ export function SemesterSettingsPage() {
     void load()
   }, [load])
 
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to programme configuration">
+          <Link
+            to="/masters/programme-configuration"
+            search={{ programmeId, admissionYearId }}
+          />
+        </BackLink>
+      }
+      title={
+        semester
+          ? `Sem ${semester.semester.sem_number} settings`
+          : "Semester settings"
+      }
+    />
+  )
+
   return (
     <div className="mx-auto max-w-5xl space-y-4 py-2">
-      <div className="flex items-center gap-1">
-        <Link
-          to="/masters/programme-configuration"
-          search={{ programmeId, admissionYearId }}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Programme configuration
-        </Link>
-      </div>
+      {header}
 
       {loading ? (
         <SettingsSkeleton />
@@ -151,38 +161,31 @@ export function SemesterSettingsPage() {
         </div>
       ) : (
         <>
-          <header className="rounded-lg border bg-card px-5 py-4 text-card-foreground shadow-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg font-semibold tracking-tight">
-                Sem {semester.semester.sem_number} settings
-              </h1>
-              <span
-                className={cn(
-                  "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-                  STATUS_STYLES[semester.status],
-                )}
-              >
-                {STATUS_LABELS[semester.status]}
-              </span>
-            </div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-              <GraduationCap className="size-3.5" />
-              <span className="font-medium text-foreground">
-                {semester.programme.code}
-              </span>
-              <span>— {semester.programme.display_name}</span>
-              <span className="opacity-40">·</span>
-              <span className="tabular-nums">
-                {semester.admission_year.display_year}
-              </span>
-              <span className="opacity-40">·</span>
-              <span className="font-mono text-foreground">
-                {semester.semester.code}
-              </span>
-              <span className="opacity-40">·</span>
-              <span>{semester.semester.name}</span>
-            </div>
-          </header>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                STATUS_STYLES[semester.status],
+              )}
+            >
+              {STATUS_LABELS[semester.status]}
+            </span>
+            <GraduationCap className="size-3.5" />
+            <span className="font-medium text-foreground">
+              {semester.programme.code}
+            </span>
+            <span>— {semester.programme.display_name}</span>
+            <span className="opacity-40">·</span>
+            <span className="tabular-nums">
+              {semester.admission_year.display_year}
+            </span>
+            <span className="opacity-40">·</span>
+            <span className="font-mono text-foreground">
+              {semester.semester.code}
+            </span>
+            <span className="opacity-40">·</span>
+            <span>{semester.semester.name}</span>
+          </div>
 
           <div>
             <h2 className="mb-2 px-0.5 text-sm font-semibold tracking-tight">
@@ -360,10 +363,7 @@ function BentoCard({
 function SettingsSkeleton() {
   return (
     <>
-      <div className="rounded-lg border bg-card px-5 py-4 shadow-xs">
-        <Skeleton className="h-6 w-44" />
-        <Skeleton className="mt-2 h-4 w-72" />
-      </div>
+      <Skeleton className="h-4 w-72" />
       <div>
         <Skeleton className="mb-2 h-4 w-28" />
         <div className="grid gap-3 sm:grid-cols-2">

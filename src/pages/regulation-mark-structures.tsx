@@ -3,13 +3,14 @@ import { Link, useParams } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
   AlertTriangle,
-  ArrowLeft,
   ChevronRight,
   Eye,
   ListChecks,
   Tags,
 } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
@@ -90,17 +91,20 @@ export function RegulationMarkStructuresPage() {
 
   const configuredCount = rows.filter((r) => r.structure !== null).length
 
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to regulations">
+          <Link to="/masters/regulations" />
+        </BackLink>
+      }
+      title="Mark structures"
+    />
+  )
+
   return (
     <div className="mx-auto max-w-4xl space-y-4 py-2">
-      <div className="flex items-center gap-1">
-        <Link
-          to="/masters/regulations"
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Regulations
-        </Link>
-      </div>
+      {header}
 
       {loading ? (
         <HubSkeleton />
@@ -119,28 +123,21 @@ export function RegulationMarkStructuresPage() {
         </div>
       ) : (
         <>
-          <header className="rounded-lg border bg-card px-5 py-4 text-card-foreground shadow-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg font-semibold tracking-tight">
-                Mark structures
-              </h1>
-              <span className="text-sm text-muted-foreground">·</span>
-              <span className="text-sm font-medium">{regulation.name}</span>
-              <span className="font-mono text-xs text-muted-foreground">
-                ({regulation.code})
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Define how marks are broken down for each subject type under this
-              regulation.{" "}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="text-sm font-medium text-foreground">
+              {regulation.name}
+            </span>
+            <span className="font-mono">({regulation.code})</span>
+            <span className="opacity-40">·</span>
+            <span>
               <span className="font-medium text-foreground">
                 {configuredCount}
               </span>{" "}
               of{" "}
               <span className="font-medium text-foreground">{rows.length}</span>{" "}
-              configured.
-            </p>
-          </header>
+              configured
+            </span>
+          </div>
 
           {rows.length === 0 ? (
             <div className="rounded-lg border bg-card text-card-foreground">
@@ -633,10 +630,7 @@ function generateExample(
 function HubSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-card p-5">
-        <Skeleton className="h-6 w-64" />
-        <Skeleton className="mt-2 h-3 w-80" />
-      </div>
+      <Skeleton className="h-4 w-72" />
       <div className="overflow-hidden rounded-lg border bg-card">
         {Array.from({ length: 4 }).map((_, i) => (
           <div

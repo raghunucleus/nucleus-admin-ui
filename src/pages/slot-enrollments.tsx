@@ -4,7 +4,6 @@ import { toast } from "sonner"
 import { loadXlsx } from "@/lib/xlsx"
 import {
   AlertTriangle,
-  ArrowLeft,
   CheckCircle2,
   Download,
   Upload,
@@ -12,6 +11,8 @@ import {
   X,
 } from "lucide-react"
 
+import { BackLink } from "@/components/back-link"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
@@ -702,8 +703,30 @@ export function SlotEnrollmentsPage() {
     }
   }
 
+  const header = (
+    <PageHeader
+      leading={
+        <BackLink label="Back to student allocation">
+          <Link
+            to="/masters/programme-configuration/semester/$programmeSemesterId/student-allocation"
+            params={{
+              programmeSemesterId: params.programmeSemesterId ?? "",
+            }}
+            search={{
+              programmeId: search.programmeId,
+              admissionYearId: search.admissionYearId,
+            }}
+          />
+        </BackLink>
+      }
+      title={view?.slot_name || "Slot"}
+    />
+  )
+
   return (
     <div className="mx-auto max-w-[100rem] space-y-4 py-2">
+      {header}
+
       {loading ? (
         <EnrollmentsSkeleton />
       ) : failed || !view ? (
@@ -732,37 +755,11 @@ export function SlotEnrollmentsPage() {
           <header className="sticky top-0 z-50 rounded-lg border bg-card px-5 py-3 text-card-foreground shadow-sm before:pointer-events-none before:absolute before:-top-12 before:left-0 before:right-0 before:-z-10 before:h-12 before:bg-background before:content-['']">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
-                <Link
-                  to="/masters/programme-configuration/semester/$programmeSemesterId/student-allocation"
-                  params={{
-                    programmeSemesterId: params.programmeSemesterId ?? "",
-                  }}
-                  search={{
-                    programmeId: search.programmeId,
-                    admissionYearId: search.admissionYearId,
-                  }}
-                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                  title="Back to Student allocation"
-                  aria-label="Back to Student allocation"
-                >
-                  <ArrowLeft className="size-4" />
-                </Link>
-                <div className="min-w-0 space-y-0.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="text-base font-semibold tracking-tight">
-                      {view.slot_name || "Slot"}
-                    </h1>
-                    {view.slot_type && (
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
-                        {SLOT_TYPE_LABEL[view.slot_type]}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Pick one of the subjects offered + the faculty teaching
-                    each student.
-                  </p>
-                </div>
+                {view.slot_type && (
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                    {SLOT_TYPE_LABEL[view.slot_type]}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -1531,9 +1528,12 @@ function PickIndicator({
 function EnrollmentsSkeleton() {
   return (
     <>
-      <div className="rounded-lg border bg-card px-5 py-4 shadow-xs">
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="mt-2 h-4 w-64" />
+      <div className="flex items-center justify-between rounded-lg border bg-card px-5 py-3 shadow-xs">
+        <Skeleton className="h-5 w-24 rounded-full" />
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-8 w-36 rounded-md" />
+          <Skeleton className="h-8 w-32 rounded-md" />
+        </div>
       </div>
       <div className="rounded-lg border bg-card p-4 shadow-xs">
         <div className="grid gap-2 sm:grid-cols-3">
